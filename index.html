@@ -1,0 +1,2875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>adaptABILITY Practice Scheduler</title>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{font-size:14px}
+body{font-family:'DM Sans',sans-serif;background:#EEF1F7;color:#1B2A4A;min-height:100vh}
+:root{
+  --nv:#1B2A4A;--pu:#6B4C9A;--pl:#EDE7F6;--or:#E8832A;--ol:#FFF3E0;
+  --gn:#2E8B65;--gl:#E8F5EF;--rd:#C0392B;--am:#D97706;--te:#0097A7;
+  --bg:#EEF1F7;--su:#fff;--bd:#DDE1EB;--bl:#EEF1F7;
+  --t2:#4A5872;--mt:#8896B3;
+  --sh:0 2px 8px rgba(27,42,74,.08);--shm:0 6px 20px rgba(27,42,74,.13)
+}
+/* LAYOUT */
+.ah{background:var(--nv);color:#fff;height:52px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:60;box-shadow:0 2px 14px rgba(0,0,0,.24)}
+.lo{font-family:'Playfair Display',serif;font-size:17px}.lo em{color:#E8832A;font-style:normal}
+.dp{background:rgba(255,255,255,.12);padding:3px 11px;border-radius:20px;font-size:12px;font-weight:500}
+.nv{background:#fff;border-bottom:1px solid var(--bd);display:flex;padding:0 16px;gap:1px;position:sticky;top:52px;z-index:50;overflow-x:auto}
+.nt{padding:12px 14px;cursor:pointer;font-size:12px;font-weight:600;color:var(--mt);border-bottom:3px solid transparent;margin-bottom:-1px;display:flex;align-items:center;gap:5px;transition:color .15s,border-color .15s;white-space:nowrap}
+.nt:hover{color:var(--nv)}.nt.on{color:var(--pu);border-bottom-color:var(--pu)}
+.mn{padding:18px;max-width:1540px;margin:0 auto}
+.tp{display:none}.tp.on{display:block}
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:7px;border:1.5px solid var(--bd);background:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--nv);transition:all .15s}
+.btn:hover{background:var(--bg)}.bp{background:var(--pu);color:#fff;border-color:var(--pu)}.bp:hover{background:#5a3d88}
+.bd{background:#FEE2E2;color:var(--rd);border-color:#FCA5A5}.bsm{padding:4px 9px;font-size:12px}.bxs{padding:2px 6px;font-size:11px;border-radius:4px}
+.btg{background:var(--or);color:#fff;border-color:var(--or)}.btg:hover{background:#c8711e}
+/* BADGES */
+.bdg{display:inline-flex;align-items:center;padding:2px 6px;border-radius:3px;font-size:9px;font-weight:800;letter-spacing:.3px;text-transform:uppercase}
+.b-echo{background:#EDE7F6;color:#4527A0}.b-tcp{background:#E3F2FD;color:#0D47A1}.b-tcs{background:#E8EAF6;color:#283593}
+.b-priv{background:#FFF3E0;color:#BF360C}.b-aet{background:#E8F5E9;color:#1B5E20}.b-geo{background:#E0F7FA;color:#006064}
+.b-civ{background:#F1F8E9;color:#33691E}.b-ger{background:#FCE4EC;color:#880E4F}
+.b-aba{background:#E3F2FD;color:#0D47A1}.b-ot{background:#E0F2F1;color:#004D40}.b-pt{background:#FFF3E0;color:#E65100}
+.b-sup{background:#F3E5F5;color:#4A148C}.b-adm{background:#ECEFF1;color:#455A64}.b-apm{background:#F9FBE7;color:#558B2F}.b-mu{background:#FFF9C4;color:#F57F17}
+/* STATS */
+.srow{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px}
+.sb{background:#fff;border-radius:9px;border:1px solid var(--bd);padding:12px 14px;box-shadow:var(--sh)}
+.sn{font-size:24px;font-weight:700;font-family:'Playfair Display',serif;line-height:1}.sl{font-size:10px;color:var(--mt);margin-top:2px;font-weight:500}
+/* VIEW TOGGLE */
+.vtog{display:flex;background:var(--bg);border:1px solid var(--bd);border-radius:8px;overflow:hidden}
+.vtog button{padding:6px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;font-family:'DM Sans',sans-serif;color:var(--mt);transition:all .15s}
+.vtog button.on{background:var(--pu);color:#fff}
+/* WEEKLY GRID */
+.sgrid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+@media(max-width:1050px){.sgrid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:680px){.sgrid{grid-template-columns:1fr 1fr}}
+.dc{background:#fff;border-radius:11px;border:1px solid var(--bd);overflow:hidden;box-shadow:var(--sh);min-height:240px;display:flex;flex-direction:column}
+.dh{padding:10px 12px;border-bottom:1px solid var(--bd);display:flex;align-items:flex-start;justify-content:space-between}
+.dh.tod{background:var(--pu);color:#fff}.dh.tod .dsub{color:rgba(255,255,255,.55)}
+.dh.hol{background:#ECEFF1}
+.ddn{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;opacity:.5;margin-bottom:1px}
+.ddv{font-size:21px;font-weight:700;font-family:'Playfair Display',serif;line-height:1}
+.hch{font-size:9px;background:#CFD8DC;padding:2px 5px;border-radius:2px;color:#37474F;font-weight:700;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bday-bar{padding:4px 8px;background:#FFF9C4;border-bottom:1px solid #FFE082;font-size:10px;color:#795548;display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+.dbody{padding:6px;display:flex;flex-direction:column;gap:4px;flex:1}
+/* SESSION BLOCKS */
+.sbl{border-radius:6px;padding:6px 8px;border-left:3px solid #ccc;background:var(--bg);cursor:pointer;transition:box-shadow .15s,transform .1s;position:relative}
+.sbl:hover{box-shadow:var(--shm);transform:translateY(-1px)}.sbl.cx{opacity:.48}
+.stm{font-size:9px;font-weight:600;color:var(--mt);margin-bottom:1px}
+.scln{font-size:11px;font-weight:700;line-height:1.25}
+.smet{display:flex;gap:3px;margin-top:3px;flex-wrap:wrap;align-items:center}
+.sthr{font-size:10px;margin-top:2px;display:flex;align-items:center;gap:3px}
+.tdot{width:7px;height:7px;border-radius:2px;flex-shrink:0}
+.cxch{position:absolute;top:2px;right:2px;font-size:7px;font-weight:800;background:#FFEBEE;color:#C62828;padding:1px 3px;border-radius:2px}
+.otch{position:absolute;bottom:2px;right:2px;font-size:7px;font-weight:700;background:#E0F2F1;color:#004D40;padding:1px 3px;border-radius:2px}
+.much{position:absolute;top:2px;left:2px;font-size:7px;font-weight:800;background:#FFF9C4;color:#F57F17;padding:1px 3px;border-radius:2px}
+/* ADMIN/APM block */
+.adm-block{border-radius:6px;padding:6px 8px;border-left:3px solid #9E9E9E;background:#FAFAFA;cursor:pointer;transition:box-shadow .15s}
+.adm-block:hover{box-shadow:var(--shm)}
+.ins-ECHO{border-left-color:#7C4DFF}.ins-TC_PRIME{border-left-color:#1B2A4A}.ins-TC_SELECT{border-left-color:#3949AB}
+.ins-PRIVATE{border-left-color:#E8832A}.ins-AETNA{border-left-color:#1A6B3A}.ins-GEOBLUE{border-left-color:#0277BD}
+.ins-CIVILIAN{border-left-color:#2E8B65}.ins-TK{border-left-color:#1565C0}.ins-AOK{border-left-color:#2E7D32}
+.ins-BARMER{border-left-color:#C62828}.ins-DAK{border-left-color:#6A1B9A}.ins-IKK{border-left-color:#E65100}.ins-GERMAN_O{border-left-color:#37474F}
+.busbar{padding:5px 9px;background:#FFFDE7;border-top:1px dashed #FFE082;font-size:10px;color:#795548;display:flex;align-items:center;gap:5px}
+.asb{width:100%;padding:5px;background:none;border:1.5px dashed var(--bd);border-radius:5px;cursor:pointer;color:var(--mt);font-size:10px;font-family:'DM Sans',sans-serif;font-weight:500;transition:all .15s;margin-top:auto}
+.asb:hover{border-color:var(--pu);color:var(--pu);background:var(--pl)}
+/* DAILY VIEW */
+.dv-wrap{display:flex;gap:14px}
+.dv-main{flex:1;min-width:0}
+.dv-side{width:240px;flex-shrink:0}
+@media(max-width:900px){.dv-wrap{flex-direction:column}.dv-side{width:100%}}
+.dv-bday{background:#FFF9C4;border:1px solid #FFE082;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.sess-row{display:flex;gap:10px;align-items:stretch;padding:10px 12px;background:#fff;border-radius:9px;border:1px solid var(--bd);margin-bottom:6px;box-shadow:var(--sh);cursor:pointer;transition:box-shadow .15s}
+.sess-row:hover{box-shadow:var(--shm)}
+.sr-time{width:70px;flex-shrink:0;text-align:right;padding-top:2px}
+.sr-time-s{font-size:12px;font-weight:700}.sr-time-e{font-size:10px;color:var(--mt)}
+.sr-bar{width:3px;border-radius:3px;flex-shrink:0}
+.sr-body{flex:1;min-width:0}
+.sr-cl{font-size:13px;font-weight:700}.sr-meta{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:3px}
+.sr-thr{display:flex;align-items:center;gap:5px;margin-top:4px}
+.sr-tc{display:inline-flex;align-items:center;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700}
+.sr-cx{background:#FFEBEE;border-radius:6px;padding:4px 8px;font-size:10px;color:var(--rd);font-weight:600}
+/* STAFF SIDE PANEL */
+.stf-pnl{background:#fff;border-radius:11px;border:1px solid var(--bd);padding:14px;box-shadow:var(--sh);margin-bottom:12px}
+.stf-pnl h4{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:10px}
+.stf-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bl)}
+.stf-row:last-child{border-bottom:none}
+.stf-av{width:32px;height:28px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0}
+.stf-nm{font-size:11px;font-weight:600;flex:1}
+.stf-sc{font-size:10px;color:var(--mt)}
+.apm-btn{font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid #8BC34A;background:#F9FBE7;color:#558B2F;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700}
+.adm-btn{font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid #B0BEC5;background:#ECEFF1;color:#455A64;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:700}
+/* CLIENTS */
+.fbar{display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.fch{padding:4px 11px;border-radius:14px;border:1.5px solid var(--bd);background:#fff;cursor:pointer;font-size:11px;font-weight:600;color:var(--t2);transition:all .15s}
+.fch:hover,.fch.on{background:var(--pu);color:#fff;border-color:var(--pu)}
+.isec{margin-bottom:22px}
+.ihead{display:flex;align-items:center;gap:8px;padding-bottom:8px;margin-bottom:12px;border-bottom:2px solid var(--bd)}
+.idot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.ihead h3{font-size:13px;font-weight:700}.ict{font-size:11px;color:var(--mt);background:var(--bg);padding:2px 7px;border-radius:9px}
+.cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(275px,1fr));gap:11px}
+.ccard{background:#fff;border-radius:11px;border:1px solid var(--bd);padding:14px;cursor:pointer;transition:box-shadow .2s;box-shadow:var(--sh)}
+.ccard:hover{box-shadow:var(--shm)}
+.cctop{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:9px}
+.ccname{font-size:13px;font-weight:700}.ccage{font-size:10px;color:var(--mt)}
+.dwrap{margin:7px 0}
+.dlbls{display:flex;justify-content:space-between;font-size:10px;color:var(--mt);margin-bottom:3px}
+.dtrk{height:6px;background:var(--bg);border-radius:3px;overflow:hidden}
+.dbar{height:100%;border-radius:3px;transition:width .4s}
+.cteam{display:flex;flex-wrap:wrap;gap:3px;margin-top:7px}
+.ctag{font-size:9px;padding:2px 6px;border-radius:3px;font-weight:600;display:flex;align-items:center;gap:3px}
+.cflags{display:flex;gap:3px;margin-top:5px;flex-wrap:wrap}
+.flg{font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px}
+.flg-ot{background:#E0F2F1;color:#004D40}.flg-bus{background:#FFF9C4;color:#F57F17}.flg-au{background:var(--pl);color:#4527A0}
+/* STAFF */
+.stgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(265px,1fr));gap:12px}
+.stcard{background:#fff;border-radius:11px;border:1px solid var(--bd);overflow:hidden;box-shadow:var(--sh)}
+.sctop{padding:14px 14px 11px;display:flex;gap:11px;align-items:flex-start;border-bottom:1px solid var(--bl)}
+.scav{width:42px;height:42px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0;cursor:pointer;position:relative}
+.scav:hover::after{content:'✎';position:absolute;inset:0;background:rgba(0,0,0,.3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff}
+.scname{font-size:13px;font-weight:700}
+.scbd{font-size:10px;color:var(--mt);margin-top:2px;display:flex;align-items:center;gap:3px}
+.bds{color:var(--am);font-weight:600}
+.scbody{padding:11px 14px}
+.sclbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--mt);margin-bottom:4px}
+.avds{display:flex;gap:3px}
+.avd{width:26px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;text-transform:uppercase}
+.av-y{background:var(--gn);color:#fff}.av-n{background:var(--bg);color:var(--mt)}.av-p{background:var(--am);color:#fff}
+.notice{background:linear-gradient(135deg,#FFFDE7,#FFF8E1);border:1px solid #FFE082;border-radius:9px;padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:12px;margin-bottom:9px}
+/* DAILY LOG */
+.lgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:820px){.lgrid{grid-template-columns:1fr}}
+.lsec{background:#fff;border-radius:11px;border:1px solid var(--bd);padding:15px;box-shadow:var(--sh)}
+.lstit{font-size:12px;font-weight:700;margin-bottom:11px;display:flex;align-items:center;gap:5px}
+.brow{display:flex;align-items:center;gap:7px;padding:5px 9px;background:var(--bg);border-radius:5px}
+.brow label{font-size:12px;font-weight:500;flex:1;cursor:pointer}
+.crow{display:flex;align-items:center;gap:5px;padding:7px 8px;background:var(--bg);border-radius:5px;flex-wrap:wrap;margin-bottom:4px}
+.crn{font-size:11px;font-weight:700;flex:1;min-width:70px}.crt{font-size:10px;color:var(--mt)}
+.csel{border:1px solid var(--bd);border-radius:5px;padding:3px 6px;font-size:11px;font-family:'DM Sans',sans-serif;background:#fff;cursor:pointer;color:var(--nv)}
+.brkr{display:flex;align-items:center;justify-content:space-between;padding:6px 9px;background:var(--bg);border-radius:5px;font-size:11px;margin-bottom:4px}
+/* SETTINGS */
+.scols{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+@media(max-width:820px){.scols{grid-template-columns:1fr}}
+.scard{background:#fff;border-radius:11px;border:1px solid var(--bd);padding:16px;margin-bottom:13px;box-shadow:var(--sh)}
+.scard h3{font-size:12px;font-weight:700;margin-bottom:11px}
+.cdi{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:6px;margin-bottom:4px}
+.cda{font-size:11px;font-weight:800;color:var(--rd)}.cdd{font-size:10px;color:var(--t2);margin-top:1px}
+.holi{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--bg);border-radius:6px;margin-bottom:4px}
+.lrow{display:flex;align-items:center;gap:7px;font-size:11px;margin-bottom:5px}
+.ldot{width:11px;height:11px;border-radius:3px;flex-shrink:0}
+.sh2{display:flex;justify-content:space-between;align-items:center;margin-bottom:13px}
+.sh2 h2{font-size:16px;font-weight:700}
+.sep{height:1px;background:var(--bd);margin:10px 0}
+input[type="checkbox"]{accent-color:var(--pu);width:13px;height:13px;cursor:pointer}
+input[type="color"]{border:none;padding:0;cursor:pointer;border-radius:4px;height:28px;width:44px}
+/* MODAL */
+.mbg{display:none;position:fixed;inset:0;background:rgba(27,42,74,.45);z-index:200;align-items:center;justify-content:center}
+.mbg.open{display:flex}
+.mbox{background:#fff;border-radius:14px;padding:22px;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto;box-shadow:0 24px 64px rgba(0,0,0,.22)}
+.mbox h3{font-size:15px;font-weight:700;margin-bottom:16px}
+.fg{margin-bottom:11px}
+.fg label{display:block;font-size:10px;font-weight:700;color:var(--mt);margin-bottom:3px;text-transform:uppercase;letter-spacing:.3px}
+.fg input,.fg select,.fg textarea,.fi{width:100%;padding:7px 9px;border:1.5px solid var(--bd);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--nv);background:#fff;transition:border-color .15s}
+.fg input:focus,.fg select:focus,.fg textarea:focus,.fi:focus{outline:none;border-color:var(--pu)}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.mact{display:flex;justify-content:flex-end;gap:7px;margin-top:16px}
+.tchip{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700}
+.rec-box{background:#F9FBE7;border:1px solid #C5E1A5;border-radius:7px;padding:10px;margin-top:8px}
+.rec-box label{font-size:12px;font-weight:600;color:#33691E;display:flex;align-items:center;gap:7px;cursor:pointer}
+.color-prev{width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;margin-right:10px;flex-shrink:0}
+
+/* SCHEDULE TEMPLATE */
+.tpl-wrap{background:#F8F9FF;border:1.5px solid #C5CAE9;border-radius:9px;padding:14px;margin-top:10px}
+.tpl-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#3949AB;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.tpl-slot{display:grid;grid-template-columns:80px 1fr 1fr 1fr 28px;gap:6px;align-items:center;margin-bottom:7px}
+.tpl-slot select,.tpl-slot input{padding:5px 7px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--nv);background:#fff;width:100%}
+.tpl-slot select:focus,.tpl-slot input:focus{outline:none;border-color:#3949AB}
+.tpl-slot-hdr{display:grid;grid-template-columns:80px 1fr 1fr 1fr 28px;gap:6px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt);margin-bottom:5px}
+.tpl-rm{background:none;border:none;cursor:pointer;color:var(--rd);font-size:16px;line-height:1;padding:0;font-weight:700}
+.tpl-rm:hover{color:#8B0000}
+.gen-btn{background:linear-gradient(135deg,#3949AB,#5C6BC0);color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;width:100%;margin-top:10px;transition:opacity .15s;display:flex;align-items:center;justify-content:center;gap:6px}
+.gen-btn:hover{opacity:.88}
+.gen-preview{background:#E8EAF6;border-radius:6px;padding:8px 11px;font-size:11px;color:#283593;margin-top:8px;display:none}
+
+/* ROLE TOGGLE PILL */
+.role-tog{display:inline-flex;border-radius:5px;overflow:hidden;border:1.5px solid var(--bd);margin-top:2px}
+.role-tog span{padding:2px 8px;font-size:9px;font-weight:800;cursor:pointer;transition:all .15s;letter-spacing:.3px;text-transform:uppercase}
+.role-tog span.active-rbt{background:#F3E5F5;color:#4A148C}
+.role-tog span.active-abat{background:#FFF3E0;color:#E65100}
+.role-tog span:not([class*="active"]){background:#fff;color:var(--mt)}
+.role-tog span:not([class*="active"]):hover{background:var(--bg)}
+
+/* STAFF SCHEDULE TEMPLATE */
+.stpl-wrap{background:#F0F4FF;border:1.5px solid #9FA8DA;border-radius:9px;padding:14px;margin-top:10px}
+.stpl-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#283593;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.stpl-slot{display:grid;grid-template-columns:76px 90px 1fr 1fr 28px;gap:5px;align-items:center;margin-bottom:6px}
+.stpl-slot select,.stpl-slot input{padding:5px 6px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--nv);background:#fff;width:100%}
+.stpl-slot select:focus,.stpl-slot input:focus{outline:none;border-color:#3949AB}
+.stpl-slot-hdr{display:grid;grid-template-columns:76px 90px 1fr 1fr 28px;gap:5px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt);margin-bottom:5px}
+.stpl-hours{background:#E8EAF6;border-radius:6px;padding:7px 11px;font-size:11px;color:#283593;margin-top:8px;display:flex;align-items:center;justify-content:space-between}
+.stpl-hours strong{font-size:15px;font-family:'Playfair Display',serif}
+.stpl-warn{color:#E65100;font-size:10px;font-weight:600;margin-top:4px;display:flex;align-items:center;gap:4px}
+/* VIEW-ONLY / PIN LOCK */
+.vo-banner{background:#E8832A;color:#fff;text-align:center;padding:7px 16px;font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px;position:sticky;top:52px;z-index:55;display:none}
+.vo-banner.show{display:flex}
+.vo-banner button{background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;padding:3px 12px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700}
+.vo-banner button:hover{background:rgba(255,255,255,.35)}
+.lock-btn{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 11px;border-radius:6px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;display:flex;align-items:center;gap:5px}
+.lock-btn:hover{background:rgba(255,255,255,.28)}
+.pin-dots{display:flex;gap:10px;justify-content:center;margin:14px 0}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--bd);background:var(--bg);transition:background .15s}
+.pin-dot.filled{background:var(--pu);border-color:var(--pu)}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:210px;margin:0 auto}
+.pin-key{padding:13px;border-radius:9px;border:1.5px solid var(--bd);background:#fff;cursor:pointer;font-size:16px;font-weight:700;font-family:'DM Sans',sans-serif;text-align:center;transition:all .15s;color:var(--nv)}
+.pin-key:hover{background:var(--pl);border-color:var(--pu)}
+.pin-key.del{font-size:13px;color:var(--rd)}
+.pin-err{color:var(--rd);font-size:12px;text-align:center;font-weight:600;margin-top:8px;min-height:18px}
+body.view-only .edit-only{display:none!important}
+body.view-only .sbl{cursor:default!important}
+body.view-only .asb{display:none!important}
+body.view-only .adm-btn,body.view-only .apm-btn{display:none!important}
+body.view-only .stf-row button{display:none!important}
+
+
+/* ── FIREBASE SETUP OVERLAY ── */
+#fb-setup{display:none;position:fixed;inset:0;background:var(--nv);z-index:999;overflow-y:auto;padding:40px 20px}
+#fb-setup.show{display:flex;align-items:flex-start;justify-content:center}
+.fb-box{background:#fff;border-radius:18px;padding:32px;width:100%;max-width:500px;box-shadow:0 24px 64px rgba(0,0,0,.3)}
+.fb-box h2{font-family:'Playfair Display',serif;font-size:22px;color:var(--nv);margin-bottom:6px}
+.fb-box p{font-size:13px;color:var(--t2);margin-bottom:20px;line-height:1.6}
+.fb-step{background:var(--bg);border-radius:10px;padding:14px 16px;margin-bottom:14px;border-left:3px solid var(--pu)}
+.fb-step h4{font-size:12px;font-weight:700;color:var(--pu);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px}
+.fb-step p{font-size:12px;color:var(--t2);margin:0;line-height:1.5}
+.fb-step a{color:var(--pu);font-weight:600}
+.fb-code{background:#1B2A4A;color:#A8D5A2;font-family:monospace;font-size:11px;padding:10px 13px;border-radius:7px;margin:8px 0;line-height:1.7;white-space:pre-wrap;word-break:break-all}
+.fb-fields{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:14px 0}
+@media(max-width:480px){.fb-fields{grid-template-columns:1fr}}
+.fb-field label{display:block;font-size:10px;font-weight:700;color:var(--mt);margin-bottom:3px;text-transform:uppercase}
+.fb-field input{width:100%;padding:8px 10px;border:1.5px solid var(--bd);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--nv)}
+.fb-field input:focus{outline:none;border-color:var(--pu)}
+.fb-status{font-size:12px;font-weight:600;min-height:20px;margin-top:10px;text-align:center}
+.sync-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:5px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sync-ok{background:var(--gn)}.sync-err{background:var(--rd)}.sync-saving{background:var(--am)}
+#sync-status{position:fixed;bottom:calc(70px + env(safe-area-inset-bottom,0));right:14px;background:#fff;border:1px solid var(--bd);border-radius:20px;padding:5px 12px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:5px;box-shadow:var(--sh);z-index:65;transition:opacity .3s}
+@media(min-width:641px){#sync-status{bottom:14px}}
+
+/* MY SCHEDULE TAB */
+.mys-header{background:var(--nv);border-radius:14px;padding:20px;color:#fff;margin-bottom:16px;position:relative;overflow:hidden}
+.mys-header::after{content:'';position:absolute;right:-20px;top:-20px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.05)}
+.mys-name{font-family:'Playfair Display',serif;font-size:22px;font-weight:700;margin-bottom:2px}
+.mys-role{font-size:12px;opacity:.7;font-weight:500}
+.mys-date{font-size:12px;opacity:.6;margin-top:6px}
+.mys-av{width:52px;height:52px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;position:absolute;right:20px;top:20px}
+.mys-week{display:flex;gap:6px;margin-bottom:18px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.mys-week::-webkit-scrollbar{display:none}
+.mys-day{flex:1;min-width:52px;background:#fff;border-radius:10px;border:1px solid var(--bd);padding:8px 6px;text-align:center;cursor:pointer;transition:all .15s;box-shadow:var(--sh)}
+.mys-day.active{background:var(--pu);border-color:var(--pu);color:#fff}
+.mys-day.active .mys-dnum{color:#fff}
+.mys-day.active .mys-dname{color:rgba(255,255,255,.7)}
+.mys-day.has-sess{border-bottom:3px solid var(--pu)}
+.mys-day.active.has-sess{border-bottom-color:rgba(255,255,255,.5)}
+.mys-day.today-d{box-shadow:0 0 0 2px var(--pu)}
+.mys-dname{font-size:9px;font-weight:700;text-transform:uppercase;color:var(--mt);letter-spacing:.5px}
+.mys-dnum{font-size:18px;font-weight:700;font-family:'Playfair Display',serif;line-height:1.2;color:var(--nv)}
+.mys-dct{font-size:9px;color:var(--mt);margin-top:1px}
+.mys-day.active .mys-dct{color:rgba(255,255,255,.6)}
+.mys-sess-wrap{display:flex;flex-direction:column;gap:8px}
+.mys-sess{background:#fff;border-radius:12px;border:1px solid var(--bd);padding:14px 16px;box-shadow:var(--sh);position:relative;overflow:hidden}
+.mys-sess::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px}
+.mys-sess.cx{opacity:.5}
+.mys-sess-time{font-size:11px;font-weight:700;color:var(--mt);margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.mys-sess-dur{background:var(--bg);padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;color:var(--t2)}
+.mys-sess-client{font-size:16px;font-weight:700;color:var(--nv);margin-bottom:5px}
+.mys-sess-meta{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.mys-sess-cx{background:#FFEBEE;color:var(--rd);font-size:11px;font-weight:700;padding:4px 10px;border-radius:6px;margin-top:6px;display:inline-block}
+.mys-bus{background:#FFFDE7;border:1px solid #FFE082;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;color:#795548}
+.mys-bday{background:#FFF9C4;border:1px solid #FFE082;border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mys-empty{text-align:center;padding:40px 20px;color:var(--mt)}
+.mys-empty .mi{font-size:36px;margin-bottom:10px}
+.mys-select-wrap{background:#fff;border-radius:12px;border:1px solid var(--bd);padding:18px;box-shadow:var(--sh);margin-bottom:16px}
+.mys-select-wrap label{font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:7px}
+.mys-select{width:100%;padding:11px 13px;border:1.5px solid var(--bd);border-radius:9px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--nv);background:#fff;cursor:pointer}
+.mys-select:focus{outline:none;border-color:var(--pu)}
+.mys-section-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin:14px 0 8px;display:flex;align-items:center;gap:6px}
+
+
+/* ── AUTH LOGIN SCREEN ── */
+#auth-screen{display:none;position:fixed;inset:0;background:var(--nv);z-index:1000;align-items:center;justify-content:center;padding:20px}
+#auth-screen.show{display:flex}
+.auth-box{background:#fff;border-radius:20px;padding:36px 32px;width:100%;max-width:400px;box-shadow:0 32px 80px rgba(0,0,0,.35)}
+.auth-logo{font-family:'Playfair Display',serif;font-size:20px;color:var(--nv);margin-bottom:4px}.auth-logo em{color:var(--or);font-style:normal}
+.auth-subtitle{font-size:12px;color:var(--mt);margin-bottom:24px;line-height:1.5}
+.auth-privacy{background:#F0F4FF;border:1px solid #C5CAE9;border-radius:8px;padding:10px 13px;font-size:11px;color:#283593;margin-bottom:20px;line-height:1.6}
+.auth-tabs{display:flex;background:var(--bg);border-radius:8px;padding:3px;margin-bottom:20px}
+.auth-tab{flex:1;padding:7px;text-align:center;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;color:var(--mt);transition:all .15s}
+.auth-tab.on{background:#fff;color:var(--pu);box-shadow:var(--sh)}
+.auth-err{color:var(--rd);font-size:11px;font-weight:600;min-height:18px;margin-top:8px;text-align:center}
+.auth-forgot{font-size:11px;color:var(--pu);cursor:pointer;text-align:right;margin-top:4px;font-weight:600}
+.auth-footer{font-size:10px;color:var(--mt);text-align:center;margin-top:20px;line-height:1.6;border-top:1px solid var(--bd);padding-top:14px}
+/* Inactivity warning */
+#inactivity-warn{display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--am);color:#fff;padding:10px 18px;border-radius:10px;font-size:12px;font-weight:600;z-index:500;box-shadow:var(--shm);text-align:center}
+#inactivity-warn.show{display:block}
+/* User badge in header */
+.user-badge{display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,.8)}
+.user-badge strong{color:#fff}
+.user-badge button{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:10px;font-weight:700}
+
+
+/* DOUBLE-BOOKING CONFLICT */
+.conflict-box{background:#FFF8E1;border:2px solid #FFB300;border-radius:9px;padding:13px 15px;margin-bottom:14px}
+.conflict-box h4{font-size:12px;font-weight:700;color:#E65100;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.conflict-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #FFE082;font-size:12px}
+.conflict-item:last-child{border-bottom:none}
+.conflict-actions{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}
+.conflict-actions .btn{flex:1;justify-content:center;min-width:120px}
+/* ── REPORTS TAB ── */
+.rpt-wrap{display:grid;grid-template-columns:240px 1fr;gap:16px;align-items:start}
+@media(max-width:820px){.rpt-wrap{grid-template-columns:1fr}}
+.rpt-sidebar{background:#fff;border-radius:12px;border:1px solid var(--bd);padding:16px;box-shadow:var(--sh)}
+@media(min-width:821px){.rpt-sidebar{position:sticky;top:120px}}
+.rpt-sidebar h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:10px}
+.rpt-btn{width:100%;padding:9px 12px;border-radius:8px;border:1.5px solid var(--bd);background:#fff;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:600;color:var(--t2);text-align:left;margin-bottom:5px;transition:all .15s;display:flex;align-items:center;gap:8px}
+.rpt-btn:hover{border-color:var(--pu);color:var(--pu);background:var(--pl)}
+.rpt-btn.on{background:var(--pu);color:#fff;border-color:var(--pu)}
+.rpt-btn .ri{font-size:15px}
+.rpt-filters{margin-top:12px;padding-top:12px;border-top:1px solid var(--bd)}
+.rfl{font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:3px;margin-top:8px}
+.rft{width:100%;padding:7px 9px;border:1.5px solid var(--bd);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:12px;color:var(--nv);background:#fff}
+.rft:focus{outline:none;border-color:var(--pu)}
+.rpt-main{background:#fff;border-radius:12px;border:1px solid var(--bd);padding:18px;box-shadow:var(--sh);min-height:400px}
+.rpt-main-hdr{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--bd)}
+.rpt-main-hdr h2{font-size:15px;font-weight:700;margin-bottom:2px}
+.rpt-period{font-size:11px;color:var(--mt)}
+.rpt-exports{display:flex;gap:6px;flex-shrink:0}
+.rpt-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:8px;margin-bottom:16px}
+.rsb{background:var(--bg);border-radius:8px;padding:10px 12px;text-align:center}
+.rsn{font-size:20px;font-weight:700;font-family:'Playfair Display',serif;color:var(--nv);line-height:1}
+.rsl{font-size:9px;color:var(--mt);margin-top:2px;font-weight:500;text-transform:uppercase;letter-spacing:.3px}
+.rpt-table{width:100%;border-collapse:collapse;font-size:11px}
+.rpt-table th{background:var(--bg);padding:7px 9px;text-align:left;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt);border-bottom:2px solid var(--bd);white-space:nowrap}
+.rpt-table td{padding:7px 9px;border-bottom:1px solid var(--bl);vertical-align:middle}
+.rpt-table tr:hover td{background:#FAFBFF}
+.rpt-table tr.cx-row td{opacity:.5}
+.rpt-group-hdr{padding:7px 10px;font-size:11px;font-weight:700;border-radius:6px;margin:14px 0 7px;color:#fff}
+.rpt-empty{text-align:center;padding:48px 20px;color:var(--mt)}
+.rpt-empty-icon{font-size:36px;margin-bottom:10px}
+.emp-card{border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:10px}
+.emp-card-hdr{display:flex;align-items:center;gap:10px;margin-bottom:11px}
+.emp-av{width:36px;height:36px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;flex-shrink:0}
+.emp-nm{font-size:13px;font-weight:700}
+.emp-rl{font-size:10px;color:var(--mt)}
+.emp-breakdown{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:9px}
+@media(max-width:600px){.emp-breakdown{grid-template-columns:repeat(3,1fr)}}
+.emp-stat{text-align:center;background:var(--bg);border-radius:6px;padding:7px 4px}
+.emp-stat-n{font-size:15px;font-weight:700;font-family:'Playfair Display',serif;color:var(--nv)}
+.emp-stat-l{font-size:8px;color:var(--mt);margin-top:1px;text-transform:uppercase;letter-spacing:.2px}
+.hrs-bar{height:7px;background:var(--bg);border-radius:4px;overflow:hidden;margin:6px 0 3px}
+.hrs-fill{height:100%;border-radius:4px;transition:width .5s}
+.billable-tag{font-size:9px;font-weight:800;padding:1px 5px;border-radius:3px;margin-left:4px}
+.bill-yes{background:#E8F5E9;color:#1B5E20}
+.bill-no{background:#ECEFF1;color:#455A64}
+@media print{
+  .rpt-sidebar,.rpt-exports,.mob-nav,.ah,.nv,.vo-banner,#sync-status,
+  #auth-screen,.rpt-btn,.rpt-filters,.auth-alerts{display:none!important}
+  .rpt-wrap{grid-template-columns:1fr!important;gap:0!important}
+  .rpt-main{border:none!important;box-shadow:none!important;padding:4px!important}
+  body{padding:0!important;font-size:10px!important}
+  @page{margin:1cm;size:landscape}
+}
+/* AUTH EXPIRY ALERTS */
+.auth-alerts{margin-bottom:16px}
+.auth-alert{display:flex;align-items:flex-start;gap:10px;padding:11px 14px;border-radius:10px;margin-bottom:7px;border:1.5px solid transparent;cursor:pointer;transition:box-shadow .15s}
+.auth-alert:hover{box-shadow:var(--shm)}
+.auth-alert.lvl-red{background:#FFF5F5;border-color:#FCA5A5}
+.auth-alert.lvl-orange{background:#FFF7ED;border-color:#FCD34D}
+.auth-alert.lvl-yellow{background:#FEFCE8;border-color:#FDE68A}
+.auth-alert-icon{font-size:18px;flex-shrink:0;margin-top:1px}
+.auth-alert-body{flex:1;min-width:0}
+.auth-alert-name{font-size:13px;font-weight:700;color:var(--nv)}
+.auth-alert-detail{font-size:11px;color:var(--t2);margin-top:2px}
+.auth-alert-badge{font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;flex-shrink:0;align-self:center}
+.auth-alert.lvl-red .auth-alert-badge{background:#FEE2E2;color:#991B1B}
+.auth-alert.lvl-orange .auth-alert-badge{background:#FEF3C7;color:#92400E}
+.auth-alert.lvl-yellow .auth-alert-badge{background:#FEF9C3;color:#854D0E}
+.auth-alerts-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.auth-alerts-hdr h3{font-size:13px;font-weight:700}
+.auth-collapse{font-size:11px;color:var(--pu);cursor:pointer;font-weight:600;background:none;border:none;font-family:'DM Sans',sans-serif}
+
+/* PRINT STYLES */
+@media print {
+  /* Hide everything interactive */
+  .ah,.nv,.mob-nav,.vo-banner,#sync-status,.vtog,
+  #sched-ctrl button,.asb,.auth-alerts,
+  .edit-only{display:none!important}
+
+  body{background:#fff!important;padding:0!important;font-size:11px}
+  .mn{padding:8px!important;max-width:none!important}
+  .tp{display:none!important}
+  .tp.on{display:block!important}
+
+  /* Week grid: compact, ink-friendly */
+  .sgrid{display:grid!important;grid-template-columns:repeat(5,1fr)!important;gap:5px!important}
+  .dc{border:1px solid #ccc!important;border-radius:4px!important;box-shadow:none!important;break-inside:avoid}
+  .dh{background:#f5f5f5!important;color:#000!important;padding:6px 8px!important}
+  .dh.tod{background:#E8EAF6!important;color:#000!important}
+  .ddv{font-size:16px!important}
+
+  /* Session blocks: white bg, just a left color bar, no shadows */
+  .sbl{background:#fff!important;border:1px solid #ddd!important;border-left-width:3px!important;
+    box-shadow:none!important;padding:4px 6px!important;margin-bottom:2px!important;transform:none!important}
+  .sbl.cx{opacity:.4!important}
+  .scln{font-size:10px!important;font-weight:700!important}
+  .stm{font-size:8px!important}
+  .smet .bdg{font-size:7px!important;padding:1px 3px!important}
+
+  /* Therapist chip: just text + color dot, no background fill */
+  .tchip{background:none!important;color:#333!important;font-size:8px!important}
+  .tdot{width:6px!important;height:6px!important}
+  .sthr{margin-top:1px!important}
+
+  /* Stats: hide on print */
+  .srow{display:none!important}
+
+  /* Bday bar: keep but smaller */
+  .bday-bar{font-size:8px!important;padding:2px 5px!important}
+  .busbar{font-size:8px!important;padding:3px 6px!important}
+
+  /* Print header */
+  #print-header{display:block!important}
+
+  /* Day view: clean */
+  .sess-row{border:1px solid #ddd!important;box-shadow:none!important;padding:6px 8px!important}
+  .sr-bar{width:2px!important}
+  .sr-cl{font-size:12px!important}
+  .dv-side{display:none!important}
+
+  @page{margin:1cm;size:landscape}
+}
+#print-header{display:none;margin-bottom:10px;border-bottom:2px solid #1B2A4A;padding-bottom:8px}
+#print-header h1{font-family:'Playfair Display',serif;font-size:16px;color:#1B2A4A}
+#print-header p{font-size:10px;color:#666;margin-top:2px}
+/* ═══════════════════════════════════════════
+   MOBILE RESPONSIVE  (≤ 640px)
+═══════════════════════════════════════════ */
+
+/* Bottom tab bar */
+.mob-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:62px;background:#fff;border-top:1px solid var(--bd);z-index:70;box-shadow:0 -2px 12px rgba(27,42,74,.1)}
+.mob-nav-inner{display:flex;height:100%}
+.mob-nt{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;cursor:pointer;color:var(--mt);font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;border:none;background:none;font-family:'DM Sans',sans-serif;transition:color .15s;-webkit-tap-highlight-color:transparent;padding-bottom:env(safe-area-inset-bottom,0)}
+.mob-nt .mi{font-size:20px;line-height:1}
+.mob-nt.on{color:var(--pu)}
+.mob-nt.on .mi{transform:translateY(-2px)}
+
+@media(max-width:640px){
+  /* Hide desktop nav, show mobile bottom bar */
+  .nv{display:none}
+  .mob-nav{display:block}
+
+  /* Header: shrink and simplify */
+  .ah{height:48px;padding:0 14px}
+  .lo{font-size:14px}
+  .dp{display:none}
+  .lock-btn{font-size:10px;padding:3px 8px}
+
+  /* Body padding for bottom bar */
+  body{padding-bottom:70px}
+  .mn{padding:12px}
+  .vo-banner{top:48px;font-size:11px;padding:6px 12px}
+
+  /* Stats: horizontal scroll strip */
+  .srow{grid-template-columns:repeat(6,90px);overflow-x:auto;flex-wrap:nowrap;padding-bottom:4px;gap:7px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .srow::-webkit-scrollbar{display:none}
+  .sb{padding:10px 12px;min-width:90px}
+  .sn{font-size:20px}
+
+  /* Schedule controls: stack neatly */
+  #sched-ctrl{flex-direction:column;align-items:stretch;gap:8px}
+  #sched-ctrl>div:first-child{justify-content:space-between}
+  #sched-ctrl>div:last-child{display:flex;gap:6px}
+  #sched-ctrl>div:last-child .btn{flex:1;justify-content:center}
+  #vlbl{text-align:center;font-size:14px}
+
+  /* Weekly grid → single column scroll (hidden on mobile, day view used instead) */
+  .sgrid{grid-template-columns:1fr}
+  .dc{min-height:auto}
+
+  /* Day view: full width, bigger session rows */
+  .dv-wrap{flex-direction:column;gap:10px}
+  .dv-side{width:100%;order:-1}
+  .sess-row{padding:12px 14px}
+  .sr-time{width:60px}
+  .sr-cl{font-size:14px}
+  .sr-thr{flex-wrap:wrap}
+
+  /* Swipe hint */
+  .swipe-hint{text-align:center;font-size:10px;color:var(--mt);padding:6px 0;opacity:.7}
+
+  /* Session blocks: bigger tap targets */
+  .sbl{padding:9px 10px;margin-bottom:1px}
+  .scln{font-size:12px}
+  .stm{font-size:10px}
+  .asb{padding:10px;font-size:11px}
+
+  /* Clients: single column */
+  .cgrid{grid-template-columns:1fr}
+  .ccard{padding:13px}
+  .fbar{gap:5px}
+  .fch{padding:5px 10px;font-size:11px}
+
+  /* Staff: single column */
+  .stgrid{grid-template-columns:1fr}
+
+  /* Daily log: single column */
+  .lgrid{grid-template-columns:1fr}
+
+  /* Settings: single column */
+  .scols{grid-template-columns:1fr}
+
+  /* Template slots: stack on mobile */
+  .tpl-slot{grid-template-columns:70px 1fr 28px;grid-template-rows:auto auto}
+  .tpl-slot-hdr{display:none}
+  .tpl-slot>div:nth-child(2){grid-column:2;grid-row:1}
+  .stpl-slot{grid-template-columns:70px 1fr 28px}
+  .stpl-slot-hdr{display:none}
+
+  /* Modal: full screen on mobile */
+  .mbg{align-items:flex-end}
+  .mbox{width:100%;max-width:100%;border-radius:20px 20px 0 0;padding:20px 18px;max-height:92vh;padding-bottom:calc(20px + env(safe-area-inset-bottom,0))}
+
+  /* Larger form inputs for touch */
+  .fg input,.fg select,.fg textarea,.fi{padding:10px 11px;font-size:14px}
+  .fg select{font-size:14px}
+  .btn{padding:10px 16px;font-size:13px}
+  .bsm{padding:8px 13px;font-size:12px}
+  .bxs{padding:5px 9px;font-size:11px}
+  .mact{gap:9px}
+  .mact .btn{flex:1;justify-content:center;padding:11px}
+
+  /* PIN pad — already good, just ensure sizing */
+  .pin-pad{max-width:240px}
+  .pin-key{padding:16px}
+
+  /* fr2 grid: stack on very small screens */
+  .fr2{grid-template-columns:1fr}
+
+  /* Bigger checkboxes */
+  input[type="checkbox"]{width:18px;height:18px}
+
+  /* Sheet headers */
+  .sh2{flex-wrap:wrap;gap:8px}
+  .sh2 h2{font-size:15px}
+
+  /* View toggle wider */
+  .vtog button{padding:8px 18px;font-size:12px}
+}
+
+/* iPhone notch/home bar safe area */
+@supports(padding: env(safe-area-inset-bottom)){
+  .mob-nav{height:calc(62px + env(safe-area-inset-bottom))}
+  .mob-nt{padding-bottom:env(safe-area-inset-bottom)}
+}
+</style>
+</head>
+<body>
+
+
+
+<!-- Auth login screen -->
+<div id="auth-screen">
+  <div class="auth-box">
+    <div class="auth-logo">adapt<em>ABILITY</em> Therapie</div>
+    <div class="auth-subtitle">Practice Scheduler · Secure Staff Access</div>
+    <div class="auth-privacy">🔒 <strong>Datenschutz / DSGVO:</strong> This application processes schedule data in accordance with DSGVO. Access is restricted to authorized adaptABILITY staff only. Client information is minimized and pseudonymized.</div>
+    <div class="auth-tabs">
+      <div class="auth-tab on" id="tab-login" onclick="authTab('login')">Sign In</div>
+      <div class="auth-tab" id="tab-reset" onclick="authTab('reset')">Reset Password</div>
+    </div>
+    <div id="auth-login-form">
+      <div class="fg"><label>Email Address</label><input type="email" id="auth-email" placeholder="you@adaptability.co" autocomplete="email"></div>
+      <div class="fg"><label>Password</label><input type="password" id="auth-password" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="btn bp" style="width:100%;justify-content:center;padding:12px;font-size:14px;margin-top:4px" onclick="doLogin()">Sign In →</button>
+      <div class="auth-err" id="auth-err"></div>
+    </div>
+    <div id="auth-reset-form" style="display:none">
+      <div class="fg"><label>Email Address</label><input type="email" id="auth-reset-email" placeholder="you@adaptability.co"></div>
+      <button class="btn bp" style="width:100%;justify-content:center;padding:12px;font-size:14px" onclick="doReset()">Send Reset Email →</button>
+      <div class="auth-err" id="auth-reset-err"></div>
+    </div>
+    <div class="auth-footer">
+      adaptABILITY Therapie GmbH · Ramstein, Germany<br>
+      First time? Ask your Scheduler administrator to create your account.
+    </div>
+  </div>
+</div>
+<div id="inactivity-warn">⏱ You'll be signed out in 60 seconds due to inactivity. <span style="text-decoration:underline;cursor:pointer" onclick="resetInactivity()">Stay signed in</span></div>
+<!-- Firebase setup overlay -->
+<div id="fb-setup">
+  <div class="fb-box">
+    <h2>🔥 Connect to Firebase</h2>
+    <p>adaptABILITY Scheduler uses Firebase to sync your schedule in real-time across all devices. Setup takes about 5 minutes and is completely free.</p>
+
+    <div class="fb-step">
+      <h4>Step 1 — Create a Firebase project</h4>
+      <p>Go to <a href="https://console.firebase.google.com" target="_blank">console.firebase.google.com</a> → <strong>Add project</strong> → name it "adaptability-scheduler" → disable Google Analytics → Create.</p>
+    </div>
+
+    <div class="fb-step">
+      <h4>Step 2 — Add a Web App</h4>
+      <p>In your project → click the <strong>&lt;/&gt;</strong> icon → register the app → copy the <strong>firebaseConfig</strong> object values into the fields below.</p>
+    </div>
+
+    <div class="fb-step">
+      <h4>Step 3 — Enable Firestore</h4>
+      <p>In the left sidebar → <strong>Build → Firestore Database</strong> → Create database → Start in <strong>test mode</strong> → choose a location near Frankfurt → Enable.</p>
+    </div>
+
+    <div class="fb-step">
+      <h4>Step 4 — Paste your config below</h4>
+      <div class="fb-fields">
+        <div class="fb-field"><label>API Key</label><input id="fb-apiKey" placeholder="AIzaSy..."></div>
+        <div class="fb-field"><label>Auth Domain</label><input id="fb-authDomain" placeholder="your-app.firebaseapp.com"></div>
+        <div class="fb-field"><label>Project ID</label><input id="fb-projectId" placeholder="your-app-id"></div>
+        <div class="fb-field"><label>Storage Bucket</label><input id="fb-storageBucket" placeholder="your-app.appspot.com"></div>
+        <div class="fb-field"><label>Messaging Sender ID</label><input id="fb-messagingSenderId" placeholder="123456789"></div>
+        <div class="fb-field"><label>App ID</label><input id="fb-appId" placeholder="1:123:web:abc..."></div>
+      </div>
+      <button class="btn bp" style="width:100%;justify-content:center;padding:12px" onclick="connectFirebase()">🔥 Connect &amp; Launch</button>
+      <div class="fb-status" id="fb-status"></div>
+    </div>
+
+    <div style="text-align:center;margin-top:16px">
+      <button class="btn bsm" onclick="useDemoMode()">Use locally without Firebase (data stays on this device only)</button>
+    </div>
+  </div>
+</div>
+
+<!-- Sync status indicator -->
+<div id="sync-status" style="display:none">
+  <span class="sync-dot sync-ok" id="sync-dot"></span>
+  <span id="sync-lbl">Synced</span>
+</div>
+<div class="mob-nav" id="mobNav">
+  <div class="mob-nav-inner">
+    <button class="mob-nt on" onclick="sw('sched')" data-mt="sched"><span class="mi">📅</span>Schedule</button>
+    <button class="mob-nt" onclick="sw('clients')" data-mt="clients"><span class="mi">👥</span>Clients</button>
+    <button class="mob-nt" onclick="sw('staff')" data-mt="staff"><span class="mi">🧑‍⚕️</span>Staff</button>
+    <button class="mob-nt" onclick="sw('daily')" data-mt="daily"><span class="mi">📋</span>Daily</button>
+    <button class="mob-nt" onclick="sw('mysched')" data-mt="mysched"><span class="mi">🙋</span>My Schedule</button>
+    <button class="mob-nt edit-only" onclick="sw('reports')" data-mt="reports"><span class="mi">📊</span>Reports</button>
+    <button class="mob-nt edit-only" onclick="sw('settings')" data-mt="settings"><span class="mi">⚙️</span>Settings</button>
+  </div>
+</div>
+<header class="ah">
+  <div class="lo">adapt<em>ABILITY</em> Therapie — Scheduler</div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="user-badge"><span id="hdate"></span><span id="user-display" style="display:none"><strong id="user-name"></strong><button onclick="doLogout()">Sign out</button></span><button class="lock-btn" id="lockBtn" onclick="toggleLock()" style="display:none">🔓 Scheduler</button></div>
+  </div>
+</header>
+<div class="vo-banner" id="voBanner">
+  👁 Staff View — Read Only &nbsp;
+  <button onclick="promptUnlock()">🔐 Scheduler Login</button>
+</div>
+<nav class="nv">
+  <div class="nt on" onclick="sw('sched')" data-t="sched">📅 Schedule</div>
+  <div class="nt" onclick="sw('clients')" data-t="clients">👥 Clients</div>
+  <div class="nt" onclick="sw('staff')" data-t="staff">🧑‍⚕️ Staff</div>
+  <div class="nt edit-only" onclick="sw('daily')" data-t="daily">📋 Daily Log</div>
+  <div class="nt" onclick="sw('mysched')" data-t="mysched">🙋 My Schedule</div>
+  <div class="nt edit-only" onclick="sw('reports')" data-t="reports">📊 Reports</div>
+  <div class="nt edit-only" onclick="sw('settings')" data-t="settings">⚙️ Settings</div>
+</nav>
+<main class="mn">
+
+<!-- SCHEDULE TAB -->
+<div class="tp on" id="tp-sched">
+  <div id="print-header"><h1>adaptABILITY Therapie — Weekly Schedule</h1><p id="print-date-range"></p></div>
+<div id="sched-ctrl" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+    <div style="display:flex;gap:6px;align-items:center">
+      <div class="vtog">
+        <button id="vw-btn" class="on" onclick="setView('week')">Week</button>
+        <button onclick="setView('day')">Day</button>
+      </div>
+      <button class="btn bsm" onclick="navPrev()">◀</button>
+      <button class="btn bsm bp" onclick="navToday()">Today</button>
+      <button class="btn bsm" onclick="navNext()">▶</button>
+    </div>
+    <div id="vlbl" style="font-size:16px;font-weight:700"></div>
+    <div style="display:flex;gap:6px">
+      <button class="btn bsm btg edit-only" onclick="openAddBlock()">+ Admin/APM</button>
+      <button class="btn bsm" onclick="doPrint()" title="Print schedule">🖨 Print</button>
+      <button class="btn bsm bp edit-only" onclick="openAddSess()">+ Session</button>
+    </div>
+  </div>
+  <div id="auth-alerts-wrap"></div>
+  <div class="srow" id="stats"></div>
+  <div id="sview"></div>
+</div>
+
+<!-- CLIENTS TAB -->
+<div class="tp" id="tp-clients">
+  <div class="sh2"><h2>Client Roster</h2><button class="btn bp bsm edit-only" onclick="openAddClient()">+ Add Client</button></div>
+  <div class="fbar">
+    <span style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase">Filter:</span>
+    <div class="fch on" onclick="fc('all',this)">All</div>
+    <div class="fch" onclick="fc('ECHO',this)">ECHO</div>
+    <div class="fch" onclick="fc('TC_PRIME',this)">TC Prime</div>
+    <div class="fch" onclick="fc('TC_SELECT',this)">TC Select</div>
+    <div class="fch" onclick="fc('PRIVATE',this)">Private</div>
+    <div class="fch" onclick="fc('AETNA',this)">Aetna</div>
+    <div class="fch" onclick="fc('GEOBLUE',this)">GeoBlue</div>
+    <div class="fch" onclick="fc('GERMAN',this)">German GKV</div>
+    <div class="fch" onclick="fc('OT',this)">Has OT</div>
+    <div class="fch" onclick="fc('BUS',this)">Bus</div>
+    <div class="fch" onclick="fc('UNDER',this)">Under Dosage</div>
+  </div>
+  <div id="ccon"></div>
+</div>
+
+<!-- STAFF TAB -->
+<div class="tp" id="tp-staff">
+  <div class="sh2"><h2>Staff &amp; Availability</h2><button class="btn bp bsm edit-only" onclick="openAddStaff()">+ Add Staff</button></div>
+  <div id="stnotices"></div>
+  <div class="stgrid" id="stgrid"></div>
+</div>
+
+<!-- DAILY LOG TAB -->
+<div class="tp" id="tp-daily">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+    <h2 id="dlbl" style="font-size:16px;font-weight:700"></h2>
+    <button class="btn bsm" onclick="chDay(-1)">◀</button>
+    <button class="btn bsm bp" onclick="rsToday()">Today</button>
+    <button class="btn bsm" onclick="chDay(1)">▶</button>
+    <input type="date" id="dpick" class="btn bsm" style="font-family:'DM Sans',sans-serif" onchange="setDay(this.value)">
+  </div>
+  <div class="lgrid">
+    <div class="lsec">
+      <div class="lstit">🚌 Bus / Transport</div>
+      <div class="fg" style="margin-bottom:10px"><label>Bus Duty Staff</label>
+        <select id="busduty" class="csel" style="width:100%;padding:7px 9px;font-size:12px" onchange="saveBD()"></select>
+      </div>
+      <div style="font-size:9px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Riders Today</div>
+      <div id="buslist"></div>
+    </div>
+    <div class="lsec">
+      <div class="lstit">❌ Cancellations</div>
+      <div id="crows"></div>
+      <div id="nocrow" style="display:none;text-align:center;padding:16px;color:var(--mt);font-size:11px">✅ No sessions today</div>
+    </div>
+    <div class="lsec">
+      <div class="lstit">☕ Breaks</div>
+      <div id="brkl"></div>
+      <button class="btn bsm" style="margin-top:8px" onclick="openAddBreak()">+ Break</button>
+    </div>
+    <div class="lsec">
+      <div class="lstit">📝 Daily Notes</div>
+      <textarea id="dnotes" rows="6" style="width:100%;padding:9px;border:1.5px solid var(--bd);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:12px;resize:vertical" placeholder="Announcements, reminders…" oninput="saveDN()"></textarea>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS TAB -->
+<div class="tp" id="tp-settings">
+  <h2 style="font-size:16px;font-weight:700;margin-bottom:14px">Settings</h2>
+  <div class="scols">
+    <div>
+      <div class="scard">
+        <h3>📅 Holidays &amp; Closures</h3>
+        <div id="hollist"></div>
+        <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">
+          <input type="date" id="nhd" class="fi" style="flex:1;min-width:100px">
+          <input type="text" id="nhn" placeholder="Name…" class="fi" style="flex:2;min-width:120px">
+          <button class="btn bp bsm" onclick="addHol()">Add</button>
+        </div>
+      </div>
+      <div class="scard">
+        <h3>🎨 Insurance Legend</h3>
+        <div id="ins-legend"></div>
+      </div>
+      <div class="scard">
+        <h3>👥 Therapist Colors</h3>
+        <div id="thr-legend"></div>
+      </div>
+      <div class="scard">
+        <h3>🔐 Scheduler PIN</h3>
+        <p style="font-size:11px;color:var(--mt);margin-bottom:10px">Staff see a read-only view. Enter your PIN to enable editing. Default: <strong>1234</strong></p>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <input type="password" id="pin-cur" placeholder="Current PIN" class="fi" style="width:120px" maxlength="4">
+          <input type="password" id="pin-new" placeholder="New PIN" class="fi" style="width:120px" maxlength="4">
+          <button class="btn bp bsm" onclick="changePin()">Change PIN</button>
+        </div>
+        <div id="pin-msg" style="font-size:11px;margin-top:7px;min-height:16px"></div>
+      </div>
+      <div class="scard">
+        <h3>👤 Account Management</h3>
+        <p style="font-size:11px;color:var(--mt);margin-bottom:10px">Create accounts for staff in the <a href="https://console.firebase.google.com/project/adaptability-scheduler/authentication/users" target="_blank" style="color:var(--pu);font-weight:600">Firebase Console → Authentication → Users</a>. Use staff email addresses.</p>
+        <button class="btn bsm bd" onclick="doLogout()">Sign Out of This Device</button>
+      </div>
+      <div class="scard"><h3>💾 Data</h3>
+        <button class="btn bsm" onclick="expData()">⬇ Export JSON</button>
+        <button class="btn bsm bd" style="margin-left:6px" onclick="confReset()">🗑 Reset</button>
+        <button class="btn bsm" style="margin-left:6px;border-color:#FFCC02;color:#795548;background:#FFFDE7" onclick="disconnectFirebase()">🔥 Firebase Setup</button>
+      </div>
+    </div>
+    <div>
+      <div class="scard">
+        <h3>❌ Cancellation Codes</h3>
+        <div id="cxlist"></div>
+        <div class="sep"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input type="text" id="ncc" placeholder="Code" class="fi" style="flex:1;min-width:70px">
+          <input type="text" id="ncl" placeholder="Description" class="fi" style="flex:3;min-width:120px">
+          <button class="btn bp bsm" onclick="addCX()">Add</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MY SCHEDULE TAB -->
+<div class="tp" id="tp-mysched">
+  <div class="mys-select-wrap">
+    <label>Who are you?</label>
+    <select class="mys-select" id="mys-who" onchange="rMyS()">
+      <option value="">— Select your name —</option>
+    </select>
+  </div>
+  <div id="mys-content">
+    <div class="mys-empty"><div class="mi">🙋</div><div style="font-size:14px;font-weight:600;margin-bottom:4px">Select your name above</div><div style="font-size:12px">to see your personal schedule</div></div>
+  </div>
+</div>
+
+<!-- REPORTS TAB -->
+<div class="tp" id="tp-reports">
+  <div class="rpt-wrap">
+    <div class="rpt-sidebar">
+      <h3>Report Type</h3>
+      <button class="rpt-btn on" id="rbt-billing" onclick="setReport('billing',this)">Billing Verification</button>
+      <button class="rpt-btn" id="rbt-attendance" onclick="setReport('attendance',this)">Attendance Log</button>
+      <button class="rpt-btn" id="rbt-cancellations" onclick="setReport('cancellations',this)">Cancellations</button>
+      <button class="rpt-btn" id="rbt-hours" onclick="setReport('hours',this)">Employee Hours</button>
+      <div class="rpt-filters">
+        <span class="rfl">Date From</span>
+        <input type="date" id="rpt-from" class="rft">
+        <span class="rfl">Date To</span>
+        <input type="date" id="rpt-to" class="rft">
+        <span class="rfl">Insurance</span>
+        <select id="rpt-ins" class="rft"><option value="">All Insurance</option></select>
+        <span class="rfl">Therapist</span>
+        <select id="rpt-staff" class="rft"><option value="">All Staff</option></select>
+        <button class="btn bp" style="width:100%;justify-content:center;padding:10px;margin-top:10px" onclick="runReport()">▶ Run Report</button>
+      </div>
+    </div>
+    <div class="rpt-main" id="rpt-main">
+      <div class="rpt-empty">
+        <div class="rpt-empty-icon">📊</div>
+        <div style="font-weight:600;margin-bottom:4px">Select a report type and date range</div>
+        <div style="font-size:11px">then click Run Report</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+<div class="mbg" id="mbg" onclick="bgCk(event)">
+  <div class="mbox"><div id="mc"></div></div>
+</div>
+<script>
+// ── INSURANCE REGISTRY ──
+const INS=[
+  {id:'ECHO',     label:'TRICARE ECHO',  group:'TRICARE',  color:'#7C4DFF',  badge:'b-echo'},
+  {id:'TC_PRIME', label:'TC Prime',      group:'TRICARE',  color:'#1B2A4A',  badge:'b-tcp'},
+  {id:'TC_SELECT',label:'TC Select',     group:'TRICARE',  color:'#3949AB',  badge:'b-tcs'},
+  {id:'PRIVATE',  label:'Private Pay',   group:'Private',  color:'#E8832A',  badge:'b-priv'},
+  {id:'AETNA',    label:'Aetna',         group:'Civilian', color:'#1A6B3A',  badge:'b-aet'},
+  {id:'GEOBLUE',  label:'GeoBlue',       group:'Civilian', color:'#0277BD',  badge:'b-geo'},
+  {id:'CIVILIAN', label:'Other Civilian',group:'Civilian', color:'#2E8B65',  badge:'b-civ'},
+  {id:'TK',       label:'TK (Techniker)',group:'German GKV',color:'#1565C0', badge:'b-ger'},
+  {id:'AOK',      label:'AOK',           group:'German GKV',color:'#2E7D32', badge:'b-ger'},
+  {id:'BARMER',   label:'Barmer',        group:'German GKV',color:'#C62828', badge:'b-ger'},
+  {id:'DAK',      label:'DAK-Gesundheit',group:'German GKV',color:'#6A1B9A', badge:'b-ger'},
+  {id:'IKK',      label:'IKK',           group:'German GKV',color:'#E65100', badge:'b-ger'},
+  {id:'GERMAN_O', label:'Other GKV',     group:'German GKV',color:'#37474F', badge:'b-ger'},
+];
+function iById(id){return INS.find(x=>x.id===id)||{id,label:id,group:'',color:'#9E9E9E',badge:'b-civ'};}
+function iColor(id){return iById(id).color;}
+function iLabel(id){return iById(id).label;}
+function iBdg(id){return iById(id).badge;}
+function isGerman(id){return iById(id).group==='German GKV';}
+// Insurance <select> options grouped
+function insOpts(sel=''){
+  const groups=['TRICARE','Private','Civilian','German GKV'];
+  return groups.map(g=>`<optgroup label="${g}">${INS.filter(i=>i.group===g).map(i=>`<option value="${i.id}" ${sel===i.id?'selected':''}>${i.label}</option>`).join('')}</optgroup>`).join('');
+}
+
+// ── ROLES ──
+const ROLES=['BCBA','RBT','ABAT','OT','Billing'];
+const ROLE_BADGE={BCBA:'b-echo',RBT:'b-sup',ABAT:'b-pt',OT:'b-ot',Billing:'b-adm'};
+
+// ── SESSION TYPES ──
+const STYPES=[
+  {id:'ABA', label:'ABA', badge:'b-aba'},
+  {id:'OT',  label:'OT',  badge:'b-ot'},
+  {id:'PT',  label:'Parent Training',badge:'b-pt'},
+  {id:'SUP', label:'Supervision',badge:'b-sup'},
+  {id:'ADMIN',label:'Admin',badge:'b-adm'},
+  {id:'APM', label:'Assessment/Prog Mod',badge:'b-apm'},
+];
+function sTypeBdg(t){return(STYPES.find(x=>x.id===t)||{badge:'b-adm'}).badge;}
+function sTypeLabel(t){return(STYPES.find(x=>x.id===t)||{label:t}).label;}
+
+// ── STATE ──
+let S={clients:[],staff:[],sessions:[],logs:{},holidays:[],cfg:{cxCodes:defCX()}};
+let curView='week';
+let wkStart=wkOf(new Date());
+let dayDate=fd(new Date());
+let atab='sched';
+let cflt='all';
+
+function defCX(){return[
+  {code:'CX-S',label:'Sick – Client'},{code:'CX-T',label:'Sick – Therapist'},
+  {code:'CX-V',label:'Vacation'},{code:'CX-NS',label:'No Show'},
+  {code:'CX-WT',label:'Weather/Transport'},{code:'CX-F',label:'Family Emergency'},
+  {code:'CX-CC',label:'Clinic Closure'},{code:'CX-O',label:'Other'},
+];}
+
+// ── SAMPLE DATA ──
+function loadSample(){
+  S.staff=[
+    {id:'ToS',name:'Tobias Schiebelhut',initials:'ToS',role:'RBT',hrs:35,birthday:'1990-07-15',av:[1,1,1,1,1],bus:false,pto:[],clients:[],color:'#8B7355'},
+    {id:'SW', name:'Suzanne Ward',       initials:'SW', role:'BCBA',hrs:null,birthday:'1985-06-14',av:[1,1,1,1,1],bus:false,pto:[],clients:[],color:'#C8C8C8'},
+    {id:'TC', name:'Taylor Calame',      initials:'TC', role:'ABAT',hrs:null,hrsNote:'flex 40/mo',birthday:'1995-03-22',av:[1,1,1,1,0],bus:false,pto:[],clients:[],color:'#FFB3B3'},
+    {id:'SB', name:'Sara Bastin',        initials:'SB', role:'RBT',hrs:35,birthday:'1997-11-03',av:[1,1,1,1,1],bus:true, pto:[],clients:[],color:'#98D498'},
+    {id:'AG', name:'Anais Goral',        initials:'AG', role:'RBT',hrs:30,birthday:'1996-08-20',av:[1,1,0,1,1],bus:false,pto:[],clients:[],color:'#C8B450'},
+    {id:'MR', name:'Marina Riede',       initials:'MR', role:'OT', hrs:25,birthday:'1988-04-05',av:[1,0,1,0,1],bus:false,pto:[],clients:[],color:'#9E9E9E'},
+    {id:'AT', name:'Ali Trznadel',       initials:'AT', role:'ABAT',hrs:30,birthday:'1994-01-30',av:[0,1,1,1,1],bus:true, pto:[],clients:[],color:'#FF9933'},
+    {id:'MQ', name:'Miriam Quarterman',  initials:'MQ', role:'RBT',hrs:30,birthday:'1992-09-14',av:[1,1,1,1,1],bus:false,pto:[],clients:[],color:'#22CC22'},
+    {id:'ErT',name:'Erika Toth',         initials:'ErT',role:'RBT',hrs:30,birthday:'1999-12-08',av:[1,1,1,0,1],bus:true, pto:[],clients:[],color:'#E0E0E0'},
+    {id:'MF', name:'Melanie Fleming',    initials:'MF', role:'OT', hrs:30,birthday:'1991-05-27',av:[1,1,0,1,0],bus:false,pto:[],clients:[],color:'#26C6DA'},
+    {id:'KS', name:'Kori Sheehey',       initials:'KS', role:'RBT',hrs:null,birthday:'1998-02-17',av:[1,0,1,1,1],bus:false,pto:[],clients:[],color:'#B0BEC5'},
+    {id:'JS', name:'Janina Schiebelhut', initials:'JS', role:'RBT',hrs:null,birthday:'1993-10-09',av:[1,1,1,0,1],bus:true, pto:[],clients:[],color:'#C5CAE9'},
+    {id:'TyC',name:'Tyler Cruson',       initials:'TyC',role:'RBT',hrs:null,birthday:'2000-06-22',av:[0,1,1,1,1],bus:false,pto:[],clients:[],color:'#F5F0DC'},
+  ];
+  S.clients=[
+    {id:'c1',name:'Jackson R.',  dob:'2016-05-10',ins:'ECHO',     rec:25,sch:20,hasOT:true, hasBus:true, team:['SW','SB','MR'],  bcba:'SW',notes:'',authEnd:'2026-09-30'},
+    {id:'c2',name:'Amelia C.',   dob:'2014-02-28',ins:'ECHO',     rec:20,sch:20,hasOT:false,hasBus:true, team:['SW','ErT'],      bcba:'SW',notes:'',authEnd:'2026-08-15'},
+    {id:'c3',name:'Noah P.',     dob:'2018-09-14',ins:'TC_PRIME', rec:30,sch:25,hasOT:true, hasBus:false,team:['SW','AG','MR'],  bcba:'SW',notes:'',authEnd:'2026-10-01'},
+    {id:'c4',name:'Sofia D.',    dob:'2015-07-03',ins:'TC_SELECT',rec:20,sch:18,hasOT:false,hasBus:false,team:['SW','MQ'],       bcba:'SW',notes:'',authEnd:'2026-07-31'},
+    {id:'c5',name:'Ethan M.',    dob:'2012-11-20',ins:'TC_PRIME', rec:15,sch:15,hasOT:false,hasBus:true, team:['SW','SB'],       bcba:'SW',notes:'',authEnd:'2026-09-01'},
+    {id:'c6',name:'Mia H.',      dob:'2017-04-05',ins:'PRIVATE',  rec:20,sch:16,hasOT:true, hasBus:false,team:['SW','AT','MF'],  bcba:'SW',notes:'',authEnd:''},
+    {id:'c7',name:'Lukas S.',    dob:'2013-12-08',ins:'AETNA',    rec:15,sch:14,hasOT:false,hasBus:false,team:['SW','TyC'],      bcba:'SW',notes:'',authEnd:'2026-12-31'},
+    {id:'c8',name:'Hannah T.',   dob:'2016-08-22',ins:'GEOBLUE',  rec:20,sch:20,hasOT:false,hasBus:false,team:['SW','ToS'],      bcba:'SW',notes:'',authEnd:'2026-11-30'},
+    {id:'c9',name:'Felix B.',    dob:'2019-03-11',ins:'TK',       rec:60,sch:45,hasOT:true, hasBus:false,team:['SW','MR','MF'],  bcba:'SW',notes:'OT via TK only',authEnd:'2026-06-30'},
+    {id:'c10',name:'Lena K.',    dob:'2017-08-04',ins:'AOK',      rec:45,sch:45,hasOT:true, hasBus:false,team:['SW','MF'],       bcba:'SW',notes:'',authEnd:'2026-08-31'},
+  ];
+  const tpls=[
+    {dw:1,cl:'c1',st:'SB', s:'08:00',e:'10:00',t:'ABA'},
+    {dw:1,cl:'c1',st:'MR', s:'10:00',e:'11:00',t:'OT'},
+    {dw:1,cl:'c4',st:'MQ', s:'09:00',e:'11:00',t:'ABA'},
+    {dw:1,cl:'c7',st:'TyC',s:'13:00',e:'15:00',t:'ABA'},
+    {dw:1,cl:'c2',st:'SW', s:'12:00',e:'13:00',t:'PT'},
+    {dw:2,cl:'c2',st:'ErT',s:'08:30',e:'10:30',t:'ABA'},
+    {dw:2,cl:'c5',st:'SB', s:'10:30',e:'12:00',t:'ABA'},
+    {dw:2,cl:'c6',st:'AT', s:'09:00',e:'11:00',t:'ABA'},
+    {dw:2,cl:'c6',st:'MF', s:'11:00',e:'12:00',t:'OT'},
+    {dw:2,cl:'c8',st:'ToS',s:'13:00',e:'15:00',t:'ABA'},
+    {dw:2,cl:'c3',st:'SW', s:'14:00',e:'14:30',t:'SUP'},
+    {dw:3,cl:'c1',st:'SB', s:'08:00',e:'10:00',t:'ABA'},
+    {dw:3,cl:'c3',st:'AG', s:'08:30',e:'10:30',t:'ABA'},
+    {dw:3,cl:'c3',st:'MR', s:'10:30',e:'11:30',t:'OT'},
+    {dw:3,cl:'c4',st:'MQ', s:'09:00',e:'11:00',t:'ABA'},
+    {dw:3,cl:'c2',st:'SW', s:'12:00',e:'13:00',t:'PT'},
+    {dw:3,cl:'c9',st:'MF', s:'08:00',e:'09:30',t:'OT'},
+    {dw:4,cl:'c5',st:'SB', s:'08:00',e:'10:00',t:'ABA'},
+    {dw:4,cl:'c8',st:'ToS',s:'09:30',e:'11:30',t:'ABA'},
+    {dw:4,cl:'c6',st:'AT', s:'13:00',e:'15:00',t:'ABA'},
+    {dw:4,cl:'c1',st:'SW', s:'14:00',e:'14:30',t:'SUP'},
+    {dw:4,cl:'c10',st:'MF',s:'09:00',e:'10:30',t:'OT'},
+    {dw:5,cl:'c7',st:'TyC',s:'09:00',e:'11:00',t:'ABA'},
+    {dw:5,cl:'c4',st:'MQ', s:'11:00',e:'13:00',t:'ABA'},
+    {dw:5,cl:'c8',st:'KS', s:'09:00',e:'11:00',t:'ABA'},
+    {dw:5,cl:'c5',st:'SW', s:'13:00',e:'13:30',t:'PT'},
+  ];
+  let sid=1;
+  for(let w=-1;w<=2;w++){
+    const ws=new Date(wkStart);ws.setDate(ws.getDate()+w*7);
+    tpls.forEach(tp=>{
+      const d=new Date(ws);d.setDate(d.getDate()+(tp.dw-1));
+      S.sessions.push({id:'s'+(sid++),cid:tp.cl,stid:tp.st,date:fd(d),s:tp.s,e:tp.e,type:tp.t,status:'OK',cx:'',makeup:false,recurGroup:'',notes:''});
+    });
+  }
+  S.holidays=[
+    {id:'h1',name:'Tag der Arbeit',  date:'2026-05-01'},
+    {id:'h2',name:'Himmelfahrt',     date:'2026-05-14'},
+    {id:'h3',name:'Pfingstmontag',   date:'2026-05-25'},
+    {id:'h4',name:'Independence Day',date:'2026-07-04'},
+  ];
+  save();
+}
+
+// ── STORAGE ──
+// ── FIREBASE / STORAGE ──
+let db = null;
+let useLocal = false;
+let saveTimer = null;
+
+function setSyncStatus(state, msg){
+  const el=document.getElementById('sync-status');
+  const dot=document.getElementById('sync-dot');
+  const lbl=document.getElementById('sync-lbl');
+  if(!el)return;
+  el.style.display='flex';
+  dot.className='sync-dot '+(state==='ok'?'sync-ok':state==='saving'?'sync-saving':'sync-err');
+  lbl.textContent=msg||'Synced';
+  if(state==='ok') setTimeout(()=>{el.style.opacity='0';},3000);
+  else el.style.opacity='1';
+}
+
+function save(){
+  if(useLocal){
+    try{localStorage.setItem('abl-local',JSON.stringify(S));}catch(e){}
+    setSyncStatus('ok','Saved locally');
+    return;
+  }
+  if(!db) return;
+  setSyncStatus('saving','Saving…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async ()=>{
+    try{
+      await db.collection('scheduler').doc('data').set({payload: JSON.stringify(S), ts: Date.now()});
+      setSyncStatus('ok','Synced ✓');
+    } catch(e){
+      setSyncStatus('err','Save failed');
+      console.error('Firebase save error:',e);
+    }
+  }, 600); // debounce 600ms so rapid changes batch
+}
+
+async function init(){
+  // Check for saved Firebase config
+  const cfg = getSavedFirebaseCfg();
+  if(cfg){
+    await connectFirebaseWithCfg(cfg);
+  } else {
+    // Show setup screen
+    document.getElementById('fb-setup').classList.add('show');
+  }
+}
+
+function getSavedFirebaseCfg(){
+  try{const c=localStorage.getItem('abl-fb-cfg');return c?JSON.parse(c):null;}catch(e){return null;}
+}
+
+async function connectFirebase(){
+  const cfg = {
+    apiKey:            document.getElementById('fb-apiKey').value.trim(),
+    authDomain:        document.getElementById('fb-authDomain').value.trim(),
+    projectId:         document.getElementById('fb-projectId').value.trim(),
+    storageBucket:     document.getElementById('fb-storageBucket').value.trim(),
+    messagingSenderId: document.getElementById('fb-messagingSenderId').value.trim(),
+    appId:             document.getElementById('fb-appId').value.trim(),
+  };
+  const missing = Object.entries(cfg).filter(([k,v])=>!v).map(([k])=>k);
+  if(missing.length){
+    document.getElementById('fb-status').innerHTML='<span style="color:var(--rd)">⚠️ Please fill in all fields.</span>';
+    return;
+  }
+  document.getElementById('fb-status').innerHTML='<span style="color:var(--am)">🔄 Connecting…</span>';
+  try{
+    await connectFirebaseWithCfg(cfg, true);
+    localStorage.setItem('abl-fb-cfg', JSON.stringify(cfg));
+    document.getElementById('fb-setup').classList.remove('show');
+  } catch(e){
+    document.getElementById('fb-status').innerHTML='<span style="color:var(--rd)">❌ Connection failed: '+e.message+'</span>';
+  }
+}
+
+let currentUser = null;
+let inactivityTimer = null;
+let inactivityWarnTimer = null;
+const INACTIVITY_MINS = 30;
+
+async function connectFirebaseWithCfg(cfg, isNew=false){
+  if(!firebase.apps.length){ firebase.initializeApp(cfg); }
+  else { firebase.app(); }
+  db = firebase.firestore();
+  // Auth state listener — drives everything
+  firebase.auth().onAuthStateChanged(async user=>{
+    if(user){
+      currentUser = user;
+      document.getElementById('auth-screen').classList.remove('show');
+      document.getElementById('fb-setup').classList.remove('show');
+      // Show user info in header
+      const nameEl=document.getElementById('user-name');
+      const dispEl=document.getElementById('user-display');
+      const lockEl=document.getElementById('lockBtn');
+      if(nameEl) nameEl.textContent=user.email.split('@')[0];
+      if(dispEl) dispEl.style.display='flex';
+      if(lockEl) lockEl.style.display='flex';
+      await loadFromFirestore();
+      startInactivityTimer();
+    } else {
+      currentUser = null;
+      document.getElementById('auth-screen').classList.add('show');
+      const dispEl=document.getElementById('user-display');
+      const lockEl=document.getElementById('lockBtn');
+      if(dispEl) dispEl.style.display='none';
+      if(lockEl) lockEl.style.display='none';
+      clearInactivityTimer();
+    }
+  });
+}
+
+async function loadFromFirestore(){
+  let loaded = false;
+  try{
+    const doc = await db.collection('scheduler').doc('data').get();
+    if(doc.exists && doc.data().payload){
+      const L = JSON.parse(doc.data().payload);
+      S = Object.assign({},S,L);
+      if(!S.cfg)S.cfg={};
+      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
+      loaded = true;
+    }
+  } catch(e){ console.warn('Firestore read error:',e); }
+  // Start empty if no data in Firestore
+  db.collection('scheduler').doc('data').onSnapshot(snap=>{
+    if(!snap.exists||!snap.data().payload) return;
+    const incoming = JSON.parse(snap.data().payload);
+    if(snap.data().ts && snap.data().ts > (window._lastSaveTs||0)){
+      window._lastSaveTs = snap.data().ts;
+      S = Object.assign({},S,incoming);
+      if(!S.cfg)S.cfg={};
+      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
+      renderAll();
+      setSyncStatus('ok','Live update ↓');
+    }
+  }, err=>{ setSyncStatus('err','Sync error'); });
+  renderAll();
+  setSyncStatus('ok','Connected ✓');
+}
+
+// ── AUTH ACTIONS ──
+function authTab(t){
+  document.getElementById('tab-login').classList.toggle('on',t==='login');
+  document.getElementById('tab-reset').classList.toggle('on',t==='reset');
+  document.getElementById('auth-login-form').style.display=t==='login'?'block':'none';
+  document.getElementById('auth-reset-form').style.display=t==='reset'?'block':'none';
+}
+
+async function doLogin(){
+  const email=document.getElementById('auth-email').value.trim();
+  const pass=document.getElementById('auth-password').value;
+  const errEl=document.getElementById('auth-err');
+  errEl.textContent='';
+  if(!email||!pass){errEl.textContent='Please enter your email and password.';return;}
+  try{
+    errEl.textContent='Signing in…';
+    await firebase.auth().signInWithEmailAndPassword(email,pass);
+    // onAuthStateChanged handles the rest
+  } catch(e){
+    const msgs={
+      'auth/user-not-found':'No account found with that email.',
+      'auth/wrong-password':'Incorrect password.',
+      'auth/invalid-email':'Please enter a valid email address.',
+      'auth/too-many-requests':'Too many attempts. Try again later.',
+      'auth/invalid-credential':'Incorrect email or password.',
+    };
+    errEl.textContent=msgs[e.code]||'Sign in failed: '+e.message;
+  }
+}
+
+async function doReset(){
+  const email=document.getElementById('auth-reset-email').value.trim();
+  const errEl=document.getElementById('auth-reset-err');
+  if(!email){errEl.textContent='Enter your email address.';return;}
+  try{
+    await firebase.auth().sendPasswordResetEmail(email);
+    errEl.style.color='var(--gn)';errEl.textContent='Reset email sent! Check your inbox.';
+  } catch(e){
+    errEl.style.color='var(--rd)';errEl.textContent='Could not send reset email.';
+  }
+}
+
+async function doLogout(){
+  if(!confirm('Sign out of adaptABILITY Scheduler?'))return;
+  await firebase.auth().signOut();
+}
+
+// ── INACTIVITY TIMEOUT (30 min) ──
+function startInactivityTimer(){
+  resetInactivity();
+  ['click','keydown','touchstart','mousemove'].forEach(e=>
+    document.addEventListener(e, resetInactivity, {passive:true})
+  );
+}
+function clearInactivityTimer(){
+  clearTimeout(inactivityTimer);clearTimeout(inactivityWarnTimer);
+  const w=document.getElementById('inactivity-warn');if(w)w.classList.remove('show');
+}
+function resetInactivity(){
+  clearTimeout(inactivityTimer);clearTimeout(inactivityWarnTimer);
+  const w=document.getElementById('inactivity-warn');if(w)w.classList.remove('show');
+  const warnMs=(INACTIVITY_MINS*60-60)*1000;
+  inactivityWarnTimer=setTimeout(()=>{if(w)w.classList.add('show');},warnMs);
+  inactivityTimer=setTimeout(async()=>{
+    if(firebase.auth().currentUser){
+      await firebase.auth().signOut();
+    }
+  },INACTIVITY_MINS*60*1000);
+}
+
+function useDemoMode(){
+  useLocal = true;
+  document.getElementById('fb-setup').classList.remove('show');
+  let loaded = false;
+  try{const d=localStorage.getItem('abl-local');if(d){S=Object.assign({},S,JSON.parse(d));loaded=true;}}catch(e){}
+  if(!S.cfg)S.cfg={};
+  if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
+  renderAll();
+  setSyncStatus('ok','Local mode');
+}
+
+// Add to settings: option to re-run setup or disconnect
+function disconnectFirebase(){
+  if(!confirm('Disconnect Firebase? Your data will remain in Firestore but this device will go back to setup.'))return;
+  localStorage.removeItem('abl-fb-cfg');
+  location.reload();
+}
+
+
+// ── PRIVACY / PSEUDONYMIZATION ──
+// Returns short display name for public views: initials + padded ID
+function cDisplayName(c){
+  if(!c) return '—';
+  const parts = c.name.trim().split(/\s+/);
+  return parts.map(function(p){return p[0]||'';}).join('.').toUpperCase();
+}
+// Full name — only shown in detail modals (scheduler only)
+function cFullName(c){ return c?.name||'—'; }
+// ── UTILS ──
+function fd(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
+function p2(n){return String(n).padStart(2,'0');}
+function pd(s){if(!s)return new Date();const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
+function wkOf(d){const dt=new Date(d),dw=dt.getDay();dt.setDate(dt.getDate()+(dw===0?-6:1-dw));dt.setHours(0,0,0,0);return dt;}
+function uid(){return Math.random().toString(36).slice(2,8);}
+function gc(id){return S.clients.find(c=>c.id===id);}
+function gs(id){return S.staff.find(s=>s.id===id);}
+function ftm(t){if(!t)return'';const[h,m]=t.split(':').map(Number);return`${h%12||12}:${p2(m)}${h>=12?'pm':'am'}`;}
+function fsh(d){return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});}
+function ffull(d){return d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});}
+function txtForBg(hex){
+  if(!hex||hex.length<7)return'#1B2A4A';
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return(0.299*r+0.587*g+0.114*b)/255>0.58?'#1B2A4A':'#ffffff';
+}
+function tClr(sid){const s=gs(sid);return s?.color||'#9E9E9E';}
+function tTxt(sid){return txtForBg(tClr(sid));}
+function thrChip(sid){const s=gs(sid);if(!s)return'';const bg=tClr(sid),tx=tTxt(sid);return`<span class="tchip" style="background:${bg};color:${tx}">${s.initials}</span>`;}
+function dbu(bs){if(!bs)return null;const t=new Date();t.setHours(0,0,0,0);const[,m,d]=bs.split('-').map(Number);let nx=new Date(t.getFullYear(),m-1,d);if(nx<t)nx.setFullYear(t.getFullYear()+1);return Math.round((nx-t)/864e5);}
+function isHol(ds){return S.holidays.find(h=>h.date===ds);}
+// birthdays on a given date string
+function bdaysOn(ds){
+  const d=pd(ds);const m=d.getMonth()+1,day=d.getDate();
+  const sb=S.staff.filter(s=>s.birthday&&parseInt(s.birthday.split('-')[1])===m&&parseInt(s.birthday.split('-')[2])===day);
+  const cb=S.clients.filter(c=>c.dob&&parseInt(c.dob.split('-')[1])===m&&parseInt(c.dob.split('-')[2])===day);
+  return{staff:sb,clients:cb};
+}
+
+// ── TABS ──
+function sw(t){
+  atab=t;
+  document.querySelectorAll('.nt').forEach(n=>n.classList.toggle('on',n.dataset.t===t));
+  document.querySelectorAll('.mob-nt').forEach(n=>n.classList.toggle('on',n.dataset.mt===t));
+  document.querySelectorAll('.tp').forEach(p=>p.classList.toggle('on',p.id==='tp-'+t));
+  // On mobile, schedule tab always opens in day view
+  if(t==='sched'&&isMobile()&&curView==='week'){setView('day');}
+  if(t==='mysched'){initMyS();}
+  if(t==='reports'){initReports();}
+}
+function isMobile(){return window.innerWidth<=640;}
+
+function renderAll(){
+  document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+  rSched();rClients();rStaff();rDaily();rSettings();initMyS();rAuthAlerts();
+}
+
+// ── VIEW TOGGLE ──
+function setView(v){
+  curView=v;
+  document.querySelectorAll('.vtog button').forEach((b,i)=>b.classList.toggle('on',(i===0&&v==='week')||(i===1&&v==='day')));
+  rSched();
+}
+function navPrev(){if(curView==='week'){wkStart.setDate(wkStart.getDate()-7);}else{const d=pd(dayDate);d.setDate(d.getDate()-1);dayDate=fd(d);}rSched();}
+function navNext(){if(curView==='week'){wkStart.setDate(wkStart.getDate()+7);}else{const d=pd(dayDate);d.setDate(d.getDate()+1);dayDate=fd(d);}rSched();}
+function navToday(){if(curView==='week'){wkStart=wkOf(new Date());}else{dayDate=fd(new Date());}rSched();}
+
+// ── SCHEDULE RENDER ──
+function rSched(){
+  if(curView==='week')rWeek();else rDay();
+}
+
+// ── WEEKLY VIEW ──
+function rWeek(){
+  const DAY=['Mon','Tue','Wed','Thu','Fri'];
+  const today=fd(new Date());
+  const wEnd=new Date(wkStart);wEnd.setDate(wEnd.getDate()+4);
+  document.getElementById('vlbl').textContent=fsh(wkStart)+' – '+fsh(wEnd)+', '+wEnd.getFullYear();
+  const wds=DAY.map((_,i)=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
+  const ws=S.sessions.filter(s=>wds.includes(s.date));
+  const cxn=ws.filter(s=>s.status==='CX').length;
+  document.getElementById('stats').innerHTML=`
+    <div class="sb"><div class="sn">${ws.length}</div><div class="sl">Sessions</div></div>
+    <div class="sb"><div class="sn">${[...new Set(ws.filter(s=>s.cid).map(s=>s.cid))].length}</div><div class="sl">Clients</div></div>
+    <div class="sb"><div class="sn">${cxn}</div><div class="sl">Cancellations</div></div>
+    <div class="sb"><div class="sn">${ws.filter(s=>s.makeup).length}</div><div class="sl">Make-ups</div></div>
+    <div class="sb"><div class="sn">${ws.filter(s=>s.type==='OT').length}</div><div class="sl">OT</div></div>
+    <div class="sb"><div class="sn">${ws.filter(s=>s.type==='PT').length}</div><div class="sl">Parent Training</div></div>
+    <div class="sb"><div class="sn">${ws.filter(s=>s.type==='SUP'||s.type==='APM').length}</div><div class="sl">Sup/APM</div></div>`;
+  let html='<div class="sgrid">';
+  DAY.forEach((dn,i)=>{
+    const d=new Date(wkStart);d.setDate(d.getDate()+i);
+    const ds=fd(d);const isT=ds===today;const hol=isHol(ds);
+    const log=S.logs[ds]||{};
+    const bdays=bdaysOn(ds);
+    const hasBday=bdays.staff.length||bdays.clients.length;
+    const dsess=S.sessions.filter(s=>s.date===ds).sort((a,b)=>a.s.localeCompare(b.s));
+    let busbar='';
+    if(log.busStaff||(log.busRiders&&log.busRiders.length)){
+      const duty=log.busStaff?(gs(log.busStaff)?.initials||'—'):'—';
+      const rc=(log.busRiders||[]).length;
+      busbar=`<div class="busbar">🚌 <strong>${duty}</strong> · ${rc} rider${rc!==1?'s':''}</div>`;
+    }
+    const hcls=isT?'dh tod':hol?'dh hol':'dh';
+    let bdayBar='';
+    if(hasBday){
+      const parts=[...bdays.staff.map(s=>`🎂 ${s.initials}`),...bdays.clients.map(c=>`🎂 ${cDisplayName(c)}`)];
+      bdayBar=`<div class="bday-bar">${parts.join(' &nbsp;')}</div>`;
+    }
+    let sh=dsess.map(s=>{
+      const cl=gc(s.cid);
+      const bg=tClr(s.stid),tx=tTxt(s.stid);
+      const cxcl=s.status==='CX'?' cx':'';const isAuto=s._autoAdmin?true:false;const isGrp=s.isGroup||false;
+      const cxch=s.status==='CX'&&s.cx?`<div class="cxch">${s.cx}</div>`:'';
+      const otfl=(cl?.hasOT&&s.type==='ABA')?'<div class="otch">+OT</div>':'';
+      const much=s.makeup?'<div class="much">MU</div>':'';
+      const tbdg=`<span class="bdg ${sTypeBdg(s.type)}">${sTypeLabel(s.type)}</span>`;
+      const clName=cl?cl.name:`<em style="color:var(--mt)">${gs(s.stid)?.name||''} – ${sTypeLabel(s.type)}</em>`;
+      const insCls=cl?`ins-${cl.ins}`:'';
+      const autoStyle=isAuto?'border-left-color:#9E9E9E;background:#FAFAFA;border:1px dashed #B0BEC5;':'';
+      const grpChip=isGrp?'<div style="position:absolute;top:2px;left:2px;font-size:7px;background:#E8EAF6;color:#283593;padding:1px 4px;border-radius:2px;font-weight:800">GRP</div>':'';
+      return`<div class="sbl ${insCls}${cxcl}" style="${autoStyle}" onclick="openSess('${s.id}')">${cxch}${otfl}${much}${grpChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${bg}"></span><span style="font-size:9px;color:var(--mt)">${gs(s.stid)?.initials||'—'}</span></div></div>`;
+    }).join('');
+    if(!sh)sh=hol?`<div style="text-align:center;padding:14px"><div style="font-size:20px">🎌</div><div style="font-size:10px;margin-top:3px">${hol.name}</div></div>`:'<div style="text-align:center;padding:12px;font-size:10px;color:var(--mt)">No sessions</div>';
+    html+=`<div class="dc"><div class="${hcls}"><div><div class="ddn">${dn}</div><div class="ddv">${d.getDate()}</div></div><div style="text-align:right">${hol?`<span class="hch">${hol.name}</span>`:''}${isT?'<span style="font-size:9px;font-weight:700;opacity:.75;display:block;margin-top:2px">TODAY</span>':''}</div></div>${bdayBar}<div class="dbody">${sh}<button class="asb" onclick="openAddSess('${ds}')">+ Session</button></div>${busbar}</div>`;
+  });
+  html+='</div>';
+  document.getElementById('sview').innerHTML=html;
+}
+
+// ── DAILY VIEW ──
+function rDay(){
+  const d=pd(dayDate);
+  document.getElementById('vlbl').textContent=ffull(d);
+  const bdays=bdaysOn(dayDate);
+  const dsess=S.sessions.filter(s=>s.date===dayDate).sort((a,b)=>a.s.localeCompare(b.s));
+  const log=S.logs[dayDate]||{};
+  const today=fd(new Date());
+  const wds=[0,1,2,3,4].map(i=>{const dt=new Date(wkStart);dt.setDate(dt.getDate()+i);return fd(dt);});
+  const dowIdx=wds.indexOf(dayDate);
+
+  // Stats for day
+  const cxn=dsess.filter(s=>s.status==='CX').length;
+  document.getElementById('stats').innerHTML=`
+    <div class="sb"><div class="sn">${dsess.length}</div><div class="sl">Sessions Today</div></div>
+    <div class="sb"><div class="sn">${[...new Set(dsess.filter(s=>s.cid).map(s=>s.cid))].length}</div><div class="sl">Clients</div></div>
+    <div class="sb"><div class="sn">${cxn}</div><div class="sl">Cancellations</div></div>
+    <div class="sb"><div class="sn">${dsess.filter(s=>s.type==='OT').length}</div><div class="sl">OT</div></div>
+    <div class="sb"><div class="sn">${dsess.filter(s=>s.makeup).length}</div><div class="sl">Make-ups</div></div>`;
+
+  // Bday bar
+  let bdayHtml='';
+  if(bdays.staff.length||bdays.clients.length){
+    const parts=[...bdays.staff.map(s=>`🎂 <strong>${s.name}</strong> (staff)`),...bdays.clients.map(c=>`🎂 <strong>${cDisplayName(c)}</strong> (client)`)];
+    bdayHtml=`<div class="dv-bday"><span style="font-size:14px">🎂</span>${parts.join('<span style="color:var(--mt)"> &nbsp;·&nbsp; </span>')}</div>`;
+  }
+
+  // Session rows
+  let sessRows='';
+  if(!dsess.length){sessRows='<div style="text-align:center;padding:24px;color:var(--mt);font-size:12px">No sessions scheduled.</div>';}
+  else{
+    // Group by hour for time headers
+    let curHour=-1;
+    dsess.forEach(s=>{
+      if(s._virtual){
+        // Virtual admin row — full-day indicator, grouped separately
+        return;
+      }
+      const cl=gc(s.cid);
+      const hr=parseInt(s.s.split(':')[0]);
+      const bg=tClr(s.stid),tx=tTxt(s.stid);
+      const insBg=cl?iColor(cl.ins):'#9E9E9E';
+      if(hr!==curHour){curHour=hr;sessRows+=`<div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 5px;padding-left:4px">${ftm(hr+':00').replace(':00','')}</div>`;}
+      const cxBadge=s.status==='CX'?`<span class="sr-cx">${s.cx||'Cancelled'}</span>`:'';
+      const muBadge=s.makeup?'<span class="bdg b-mu">Make-up</span>':'';
+      const tbdg=`<span class="bdg ${sTypeBdg(s.type)}">${sTypeLabel(s.type)}</span>`;
+      const clName=cl?cDisplayName(cl):`${gs(s.stid)?.initials||'—'} – ${sTypeLabel(s.type)}`;
+      const insLbl=cl?`<span class="bdg ${iBdg(cl.ins)}">${iLabel(cl.ins)}</span>`:'';
+      const otFlag=(cl?.hasOT&&s.type==='ABA')?'<span class="bdg b-ot">+OT backtoback</span>':'';
+      sessRows+=`<div class="sess-row ${s.status==='CX'?'cx':''}" onclick="openSess('${s.id}')"><div class="sr-time"><div class="sr-time-s">${ftm(s.s)}</div><div class="sr-time-e">${ftm(s.e)}</div></div><div class="sr-bar" style="background:${insBg}"></div><div class="sr-body"><div class="sr-cl">${clName}</div><div class="sr-meta">${tbdg}${insLbl}${muBadge}${otFlag}${cxBadge}</div><div class="sr-thr"><span class="tchip" style="background:${bg};color:${tx};font-size:10px">${gs(s.stid)?.initials||'—'} ${gs(s.stid)?.name||''}</span>${s.notes?`<span style="font-size:10px;color:var(--mt);margin-left:6px">${s.notes}</span>`:''}</div></div></div>`;
+    });
+    // Render virtual admin/APM rows as a grouped section at the bottom
+    const virtuals=dsess.filter(s=>s._virtual);
+    if(virtuals.length){
+      sessRows+=`<div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 7px;padding-left:4px;display:flex;align-items:center;gap:6px">Admin / Available <span style="font-size:9px;font-weight:500;text-transform:none;letter-spacing:0">(no sessions scheduled)</span></div>`;
+      virtuals.forEach(s=>{
+        const st=gs(s.stid);if(!st)return;
+        const bg=tClr(s.stid),tx=tTxt(s.stid);
+        const admType=st.role==='BCBA'?'APM':'Admin';
+        const badge=st.role==='BCBA'?'b-apm':'b-adm';
+        sessRows+=`<div class="sess-row" style="background:#FAFAFA;border:1px dashed #B0BEC5;opacity:.85"><div class="sr-time"><div class="sr-time-s" style="color:var(--mt)">All day</div></div><div class="sr-bar" style="background:#9E9E9E"></div><div class="sr-body"><div class="sr-cl" style="color:var(--t2)">${st.name}</div><div class="sr-meta"><span class="bdg ${badge}">${admType}</span><span style="font-size:10px;color:var(--mt)">Default – no sessions</span></div></div></div>`;
+      });
+    }
+    if(!sessRows){sessRows='<div style="text-align:center;padding:24px;color:var(--mt);font-size:12px">No sessions scheduled.</div>';}
+  }
+
+  // Inject virtual Admin/APM rows for available unscheduled staff
+  S.staff.forEach(st=>{
+    const av=st.av[dowIdx>=0?dowIdx:0];
+    const pto=(st.pto||[]).includes(dayDate);
+    if(pto||!av) return;
+    const realSess=dsess.filter(s=>s.stid===st.id&&!s._autoAdmin&&s.status!=='CX');
+    if(!realSess.length){
+      // Add a virtual admin entry — not saved, just rendered
+      const admType=st.role==='BCBA'?'APM':'ADMIN';
+      dsess.push({id:'_virt_'+st.id,cid:'',stid:st.id,date:dayDate,s:'08:00',e:'17:00',
+        type:admType,status:'OK',cx:'',makeup:false,recurGroup:'',notes:'Default – no sessions scheduled',_virtual:true});
+    }
+  });
+  // Re-sort after adding virtuals
+  dsess.sort((a,b)=>a.s.localeCompare(b.s));
+  // Rebuild sessRows now that we have virtuals
+  if(dsess.length){sessRows='';}
+
+  // Staff panel
+  const hol=isHol(dayDate);
+  let staffPanel='<div class="stf-pnl"><h4>Staff Today</h4>';
+  S.staff.forEach(st=>{
+    const av=st.av[dowIdx>=0?dowIdx:0];
+    const pto=(st.pto||[]).includes(dayDate);
+    const stSess=dsess.filter(s=>s.stid===st.id);
+    const realSess=stSess.filter(s=>!s._autoAdmin&&s.status!=='CX');
+    const bg=tClr(st.id),tx=tTxt(st.id);
+    let status='';
+    let actionBtn='';
+    if(pto){
+      status='<span style="color:var(--am);font-size:10px;font-weight:600">PTO</span>';
+    } else if(!av){
+      status='<span style="color:var(--mt);font-size:10px">Off</span>';
+    } else if(!realSess.length){
+      // Default to Admin/APM — show badge instead of plain "Available"
+      const admType=st.role==='BCBA'?'APM':'Admin';
+      status=`<span class="bdg ${st.role==='BCBA'?'b-apm':'b-adm'}" style="font-size:9px">${admType}</span>`;
+      actionBtn=`<button class="edit-only ${st.role==='BCBA'?'apm-btn':'adm-btn'}" onclick="${st.role==='BCBA'?'quickAddAPM':'quickAddAdmin'}('${st.id}','${dayDate}')">+ Log</button>`;
+    } else {
+      status=`<span style="font-size:10px;color:var(--gn);font-weight:600">${realSess.length} session${realSess.length!==1?'s':''}</span>`;
+    }
+    staffPanel+=`<div class="stf-row"><div class="stf-av" style="background:${bg};color:${tx}">${st.initials}</div><div class="stf-nm">${st.name}<div style="font-size:9px;font-weight:600;color:var(--mt)">${st.role}</div></div>${status}${actionBtn}</div>`;
+  });
+  staffPanel+='</div>';
+
+  // Bus bar
+  let busHtml='';
+  if(log.busStaff||(log.busRiders&&log.busRiders.length)){
+    const busC=S.clients.filter(c=>c.hasBus&&(log.busRiders||[]).includes(c.id));
+    const duty=gs(log.busStaff);
+    busHtml=`<div class="stf-pnl"><h4>🚌 Bus</h4><div style="font-size:12px"><strong>${duty?.name||'—'}</strong> on duty</div>${busC.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:7px">${busC.map(c=>`<span style="font-size:10px;padding:2px 7px;background:var(--bg);border-radius:4px">${c.name}</span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--mt);margin-top:5px">No riders checked in</div>'}</div>`;
+  }
+
+  document.getElementById('sview').innerHTML=`${bdayHtml}${isMobile()?'<div class="swipe-hint">← swipe to change day →</div>':''}<div class="dv-wrap"><div class="dv-main">${sessRows}</div><div class="dv-side">${staffPanel}${busHtml}</div></div>`;
+}
+
+// ── CLIENTS ──
+function rClients(f){
+  if(f!==undefined)cflt=f;
+  let cl=S.clients;
+  const isGF=['TK','AOK','BARMER','DAK','IKK','GERMAN_O'];
+  if(cflt==='OT')cl=cl.filter(c=>c.hasOT);
+  else if(cflt==='BUS')cl=cl.filter(c=>c.hasBus);
+  else if(cflt==='UNDER')cl=cl.filter(c=>c.sch<c.rec*0.9);
+  else if(cflt==='GERMAN')cl=cl.filter(c=>isGF.includes(c.ins));
+  else if(cflt!=='all')cl=cl.filter(c=>c.ins===cflt);
+  const con=document.getElementById('ccon');
+  if(!cl.length){con.innerHTML='<div style="text-align:center;padding:24px;color:var(--mt)">No clients match this filter.</div>';return;}
+  const groups=['TRICARE','Private','Civilian','German GKV'];
+  const grps=cflt==='all'?
+    groups.map(g=>({g,clients:cl.filter(c=>iById(c.ins).group===g)})).filter(x=>x.clients.length):
+    [{g:'',clients:cl}];
+  con.innerHTML=grps.map(({g,clients})=>`<div class="isec">${g?`<div class="ihead"><div class="idot" style="background:${iColor(clients[0]?.ins)}"></div><h3>${g}</h3><span class="ict">${clients.length}</span></div>`:''}<div class="cgrid">${clients.map(cCard).join('')}</div></div>`).join('');
+}
+function cCard(c){
+  const pct=Math.min(100,Math.round(c.sch/c.rec*100));
+  const dc=pct>=95?'#2E8B65':pct>=75?'#E8832A':'#C0392B';
+  const team=(c.team||[]).map(id=>gs(id)).filter(Boolean);
+  const age=c.dob?Math.floor((Date.now()-new Date(c.dob))/(365.25*864e5)):null;
+  const authLeft=c.authEnd?Math.ceil((pd(c.authEnd)-new Date())/864e5):null;
+  return`<div class="ccard" onclick="openClientDetail('${c.id}')"><div class="cctop"><div><div class="ccname">${cDisplayName(c)}</div><div class="ccage">${age!==null?age+' yrs':''}</div></div><span class="bdg ${iBdg(c.ins)}">${iLabel(c.ins)}</span></div><div class="dwrap"><div class="dlbls"><span>Dosage</span><span style="font-weight:700;color:${dc}">${c.sch}/${c.rec}h/wk (${pct}%)</span></div><div class="dtrk"><div class="dbar" style="width:${pct}%;background:${dc}"></div></div></div>${c.authEnd&&authLeft!==null?`<div style="font-size:10px;color:${authLeft<30?'var(--rd)':'var(--mt)'};margin-top:3px">Auth ends: ${pd(c.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${authLeft<30?` (${authLeft}d)`:''}  </div>`:''}
+<div class="cteam">${team.map(s=>{const bg=tClr(s.id),tx=tTxt(s.id);return`<span class="ctag" style="background:${bg}22;border:1px solid ${bg}55;color:${bg==='#E0E0E0'||bg==='#C8C8C8'||bg==='#F5F0DC'?'#333':bg}">${s.initials} <span style="opacity:.7">${s.role}</span></span>`;}).join('')}</div><div class="cflags">${c.hasOT?'<span class="flg flg-ot">+OT</span>':''}${c.hasBus?'<span class="flg flg-bus">🚌 Bus</span>':''}${c.authEnd?'<span class="flg flg-au">Auth</span>':''}${(c.scheduleTpl&&c.scheduleTpl.length)?`<span class='flg' style='background:#E8EAF6;color:#283593'>🗓 ${c.scheduleTpl.length}slot${c.scheduleTpl.length!==1?'s':''}</span>`:''}</div></div>`;
+}
+function fc(f,el){document.querySelectorAll('.fch').forEach(c=>c.classList.remove('on'));el.classList.add('on');rClients(f);}
+
+// ── STAFF ──
+function rStaff(){
+  const nEl=document.getElementById('stnotices');
+  const soon=S.staff.filter(s=>{const d=dbu(s.birthday);return d!==null&&d<=14;}).sort((a,b)=>dbu(a.birthday)-dbu(b.birthday));
+  nEl.innerHTML=soon.map(s=>{const d=dbu(s.birthday);return`<div class="notice"><span style="font-size:16px">🎂</span><strong>${s.name}</strong>'s birthday is ${d===0?'TODAY! 🎉':'in '+d+' day'+(d!==1?'s':'')}</div>`;}).join('');
+  const wds=[0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
+  const DNL=['M','T','W','T','F'];
+  document.getElementById('stgrid').innerHTML=S.staff.map(s=>{
+    const bd=dbu(s.birthday);
+    const bdt=s.birthday?new Date(s.birthday+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
+    const bds=bd!==null&&bd<=30;
+    const bg=s.color||'#9E9E9E',tx=txtForBg(bg);
+    const avc=DNL.map((dn,i)=>{const pto=(s.pto||[]).includes(wds[i]);const av=s.av[i];const cls=pto?'av-p':av?'av-y':'av-n';return`<div class="avd ${cls}">${dn}</div>`;}).join('');
+    const cl=S.clients.filter(c=>(s.clients||[]).includes(c.id));
+    const hrsLbl=s.hrsNote||((s.hrs||null)?s.hrs+'h/wk':null);
+    return`<div class="stcard"><div class="sctop"><div class="scav" style="background:${bg};color:${tx}" onclick="openEditStaff('${s.id}')" title="Click to edit color & details">${s.initials}</div><div style="flex:1"><div class="scname">${s.name}</div><div style="margin-top:3px;display:flex;gap:4px;flex-wrap:wrap">${(s.role==='RBT'||s.role==='ABAT')?`<div class="role-tog edit-only"><span class="${s.role==='RBT'?'active-rbt':''}" onclick="setRole('${s.id}','RBT')">RBT</span><span class="${s.role==='ABAT'?'active-abat':''}" onclick="setRole('${s.id}','ABAT')">ABAT</span></div>`:`<span class="bdg ${ROLE_BADGE[s.role]||'b-adm'}" style="font-size:9px">${s.role}</span>`}${hrsLbl?`<span style="font-size:10px;color:var(--mt)">${hrsLbl}</span>`:''}</div>${bdt?`<div class="scbd">🎂 ${bdt}${bds?`<span class="bds"> (${bd===0?'TODAY!':bd+'d'})</span>`:''}</div>`:''}</div><button class="btn bxs" onclick="openEditStaff('${s.id}')">Edit</button></div><div class="scbody"><div style="margin-bottom:9px"><div class="sclbl">Avail. This Week</div><div class="avds">${avc}</div></div>${s.bus?'<div style="font-size:10px;color:#F57F17;font-weight:600;margin-bottom:7px">🚌 Bus Duty</div>':''}${cl.length?`<div><div class="sclbl">Assigned Clients</div><div style="display:flex;flex-wrap:wrap;gap:3px">${cl.map(c=>`<span style="font-size:9px;padding:2px 5px;background:var(--bg);border-radius:3px">${cDisplayName(c)}</span>`).join('')}</div></div>`:''}
+</div></div>`;
+  }).join('');
+}
+
+// ── DAILY LOG ──
+function rDaily(){
+  const d=pd(dayDate);
+  document.getElementById('dlbl').textContent=ffull(d);
+  document.getElementById('dpick').value=dayDate;
+  const log=S.logs[dayDate]||{};
+  const bds=document.getElementById('busduty');
+  bds.innerHTML='<option value="">— not assigned —</option>'+S.staff.map(s=>`<option value="${s.id}" ${log.busStaff===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
+  const busC=S.clients.filter(c=>c.hasBus);
+  const rc=log.busRiders||[];
+  document.getElementById('buslist').innerHTML=busC.length?'<div style="display:flex;flex-direction:column;gap:4px">'+busC.map(c=>`<div class="brow"><input type="checkbox" id="br-${c.id}" ${rc.includes(c.id)?'checked':''} onchange="togR('${c.id}',this.checked)"><label for="br-${c.id}">${c.name}</label><span class="bdg ${iBdg(c.ins)}" style="font-size:9px">${c.ins}</span></div>`).join('')+'</div>':'<div style="font-size:11px;color:var(--mt)">No bus clients.</div>';
+  const ts=S.sessions.filter(s=>s.date===dayDate).sort((a,b)=>a.s.localeCompare(b.s));
+  const ce=document.getElementById('crows'),nce=document.getElementById('nocrow');
+  if(!ts.length){ce.innerHTML='';nce.style.display='block';}
+  else{nce.style.display='none';ce.innerHTML=ts.map(s=>{const cl=gc(s.cid);const st=gs(s.stid);if(!cl&&!s.cid)return'';const nm=cl?cl.name:sTypeLabel(s.type);const co='<option value="" '+(s.cx?'':'selected')+'>✅ OK</option>'+S.cfg.cxCodes.map(c=>`<option value="${c.code}" ${s.cx===c.code?'selected':''}>${c.code}</option>`).join('');const bg=tClr(s.stid),tx=tTxt(s.stid);const tb=sTypeBdg(s.type);return`<div class="crow"><div class="crn">${nm}</div><div class="crt">${ftm(s.s)}</div><span class="bdg ${tb}" style="font-size:9px">${s.type}</span><span class="tchip" style="background:${bg};color:${tx};font-size:9px">${st?.initials||'—'}</span><select class="csel" onchange="setCX('${s.id}',this.value)">${co}</select></div>`;}).join('');}
+  const brks=log.breaks||[];
+  document.getElementById('brkl').innerHTML=brks.length?brks.map((b,i)=>{const st=gs(b.stid);const bg=tClr(b.stid||''),tx=tTxt(b.stid||'');return`<div class="brkr"><div style="display:flex;align-items:center;gap:5px"><span class="tchip" style="background:${bg};color:${tx};font-size:9px">${st?.initials||'—'}</span><span>${st?.name||'—'}</span></div><span style="color:var(--mt)">${ftm(b.s)}–${ftm(b.e)}</span><button class="btn bxs bd" onclick="rmBrk(${i})">×</button></div>`;}).join(''):'<div style="font-size:11px;color:var(--mt)">No breaks.</div>';
+  document.getElementById('dnotes').value=log.notes||'';
+}
+function chDay(n){const d=pd(dayDate);d.setDate(d.getDate()+n);dayDate=fd(d);rDaily();}
+function rsToday(){dayDate=fd(new Date());rDaily();}
+function setDay(v){dayDate=v;rDaily();}
+function saveBD(){eLog();S.logs[dayDate].busStaff=document.getElementById('busduty').value;save();}
+function togR(cid,on){eLog();let r=S.logs[dayDate].busRiders||[];on?(!r.includes(cid)&&r.push(cid)):r=r.filter(x=>x!==cid);S.logs[dayDate].busRiders=r;save();}
+function setCX(id,code){
+  const s=S.sessions.find(x=>x.id===id);if(!s)return;
+  const wasCX=s.status==='CX';
+  s.cx=code;s.status=code?'CX':'OK';
+
+  if(code&&!wasCX){
+    // Session just cancelled — auto-create Admin block for therapist
+    // Remove any existing auto-admin for this therapist at this time/date first
+    S.sessions=S.sessions.filter(x=>!(x._autoAdmin&&x.stid===s.stid&&x.date===s.date&&x.s===s.s));
+    const st=gs(s.stid);
+    const type=st&&st.role==='BCBA'?'APM':'ADMIN';
+    const label=st&&st.role==='BCBA'?'APM – freed from cancellation':'Admin – available (cancellation)';
+    S.sessions.push({
+      id:'s'+uid(),cid:'',stid:s.stid,date:s.date,s:s.s,e:s.e,
+      type,status:'OK',cx:'',makeup:false,recurGroup:'',
+      notes:label,_autoAdmin:true,_fromCx:id
+    });
+  } else if(!code&&wasCX){
+    // Cancellation cleared — remove the auto-admin block that was created
+    S.sessions=S.sessions.filter(x=>!(x._autoAdmin&&x._fromCx===id));
+  }
+  save();rSched();rDaily();if(atab==='mysched')rMyS();
+}
+function saveDN(){eLog();S.logs[dayDate].notes=document.getElementById('dnotes').value;save();}
+function rmBrk(i){eLog();S.logs[dayDate].breaks.splice(i,1);save();rDaily();}
+function eLog(){if(!S.logs[dayDate])S.logs[dayDate]={busRiders:[],breaks:[],notes:'',busStaff:''};}
+
+// Quick add from daily view staff panel
+function quickAddAPM(stid, date){
+  S.sessions.push({id:'s'+uid(),cid:'',stid,date,s:'08:00',e:'09:00',type:'APM',status:'OK',cx:'',makeup:false,recurGroup:'',notes:''});
+  save();rSched();
+}
+function quickAddAdmin(stid, date){
+  S.sessions.push({id:'s'+uid(),cid:'',stid,date,s:'08:00',e:'09:00',type:'ADMIN',status:'OK',cx:'',makeup:false,recurGroup:'',notes:''});
+  save();rSched();
+}
+
+// ── SETTINGS ──
+function rSettings(){
+  document.getElementById('cxlist').innerHTML=S.cfg.cxCodes.map((c,i)=>`<div class="cdi"><div><div class="cda">${c.code}</div><div class="cdd">${c.label}</div></div><button class="btn bxs bd" onclick="rmCX(${i})">Remove</button></div>`).join('');
+  document.getElementById('hollist').innerHTML=S.holidays.length?S.holidays.map((h,i)=>`<div class="holi"><div><div style="font-weight:600;font-size:11px">${h.name}</div><div style="font-size:10px;color:var(--mt)">${pd(h.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</div></div><button class="btn bxs bd" onclick="rmHol(${i})">×</button></div>`).join(''):'<div style="font-size:11px;color:var(--mt);margin-bottom:7px">None added.</div>';
+  document.getElementById('ins-legend').innerHTML=INS.map(i=>`<div class="lrow"><div class="ldot" style="background:${i.color}"></div><span class="bdg ${i.badge}">${i.label}</span><span style="color:var(--mt);font-size:10px">${i.group}</span></div>`).join('');
+  document.getElementById('thr-legend').innerHTML=S.staff.map(s=>{const bg=s.color||'#9E9E9E',tx=txtForBg(bg);return`<div class="lrow"><div class="ldot" style="background:${bg};border:1px solid #ccc"></div><strong style="font-size:11px">${s.initials}</strong><span style="font-size:11px">${s.name}</span><span class="bdg ${ROLE_BADGE[s.role]||'b-adm'}" style="font-size:9px">${s.role}</span></div>`;}).join('');
+}
+function addHol(){const dt=document.getElementById('nhd').value,nm=document.getElementById('nhn').value.trim();if(!dt||!nm)return alert('Enter date and name.');S.holidays.push({id:uid(),date:dt,name:nm});document.getElementById('nhd').value='';document.getElementById('nhn').value='';save();rSettings();rSched();}
+function rmHol(i){S.holidays.splice(i,1);save();rSettings();rSched();}
+function addCX(){const code=document.getElementById('ncc').value.trim().toUpperCase(),label=document.getElementById('ncl').value.trim();if(!code||!label)return;S.cfg.cxCodes.push({code,label});document.getElementById('ncc').value='';document.getElementById('ncl').value='';save();rSettings();}
+function rmCX(i){S.cfg.cxCodes.splice(i,1);save();rSettings();}
+function expData(){const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='abl-'+fd(new Date())+'.json';a.click();}
+function confReset(){if(!confirm('Reset ALL data? This cannot be undone.'))return;S={clients:[],staff:[],sessions:[],logs:{},holidays:[],cfg:{cxCodes:defCX()}};save();renderAll();}
+
+// ── MODAL ──
+function _openM(html){document.getElementById('mc').innerHTML=html;document.getElementById('mbg').classList.add('open');}
+function openM(html){if(isViewOnly){promptUnlock();return;}_openM(html);}
+function closeM(){document.getElementById('mbg').classList.remove('open');}
+function bgCk(e){if(e.target===document.getElementById('mbg'))closeM();}
+
+// ── ADD ADMIN/APM BLOCK ──
+function openAddBlock(){
+  const so=S.staff.map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
+  const tOpts=[{id:'ADMIN',l:'Admin'},{id:'APM',l:'Assessment / Program Mod'}].map(t=>`<option value="${t.id}">${t.l}</option>`).join('');
+  openM(`<h3>Add Admin / APM Block</h3>
+    <div class="fg"><label>Staff Member</label><select id="ab-st">${so}</select></div>
+    <div class="fg"><label>Type</label><select id="ab-ty">${tOpts}</select></div>
+    <div class="fr2"><div class="fg"><label>Date</label><input type="date" id="ab-dt" value="${dayDate||fd(new Date())}"></div><div class="fg"><label>Notes</label><input id="ab-nt" placeholder="Brief description"></div></div>
+    <div class="fr2"><div class="fg"><label>Start</label><input type="time" id="ab-s" value="08:00"></div><div class="fg"><label>End</label><input type="time" id="ab-e" value="09:00"></div></div>
+    <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="saveBlock()">Add</button></div>`);
+}
+function saveBlock(){
+  S.sessions.push({id:'s'+uid(),cid:'',stid:document.getElementById('ab-st').value,date:document.getElementById('ab-dt').value,s:document.getElementById('ab-s').value,e:document.getElementById('ab-e').value,type:document.getElementById('ab-ty').value,status:'OK',cx:'',makeup:false,recurGroup:'',notes:document.getElementById('ab-nt').value});
+  save();closeM();rSched();rDaily();
+}
+
+// ── ADD SESSION ──
+function openAddSess(pre){
+  const dv=pre||fd(new Date());
+  const co=S.clients.map(c=>`<option value="${c.id}">${c.name} (${iLabel(c.ins)})</option>`).join('');
+  const so=S.staff.filter(s=>s.role!=='Billing').map(s=>`<option value="${s.id}">${s.initials} – ${s.name} (${s.role})</option>`).join('');
+  const to=STYPES.filter(t=>t.id!=='ADMIN'&&t.id!=='APM').map(t=>`<option value="${t.id}">${t.label}</option>`).join('');
+  openM(`<h3>Add Session</h3>
+    <div class="fg"><label>Client</label><select id="f-cl">${co}</select></div>
+    <div class="fg"><label>Therapist</label><select id="f-st">${so}</select></div>
+    <div class="fr2"><div class="fg"><label>Date</label><input type="date" id="f-dt" value="${dv}"></div><div class="fg"><label>Type</label><select id="f-ty">${to}</select></div></div>
+    <div class="fr2"><div class="fg"><label>Start</label><input type="time" id="f-s" value="09:00"></div><div class="fg"><label>End</label><input type="time" id="f-e" value="11:00"></div></div>
+    <div style="display:flex;gap:14px;margin:6px 0">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="f-mu"> Make-up session</label>
+    </div>
+    <div class="rec-box">
+      <label><input type="checkbox" id="f-rec" onchange="toggleRecBox()"> Repeat weekly until authorization end</label>
+      <div id="rec-opts" style="display:none;margin-top:8px">
+        <div class="fg" style="margin:0"><label style="color:#33691E">Authorization End Date</label><input type="date" id="f-auth"></div>
+        <div style="font-size:10px;color:#558B2F;margin-top:4px">Sessions will be created every week from the selected date until the auth end date.</div>
+      </div>
+    </div>
+    <div class="fg" style="margin-top:10px"><label>Notes</label><textarea id="f-nt" rows="2"></textarea></div>
+    <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="saveSess()">Add</button></div>`);
+}
+function toggleRecBox(){document.getElementById('rec-opts').style.display=document.getElementById('f-rec').checked?'block':'none';}
+function saveSess(){
+  const cid=document.getElementById('f-cl').value;
+  const stid=document.getElementById('f-st').value;
+  const startDate=document.getElementById('f-dt').value;
+  const s=document.getElementById('f-s').value;
+  const e=document.getElementById('f-e').value;
+  const type=document.getElementById('f-ty').value;
+  const makeup=document.getElementById('f-mu').checked;
+  const notes=document.getElementById('f-nt').value;
+  const isRec=document.getElementById('f-rec').checked;
+  const authEnd=document.getElementById('f-auth')?.value||'';
+  const rg=uid();
+
+  // Check for conflict on the first date (or single date)
+  checkConflictThenSave(stid, startDate, s, e, '', function(isGroup){
+    // Tag as group if confirmed
+    const grpNote = isGroup ? (notes ? notes+' [Group]' : '[Group]') : notes;
+    if(isRec&&authEnd){
+      let d=pd(startDate);const end=pd(authEnd);
+      while(d<=end){
+        S.sessions.push({id:'s'+uid(),cid,stid,date:fd(d),s,e,type,status:'OK',cx:'',makeup,recurGroup:rg,notes:grpNote,isGroup:isGroup||false});
+        d=new Date(d);d.setDate(d.getDate()+7);
+      }
+    } else {
+      S.sessions.push({id:'s'+uid(),cid,stid,date:startDate,s,e,type,status:'OK',cx:'',makeup,recurGroup:'',notes:grpNote,isGroup:isGroup||false});
+    }
+    save();closeM();rSched();rDaily();
+  });
+}
+
+// ── SESSION DETAIL ──
+function openSess(id){
+  const s=S.sessions.find(x=>x.id===id);if(!s)return;
+  const cl=gc(s.cid);
+  const so=S.staff.filter(x=>x.role!=='Billing').map(x=>`<option value="${x.id}" ${x.id===s.stid?'selected':''}>${x.initials} – ${x.name}</option>`).join('');
+  const co='<option value="" '+(s.cx?'':'selected')+'>✅ Scheduled</option>'+S.cfg.cxCodes.map(c=>`<option value="${c.code}" ${s.cx===c.code?'selected':''}>${c.code} – ${c.label}</option>`).join('');
+  const to=STYPES.map(t=>`<option value="${t.id}" ${t.id===s.type?'selected':''}>${t.label}</option>`).join('');
+  const isRec=!!s.recurGroup;
+  const futureSiblings=isRec?S.sessions.filter(x=>x.recurGroup===s.recurGroup&&x.date>s.date).length:0;
+  openM(`<h3>Session: ${cl?.name||sTypeLabel(s.type)}</h3>
+    <div style="background:var(--bg);border-radius:7px;padding:10px;margin-bottom:12px;font-size:11px;color:var(--t2)">${ffull(pd(s.date))}<br>${ftm(s.s)}–${ftm(s.e)} · ${sTypeLabel(s.type)}${s.makeup?' · <strong style="color:#F57F17">Make-up</strong>':''}${isRec?` · <span style="color:#558B2F">🔁 Recurring (${futureSiblings} future)</span>`:''}</div>
+    <div class="fg"><label>Therapist</label><select id="sd-st">${so}</select></div>
+    <div class="fg"><label>Type</label><select id="sd-ty">${to}</select></div>
+    <div class="fr2"><div class="fg"><label>Start</label><input type="time" id="sd-s" value="${s.s}"></div><div class="fg"><label>End</label><input type="time" id="sd-e" value="${s.e}"></div></div>
+    <div style="display:flex;gap:14px;margin:6px 0">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-mu" ${s.makeup?'checked':''}> Make-up</label>
+    </div>
+    <div class="fg"><label>Cancellation Code</label><select id="sd-cx">${co}</select></div>
+    <div class="fg"><label>Notes</label><textarea id="sd-nt" rows="2">${s.notes||''}</textarea></div>
+    ${isRec?`<div style="background:#F9FBE7;border:1px solid #C5E1A5;border-radius:7px;padding:9px;margin-top:6px;font-size:11px;color:#33691E">🔁 This session repeats. <button class="btn bxs" style="background:#C5E1A5;border-color:#A5D6A7;color:#1B5E20" onclick="cancelFuture('${s.recurGroup}','${s.date}')">Cancel all future (${futureSiblings})</button></div>`:''}
+    <div class="mact"><button class="btn bd" onclick="delSess('${s.id}')">Delete</button><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updSess('${s.id}')">Save</button></div>`);
+}
+function updSess(id){
+  const s=S.sessions.find(x=>x.id===id);if(!s)return;
+  const newStid=document.getElementById('sd-st').value;
+  const newS=document.getElementById('sd-s').value;
+  const newE=document.getElementById('sd-e').value;
+  const newType=document.getElementById('sd-ty').value;
+  const newMakeup=document.getElementById('sd-mu').checked;
+  const cx=document.getElementById('sd-cx').value;
+  const newNotes=document.getElementById('sd-nt').value;
+
+  const doUpdate = function(isGroup){
+    s.stid=newStid;s.type=newType;s.s=newS;s.e=newE;
+    s.makeup=newMakeup;s.notes=newNotes;s.isGroup=isGroup||s.isGroup||false;
+    S.sessions=S.sessions.filter(x=>!(x._autoAdmin&&x._fromCx===id));
+    s.cx=cx;s.status=cx?'CX':'OK';
+    if(cx){
+      const st=gs(s.stid);
+      const type=st&&st.role==='BCBA'?'APM':'ADMIN';
+      S.sessions.push({
+        id:'s'+uid(),cid:'',stid:s.stid,date:s.date,s:s.s,e:s.e,
+        type,status:'OK',cx:'',makeup:false,recurGroup:'',
+        notes:(st&&st.role==='BCBA'?'APM':'Admin')+' – freed from cancellation',_autoAdmin:true,_fromCx:id
+      });
+    }
+    save();closeM();rSched();rDaily();if(atab==='mysched')rMyS();
+  };
+
+  // Only check conflict if not being cancelled and time/therapist changed
+  if(!cx){
+    checkConflictThenSave(newStid, s.date, newS, newE, id, doUpdate);
+  } else {
+    doUpdate(false);
+  }
+}
+function delSess(id){if(!confirm('Delete this session?'))return;S.sessions=S.sessions.filter(s=>s.id!==id);save();closeM();rSched();rDaily();}
+function cancelFuture(rg, fromDate){if(!confirm('Cancel all future sessions in this recurring group?'))return;S.sessions.filter(s=>s.recurGroup===rg&&s.date>fromDate).forEach(s=>{s.status='CX';s.cx='CX-CC';});save();closeM();rSched();}
+
+// ── ADD CLIENT ──
+function openAddClient(){
+  const so=S.staff.filter(s=>s.role!=='Billing').map(s=>`<option value="${s.id}">${s.initials} – ${s.name} (${s.role})</option>`).join('');
+  const bo=S.staff.filter(s=>s.role==='BCBA').map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  openM(`<h3>Add Client</h3>
+    <div class="fg"><label>Name</label><input id="nc-n" placeholder="Client name"></div>
+    <div class="fr2"><div class="fg"><label>Date of Birth</label><input type="date" id="nc-dob"></div><div class="fg"><label>Insurance</label><select id="nc-ins">${insOpts()}</select></div></div>
+    <div class="fr2"><div class="fg"><label>Rec. Hrs/Wk</label><input type="number" id="nc-rec" value="20" min="1"></div><div class="fg"><label>Sched. Hrs/Wk</label><input type="number" id="nc-sch" value="20" min="0"></div></div>
+    <div class="fr2"><div class="fg"><label>Primary BCBA</label><select id="nc-bcba">${bo}</select></div><div class="fg"><label>Auth End Date</label><input type="date" id="nc-auth"></div></div>
+    <div class="fg"><label>Team Members (Ctrl+click)</label><select id="nc-team" multiple style="height:88px">${so}</select></div>
+    <div style="display:flex;gap:14px;margin:6px 0">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="nc-ot"> Has OT</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="nc-bus"> Bus Rider</label>
+    </div>
+    <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="saveClient()">Add</button></div>`);
+}
+function saveClient(){
+  const name=document.getElementById('nc-n').value.trim();if(!name)return alert('Name required.');
+  const team=Array.from(document.getElementById('nc-team').selectedOptions).map(o=>o.value);
+  const c={id:'c'+uid(),name,dob:document.getElementById('nc-dob').value,ins:document.getElementById('nc-ins').value,rec:+document.getElementById('nc-rec').value,sch:+document.getElementById('nc-sch').value,bcba:document.getElementById('nc-bcba').value,authEnd:document.getElementById('nc-auth').value,team,hasOT:document.getElementById('nc-ot').checked,hasBus:document.getElementById('nc-bus').checked,notes:''};
+  S.clients.push(c);
+  team.forEach(sid=>{const s=gs(sid);if(s){if(!s.clients)s.clients=[];if(!s.clients.includes(c.id))s.clients.push(c.id);}});
+  save();closeM();rClients();rStaff();
+}
+
+// ── EDIT CLIENT ──
+let _tplSlots=[];
+function openClientDetail(id){
+  const c=S.clients.find(x=>x.id===id);if(!c)return;
+  _tplSlots=(c.scheduleTpl||[]).map(s=>Object.assign({},s));
+  const so=S.staff.filter(s=>s.role!=='Billing').map(s=>`<option value="${s.id}" ${(c.team||[]).includes(s.id)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+  const bo=S.staff.filter(s=>s.role==='BCBA').map(s=>`<option value="${s.id}" ${c.bcba===s.id?'selected':''}>${s.name}</option>`).join('');
+  const existRec=S.sessions.filter(s=>s.cid===id&&s.recurGroup&&pd(s.date)>=new Date()).length;
+  openM(`<h3>Edit: ${c.name}</h3>
+    <div class="fg"><label>Name</label><input id="cd-n" value="${c.name}"></div>
+    <div class="fr2"><div class="fg"><label>DOB</label><input type="date" id="cd-dob" value="${c.dob||''}"></div><div class="fg"><label>Insurance</label><select id="cd-ins">${insOpts(c.ins)}</select></div></div>
+    <div class="fr2"><div class="fg"><label>Rec. Hrs/Wk</label><input type="number" id="cd-rec" value="${c.rec}"></div><div class="fg"><label>Sched. Hrs/Wk</label><input type="number" id="cd-sch" value="${c.sch}"></div></div>
+    <div class="fr2"><div class="fg"><label>Primary BCBA</label><select id="cd-bcba">${bo}</select></div><div class="fg"><label>Auth End Date</label><input type="date" id="cd-auth" value="${c.authEnd||''}"></div></div>
+    <div class="fg"><label>Team</label><select id="cd-team" multiple style="height:88px">${so}</select></div>
+    <div style="display:flex;gap:14px;margin:6px 0">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-ot" ${c.hasOT?'checked':''}> Has OT</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-bus" ${c.hasBus?'checked':''}> Bus Rider</label>
+    </div>
+    <div class="fg"><label>Notes</label><textarea id="cd-notes" rows="2">${c.notes||''}</textarea></div>
+    <div class="tpl-wrap">
+      <div class="tpl-title">🗓 Weekly Schedule Template</div>
+      <div style="font-size:11px;color:var(--t2);margin-bottom:10px">Define recurring weekly sessions. Click <strong>Generate Schedule</strong> to create all sessions through the auth end date.</div>
+      <div class="tpl-slot-hdr"><span>Day</span><span>Start – End</span><span>Therapist</span><span>Type</span><span></span></div>
+      <div id="tpl-slots"></div>
+      <button class="btn bsm" style="width:100%;border-style:dashed;margin-top:2px" onclick="addTplSlot()">+ Add Session Slot</button>
+      <button class="gen-btn" onclick="genSchedule('${c.id}')">
+        🗓 Generate Schedule${c.authEnd?' through '+pd(c.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):''}
+        ${existRec?`<span style="font-size:10px;opacity:.8">(replaces ${existRec} existing future sessions)</span>`:''}
+      </button>
+      <div class="gen-preview" id="gen-preview"></div>
+    </div>
+    <div class="mact"><button class="btn bd" onclick="delClient('${c.id}')">Delete</button><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updClient('${c.id}')">Save Info</button></div>`);
+  renderTplSlots();
+}
+
+function renderTplSlots(){
+  const so=S.staff.filter(s=>s.role!=='Billing').map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
+  const days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  const to=STYPES.filter(t=>t.id!=='ADMIN'&&t.id!=='APM').map(t=>`<option value="${t.id}">${t.label}</option>`).join('');
+  const wrap=document.getElementById('tpl-slots');
+  if(!wrap)return;
+  wrap.innerHTML=_tplSlots.length?_tplSlots.map((sl,i)=>{
+    const dOpts=days.map((d,di)=>`<option value="${di+1}" ${sl.dow==di+1?'selected':''}>${d}</option>`).join('');
+    const stOpts=S.staff.filter(s=>s.role!=='Billing').map(s=>`<option value="${s.id}" ${s.id===sl.stid?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+    const tyOpts=STYPES.filter(t=>t.id!=='ADMIN'&&t.id!=='APM').map(t=>`<option value="${t.id}" ${t.id===sl.type?'selected':''}>${t.label}</option>`).join('');
+    return `<div class="tpl-slot" id="tsl-${i}">
+      <select onchange="_tplSlots[${i}].dow=+this.value">${dOpts}</select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+        <input type="time" value="${sl.s||'09:00'}" onchange="_tplSlots[${i}].s=this.value">
+        <input type="time" value="${sl.e||'11:00'}" onchange="_tplSlots[${i}].e=this.value">
+      </div>
+      <select onchange="_tplSlots[${i}].stid=this.value">${stOpts}</select>
+      <select onchange="_tplSlots[${i}].type=this.value">${tyOpts}</select>
+      <button class="tpl-rm" onclick="removeTplSlot(${i})">×</button>
+    </div>`;
+  }).join(''):'<div style="font-size:11px;color:var(--mt);text-align:center;padding:8px 0">No sessions defined yet. Click + Add Session Slot.</div>';
+}
+
+function addTplSlot(){
+  _tplSlots.push({dow:1,s:'09:00',e:'11:00',stid:S.staff[0]?.id||'',type:'ABA'});
+  renderTplSlots();
+}
+function removeTplSlot(i){
+  _tplSlots.splice(i,1);renderTplSlots();
+}
+
+function genSchedule(cid){
+  const c=gc(cid);if(!c)return;
+  if(!c.authEnd){alert('Please set an Authorization End Date first, then Save Info.');return;}
+  if(!_tplSlots.length){alert('Add at least one session slot to the template first.');return;}
+  const authEnd=pd(c.authEnd);
+  const today=new Date();today.setHours(0,0,0,0);
+  // Remove existing future recurring sessions for this client
+  S.sessions=S.sessions.filter(s=>!(s.cid===cid&&s.recurGroup&&pd(s.date)>=today));
+  // Generate from today through auth end
+  const rg=uid();
+  let count=0;
+  // Start from the current week's Monday
+  let weekMon=wkOf(today);
+  while(weekMon<=authEnd){
+    _tplSlots.forEach(sl=>{
+      const d=new Date(weekMon);d.setDate(d.getDate()+(sl.dow-1));
+      if(d>=today&&d<=authEnd){
+        S.sessions.push({id:'s'+uid(),cid,stid:sl.stid,date:fd(d),s:sl.s,e:sl.e,type:sl.type,status:'OK',cx:'',makeup:false,recurGroup:rg,notes:''});
+        count++;
+      }
+    });
+    weekMon=new Date(weekMon);weekMon.setDate(weekMon.getDate()+7);
+  }
+  // Save template to client
+  c.scheduleTpl=_tplSlots.map(s=>Object.assign({},s));
+  save();
+  const prev=document.getElementById('gen-preview');
+  if(prev){
+    prev.style.display='block';
+    const wks=Math.round((authEnd-today)/864e5/7);
+    prev.innerHTML=`✅ Generated <strong>${count} sessions</strong> across ~${wks} weeks (${_tplSlots.length} slot${_tplSlots.length!==1?'s':''}/week) through <strong>${authEnd.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</strong>`;
+  }
+  rSched();rClients();
+}
+function updClient(id){
+  const c=S.clients.find(x=>x.id===id);if(!c)return;
+  c.name=document.getElementById('cd-n').value;c.dob=document.getElementById('cd-dob').value;c.ins=document.getElementById('cd-ins').value;
+  c.rec=+document.getElementById('cd-rec').value;c.sch=+document.getElementById('cd-sch').value;c.bcba=document.getElementById('cd-bcba').value;
+  c.authEnd=document.getElementById('cd-auth').value;
+  c.team=Array.from(document.getElementById('cd-team').selectedOptions).map(o=>o.value);
+  c.hasOT=document.getElementById('cd-ot').checked;c.hasBus=document.getElementById('cd-bus').checked;c.notes=document.getElementById('cd-notes').value;
+  // Save current template slots too
+  c.scheduleTpl=_tplSlots.map(s=>Object.assign({},s));
+  // Sync team → staff.clients
+  S.staff.forEach(st=>{if(!st.clients)st.clients=[];st.clients=st.clients.filter(x=>x!==id);});
+  c.team.forEach(sid=>{const s=gs(sid);if(s){if(!s.clients)s.clients=[];if(!s.clients.includes(id))s.clients.push(id);}});
+  save();closeM();rClients();rStaff();
+}
+function delClient(id){if(!confirm('Delete client and all sessions?'))return;S.clients=S.clients.filter(c=>c.id!==id);S.sessions=S.sessions.filter(s=>s.cid!==id);save();closeM();rClients();rSched();}
+
+// ── ADD STAFF ──
+function openAddStaff(){
+  openM(`<h3>Add Staff Member</h3>
+    <div class="fr2"><div class="fg"><label>Full Name</label><input id="ns-n" placeholder="Full name"></div><div class="fg"><label>Initials / ID</label><input id="ns-i" placeholder="e.g. MQ, ErT"></div></div>
+    <div class="fr2"><div class="fg"><label>Role</label><select id="ns-r">${ROLES.map(r=>`<option value="${r}">${r}</option>`).join('')}</select></div><div class="fg"><label>Birthday</label><input type="date" id="ns-bd"></div></div>
+    <div class="fr2"><div class="fg"><label>Contract Hrs/Wk</label><input type="number" id="ns-h" placeholder="30"></div><div class="fg"><label>Hrs Note</label><input id="ns-hn" placeholder="e.g. flex 40/mo"></div></div>
+    <div class="fg"><label>Color</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+        <div id="ns-prev" class="color-prev" style="background:#9E9E9E;color:#fff">AB</div>
+        <input type="color" id="ns-col" value="#9E9E9E" oninput="prevClr('ns-prev','ns-col','ns-i','ns-n')">
+        <span style="font-size:11px;color:var(--mt)">Click to open color wheel</span>
+      </div>
+    </div>
+    <div class="fg"><label>Available Days</label><div style="display:flex;gap:10px;margin-top:4px">${['Mon','Tue','Wed','Thu','Fri'].map((d,i)=>`<label style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;cursor:pointer"><input type="checkbox" id="ns-av${i}" checked>${d}</label>`).join('')}</div></div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin:6px 0"><input type="checkbox" id="ns-bus"> Bus Duty Eligible</label>
+    <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="saveStaff()">Add</button></div>`);
+}
+function prevClr(prevId,colId,initId,nameId){
+  const hex=document.getElementById(colId).value;
+  const ini=document.getElementById(initId)?.value||document.getElementById(nameId)?.value?.split(' ').map(n=>n[0]).join('').slice(0,2)||'AB';
+  const el=document.getElementById(prevId);
+  el.style.background=hex;el.style.color=txtForBg(hex);el.textContent=ini.toUpperCase().slice(0,3);
+}
+function saveStaff(){
+  const name=document.getElementById('ns-n').value.trim();if(!name)return alert('Name required.');
+  const initials=(document.getElementById('ns-i').value.trim()||name.split(' ').map(n=>n[0]).join('')).slice(0,3);
+  S.staff.push({id:initials,name,initials,role:document.getElementById('ns-r').value,hrs:+document.getElementById('ns-h').value||null,hrsNote:document.getElementById('ns-hn').value.trim()||null,birthday:document.getElementById('ns-bd').value,color:document.getElementById('ns-col').value,av:[0,1,2,3,4].map(i=>document.getElementById('ns-av'+i).checked?1:0),bus:document.getElementById('ns-bus').checked,pto:[],clients:[]});
+  save();closeM();rStaff();
+}
+
+// ── EDIT STAFF ──
+let _stplSlots=[];
+function openEditStaff(id){
+  const s=gs(id);if(!s)return;
+  _stplSlots=(s.prefTpl||[]).map(x=>Object.assign({},x));
+  const bg=s.color||'#9E9E9E';
+  const ro=ROLES.map(r=>`<option value="${r}" ${s.role===r?'selected':''}>${r}</option>`).join('');
+  const wds=[0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
+  openM(`<h3>Edit: ${s.name}</h3>
+    <div class="fr2"><div class="fg"><label>Full Name</label><input id="es-n" value="${s.name}"></div><div class="fg"><label>Role</label><select id="es-r">${ro}</select></div></div>
+    <div class="fr2"><div class="fg"><label>Contract Hrs/Wk</label><input type="number" id="es-h" value="${s.hrs||''}"></div><div class="fg"><label>Birthday</label><input type="date" id="es-bd" value="${s.birthday||''}"></div></div>
+    <div class="fg"><label>Color</label>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+        <div id="es-prev" class="color-prev" style="background:${bg};color:${txtForBg(bg)}">${s.initials}</div>
+        <input type="color" id="es-col" value="${bg}" oninput="prevClrE('${id}')">
+        <span style="font-size:11px;color:var(--mt)">Pick from color wheel</span>
+      </div>
+    </div>
+    <div class="fg"><label>Available Days</label><div style="display:flex;gap:10px;margin-top:4px">${['Mon','Tue','Wed','Thu','Fri'].map((d,i)=>`<label style="display:flex;flex-direction:column;align-items:center;gap:2px;font-size:10px;cursor:pointer"><input type="checkbox" id="es-av${i}" ${s.av[i]?'checked':''}>${d}</label>`).join('')}</div></div>
+    <div class="fg"><label>PTO This Week</label><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${wds.map((ds,i)=>{const dt=pd(ds);const on=(s.pto||[]).includes(ds);return`<label style="display:flex;align-items:center;gap:4px;font-size:10px;cursor:pointer;padding:3px 8px;background:${on?'var(--am)':'var(--bg)'};border-radius:4px;color:${on?'#fff':'inherit'}"><input type="checkbox" id="pto${i}" ${on?'checked':''} style="accent-color:white">${['M','T','W','T','F'][i]} ${dt.getDate()}</label>`;}).join('')}</div></div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;margin:5px 0"><input type="checkbox" id="es-bus" ${s.bus?'checked':''}> Bus Duty Eligible</label>
+    <div class="stpl-wrap">
+      <div class="stpl-title">🗓 Preferred Weekly Schedule</div>
+      <div style="font-size:11px;color:var(--t2);margin-bottom:10px">Define this therapist's preferred recurring slots. Used as a reference when building the schedule — does not auto-generate sessions.</div>
+      <div class="stpl-slot-hdr"><span>Day</span><span>Time</span><span>Client</span><span>Type</span><span></span></div>
+      <div id="stpl-slots"></div>
+      <button class="btn bsm" style="width:100%;border-style:dashed;margin-top:4px" onclick="addStplSlot()">+ Add Preferred Slot</button>
+      <div class="stpl-hours" id="stpl-hours"></div>
+    </div>
+    <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updStaff('${id}')">Save</button></div>`);
+  renderStplSlots(s);
+}
+
+function renderStplSlots(s){
+  const wrap=document.getElementById('stpl-slots');
+  const hoursEl=document.getElementById('stpl-hours');
+  if(!wrap)return;
+  const days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  const co=S.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  const to=STYPES.filter(t=>t.id!=='ADMIN'&&t.id!=='APM').map(t=>`<option value="${t.id}">${t.label}</option>`).join('');
+  wrap.innerHTML=_stplSlots.length?_stplSlots.map((sl,i)=>{
+    const dOpts=days.map((d,di)=>`<option value="${di+1}" ${sl.dow==di+1?'selected':''}>${d.slice(0,3)}</option>`).join('');
+    const clOpts='<option value="">— any —</option>'+S.clients.map(c=>`<option value="${c.id}" ${c.id===sl.cid?'selected':''}>${c.name}</option>`).join('');
+    const tyOpts=STYPES.filter(t=>t.id!=='ADMIN'&&t.id!=='APM').map(t=>`<option value="${t.id}" ${t.id===sl.type?'selected':''}>${t.label}</option>`).join('');
+    return`<div class="stpl-slot">
+      <select onchange="_stplSlots[${i}].dow=+this.value;renderStplSlots()">${dOpts}</select>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">
+        <input type="time" value="${sl.s||'09:00'}" onchange="_stplSlots[${i}].s=this.value;renderStplSlots()">
+        <input type="time" value="${sl.e||'11:00'}" onchange="_stplSlots[${i}].e=this.value;renderStplSlots()">
+      </div>
+      <select onchange="_stplSlots[${i}].cid=this.value">${clOpts}</select>
+      <select onchange="_stplSlots[${i}].type=this.value">${tyOpts}</select>
+      <button class="tpl-rm" onclick="removeStplSlot(${i})">×</button>
+    </div>`;
+  }).join(''):'<div style="font-size:11px;color:var(--mt);text-align:center;padding:8px 0">No preferred slots set yet.</div>';
+  // Calculate total preferred hours
+  const totalMins=_stplSlots.reduce((sum,sl)=>{
+    if(!sl.s||!sl.e)return sum;
+    const[sh,sm]=sl.s.split(':').map(Number);
+    const[eh,em]=sl.e.split(':').map(Number);
+    return sum+Math.max(0,(eh*60+em)-(sh*60+sm));
+  },0);
+  const hrs=(totalMins/60).toFixed(1);
+  const contractHrs=parseFloat(document.getElementById('es-h')?.value)||s?.hrs||0;
+  const diff=contractHrs?((totalMins/60)-contractHrs).toFixed(1):null;
+  if(hoursEl){
+    let warn='';
+    if(contractHrs&&Math.abs(diff)>0.5){
+      const over=diff>0;
+      warn=`<span class="stpl-warn">${over?'⚠️ '+diff+'h over':'⚠️ '+Math.abs(diff)+'h under'} contract</span>`;
+    }
+    hoursEl.innerHTML=`<div>Preferred hours/week: <strong>${hrs}h</strong>${contractHrs?` of ${contractHrs}h contract`:''}</div>${warn||'<span style="color:#2E8B65;font-size:10px;font-weight:600">✓ matches contract</span>'}`;
+    hoursEl.style.display=_stplSlots.length?'flex':'none';
+  }
+}
+
+function addStplSlot(){
+  _stplSlots.push({dow:1,s:'09:00',e:'11:00',cid:'',type:'ABA'});
+  renderStplSlots();
+}
+function removeStplSlot(i){
+  _stplSlots.splice(i,1);renderStplSlots();
+}
+function prevClrE(sid){
+  const hex=document.getElementById('es-col').value;
+  const s=gs(sid);
+  const el=document.getElementById('es-prev');
+  el.style.background=hex;el.style.color=txtForBg(hex);el.textContent=s?.initials||'AB';
+}
+function updStaff(id){
+  const s=gs(id);if(!s)return;
+  s.name=document.getElementById('es-n').value;s.role=document.getElementById('es-r').value;
+  s.hrs=+document.getElementById('es-h').value||null;s.birthday=document.getElementById('es-bd').value;
+  s.color=document.getElementById('es-col').value;
+  s.av=[0,1,2,3,4].map(i=>document.getElementById('es-av'+i).checked?1:0);
+  s.bus=document.getElementById('es-bus').checked;
+  s.prefTpl=_stplSlots.map(x=>Object.assign({},x));
+  const wds=[0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
+  wds.forEach((ds,i)=>{const on=document.getElementById('pto'+i).checked;if(!s.pto)s.pto=[];if(on&&!s.pto.includes(ds))s.pto.push(ds);else if(!on)s.pto=s.pto.filter(x=>x!==ds);});
+  save();closeM();rStaff();rSched();
+}
+
+// ── ADD BREAK ──
+function openAddBreak(){
+  const so=S.staff.map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
+  openM(`<h3>Add Break</h3>
+    <div class="fg"><label>Staff</label><select id="ab2-st">${so}</select></div>
+    <div class="fr2"><div class="fg"><label>Start</label><input type="time" id="ab2-s" value="12:00"></div><div class="fg"><label>End</label><input type="time" id="ab2-e" value="12:30"></div></div>
+    <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="saveBreak()">Add</button></div>`);
+}
+function saveBreak(){
+  eLog();const br=S.logs[dayDate].breaks||[];
+  br.push({stid:document.getElementById('ab2-st').value,s:document.getElementById('ab2-s').value,e:document.getElementById('ab2-e').value});
+  S.logs[dayDate].breaks=br;save();closeM();rDaily();
+}
+
+
+// ── PIN / VIEW-ONLY MODE ──
+let isViewOnly = false;
+
+function applyMode(){
+  if(isViewOnly){
+    document.body.classList.add('view-only');
+    document.getElementById('lockBtn').innerHTML='👁';
+    document.getElementById('lockBtn').style.background='rgba(232,131,42,.4)';
+    document.getElementById('voBanner').classList.add('show');
+    if(atab==='settings'||atab==='daily') sw('sched');
+  } else {
+    document.body.classList.remove('view-only');
+    document.getElementById('lockBtn').innerHTML='🔓 Scheduler';
+    document.getElementById('lockBtn').style.background='';
+    document.getElementById('voBanner').classList.remove('show');
+  }
+}
+
+function toggleLock(){
+  if(isViewOnly){ promptUnlock(); }
+  else { isViewOnly=true; applyMode(); }
+}
+
+function getPin(){ return S.cfg.schedulerPin||'1234'; }
+
+let pinBuffer='';
+function promptUnlock(){
+  pinBuffer='';
+  _openM(`<div style="text-align:center">
+    <div style="font-size:22px;margin-bottom:4px">🔐</div>
+    <h3 style="text-align:center;margin-bottom:4px">Scheduler Login</h3>
+    <div style="font-size:12px;color:var(--mt);margin-bottom:8px">Enter your PIN to enable editing</div>
+    <div class="pin-dots">
+      <div class="pin-dot" id="pd0"></div><div class="pin-dot" id="pd1"></div>
+      <div class="pin-dot" id="pd2"></div><div class="pin-dot" id="pd3"></div>
+    </div>
+    <div class="pin-pad">
+      ${[1,2,3,4,5,6,7,8,9].map(n=>`<button class="pin-key" onclick="pinKey('${n}')">${n}</button>`).join('')}
+      <button class="pin-key del" onclick="pinKey('del')">⌫</button>
+      <button class="pin-key" onclick="pinKey('0')">0</button>
+      <button class="pin-key" onclick="pinKey('ok')">OK</button>
+    </div>
+    <div class="pin-err" id="pin-err"></div>
+  </div>`);
+}
+
+function pinKey(k){
+  if(k==='del'){ pinBuffer=pinBuffer.slice(0,-1); }
+  else if(k==='ok'){ checkPin(); return; }
+  else if(pinBuffer.length<4){ pinBuffer+=k; }
+  [0,1,2,3].forEach(i=>{ const el=document.getElementById('pd'+i); if(el) el.classList.toggle('filled',i<pinBuffer.length); });
+  if(pinBuffer.length===4) setTimeout(checkPin,120);
+}
+
+function checkPin(){
+  if(pinBuffer===getPin()){
+    isViewOnly=false; applyMode(); closeM();
+  } else {
+    const err=document.getElementById('pin-err');
+    if(err) err.textContent='Incorrect PIN. Try again.';
+    pinBuffer='';
+    [0,1,2,3].forEach(i=>{ const el=document.getElementById('pd'+i); if(el){ el.classList.remove('filled'); el.style.background='#FFCDD2'; setTimeout(()=>{el.style.background='';},500); } });
+  }
+}
+
+
+function changePin(){
+  const cur=document.getElementById('pin-cur').value;
+  const nw=document.getElementById('pin-new').value;
+  const msg=document.getElementById('pin-msg');
+  if(cur!==getPin()){msg.style.color='var(--rd)';msg.textContent='Current PIN is incorrect.';return;}
+  if(!/^\d{4}$/.test(nw)){msg.style.color='var(--rd)';msg.textContent='New PIN must be 4 digits.';return;}
+  S.cfg.schedulerPin=nw;save();
+  msg.style.color='var(--gn)';msg.textContent='PIN updated successfully.';
+  document.getElementById('pin-cur').value='';document.getElementById('pin-new').value='';
+}
+
+// ── QUICK ROLE TOGGLE ──
+function setRole(sid, role){
+  const s=gs(sid);if(!s)return;
+  s.role=role;save();rStaff();
+}
+
+// ── SWIPE TO NAVIGATE DAYS ──
+(function(){
+  let tx=0,ty=0;
+  document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
+  document.addEventListener('touchend',e=>{
+    const dx=e.changedTouches[0].clientX-tx;
+    const dy=e.changedTouches[0].clientY-ty;
+    // Only horizontal swipes > 60px that aren't mostly vertical
+    if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5){
+      // Only on schedule tab in day view
+      if(atab==='sched'&&curView==='day'){
+        if(dx<0)navNext(); else navPrev();
+      }
+    }
+  },{passive:true});
+})();
+
+// ── MOBILE INIT: switch to day view if on phone ──
+window.addEventListener('resize',()=>{
+  if(isMobile()&&atab==='sched'&&curView==='week'){setView('day');}
+});
+
+// ── MY SCHEDULE TAB ──
+let mySchedDay = fd(new Date());
+let mySchedStid = '';
+
+function initMyS(){
+  const sel=document.getElementById('mys-who');
+  if(!sel) return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">— Select your name —</option>'+
+    S.staff.map(s=>`<option value="${s.id}" ${s.id===cur?'selected':''}>${s.name} (${s.role})</option>`).join('');
+  if(cur) rMyS();
+}
+
+function rMyS(){
+  const sel=document.getElementById('mys-who');
+  if(!sel) return;
+  mySchedStid=sel.value;
+  const con=document.getElementById('mys-content');
+  if(!mySchedStid){
+    con.innerHTML='<div class="mys-empty"><div class="mi">🙋</div><div style="font-size:14px;font-weight:600;margin-bottom:4px">Select your name above</div><div style="font-size:12px">to see your personal schedule</div></div>';
+    return;
+  }
+  const s=gs(mySchedStid);
+  if(!s){con.innerHTML='';return;}
+  const bg=s.color||'#9E9E9E', tx=txtForBg(bg);
+  const today=fd(new Date());
+
+  // ── Week strip (Mon–Fri of current week) ──
+  const wdays=['Mon','Tue','Wed','Thu','Fri'];
+  const wdates=wdays.map((_,i)=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
+  const weekStrip=wdates.map((ds,i)=>{
+    const d=pd(ds);
+    const daySess=S.sessions.filter(x=>x.date===ds&&x.stid===mySchedStid&&x.status!=='CX');
+    const isActive=ds===mySchedDay;
+    const isToday=ds===today;
+    const hasSess=daySess.length>0;
+    return`<div class="mys-day${isActive?' active':''}${isToday?' today-d':''}${hasSess?' has-sess':''}" onclick="mySchedDay='${ds}';rMyS()">
+      <div class="mys-dname">${wdays[i]}</div>
+      <div class="mys-dnum">${d.getDate()}</div>
+      <div class="mys-dct">${daySess.length?daySess.length+'sess':''}</div>
+    </div>`;
+  }).join('');
+
+  // ── Header card ──
+  const dowIdx=wdates.indexOf(mySchedDay);
+  const pto=(s.pto||[]).includes(mySchedDay);
+  const avail=dowIdx>=0?s.av[dowIdx]:1;
+  const log=S.logs[mySchedDay]||{};
+  const isBusToday=log.busStaff===mySchedStid;
+  const dayLabel=pd(mySchedDay).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const hrsLabel=s.hrsNote||(s.hrs?s.hrs+'h/wk contract':'');
+
+  const header=`<div class="mys-header">
+    <div class="mys-av" style="background:${bg};color:${tx}">${s.initials}</div>
+    <div class="mys-name">${s.name}</div>
+    <div class="mys-role">${s.role}${hrsLabel?' · '+hrsLabel:''}</div>
+    <div class="mys-date">${dayLabel}${pto?' · <span style="color:#FFE082;font-weight:700">PTO</span>':!avail?' · <span style="opacity:.6">Day off</span>':''}</div>
+  </div>`;
+
+  // ── Week navigation ──
+  const weekNav=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <button class="btn bsm" onclick="mySchedPrevWk()">◀</button>
+    <span style="font-size:12px;font-weight:600;flex:1;text-align:center">${fsh(wkStart)} – ${fsh(new Date(wkStart.getTime()+4*864e5))}</span>
+    <button class="btn bsm bp" onclick="mySchedToday()">Today</button>
+    <button class="btn bsm" onclick="mySchedNextWk()">▶</button>
+  </div>`;
+
+  // ── Bus duty notice ──
+  const busBar=isBusToday?`<div class="mys-bus">🚌 <div><strong>You have bus duty today</strong><div style="font-size:11px;font-weight:400;margin-top:1px">Check the Daily Log for rider list</div></div></div>`:'';
+
+  // ── Birthdays ──
+  const bdays=bdaysOn(mySchedDay);
+  let bdayBar='';
+  if(bdays.staff.length||bdays.clients.length){
+    const parts=[...bdays.staff.map(x=>`🎂 ${x.name}`),...bdays.clients.map(x=>`🎂 ${x.name} (client)`)];
+    bdayBar=`<div class="mys-bday"><span style="font-size:16px">🎂</span>${parts.join(' · ')}</div>`;
+  }
+
+  // ── Sessions for selected day ──
+  const daySess=S.sessions.filter(x=>x.date===mySchedDay&&x.stid===mySchedStid).sort((a,b)=>a.s.localeCompare(b.s));
+  const breaks=(log.breaks||[]).filter(b=>b.stid===mySchedStid);
+
+  let sessHtml='';
+  if(pto||!avail){
+    sessHtml=`<div class="mys-empty"><div class="mi">${pto?'🏖':'😴'}</div><div style="font-size:14px;font-weight:600">${pto?'PTO':'Day off'}</div></div>`;
+  } else if(!daySess.filter(s=>!s._autoAdmin&&s.status!=='CX').length&&!breaks.length){
+    const admType=s.role==='BCBA'?'APM':'Admin';
+    sessHtml=`<div class="mys-sess" style="border:1px dashed #B0BEC5;background:#FAFAFA">
+      <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:#9E9E9E;border-radius:4px 0 0 4px"></div>
+      <div class="mys-sess-time">All day <span class="mys-sess-dur">Default</span></div>
+      <div class="mys-sess-client" style="color:var(--t2)">${admType}</div>
+      <div class="mys-sess-meta"><span class="bdg ${s.role==='BCBA'?'b-apm':'b-adm'}">${admType}</span><span style="font-size:10px;color:var(--mt);margin-left:4px">No sessions scheduled — available for assignment</span></div>
+    </div>`;
+  } else {
+    // Merge sessions and breaks, sort by time
+    const items=[
+      ...daySess.map(x=>({...x,_type:'sess'})),
+      ...breaks.map(x=>({...x,_type:'brk',s:x.s,e:x.e}))
+    ].sort((a,b)=>a.s.localeCompare(b.s));
+
+    sessHtml=items.map(item=>{
+      if(item._type==='brk'){
+        return`<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:#FFF9C4;border-radius:9px;font-size:12px;color:#795548;font-weight:600">
+          ☕ Break &nbsp;<span style="font-weight:400">${ftm(item.s)} – ${ftm(item.e)}</span>
+        </div>`;
+      }
+      const cl=gc(item.cid);
+      const insBg=cl?iColor(cl.ins):'#9E9E9E';
+      const tbdg=`<span class="bdg ${sTypeBdg(item.type)}">${sTypeLabel(item.type)}</span>`;
+      const insBdg=cl?`<span class="bdg ${iBdg(cl.ins)}">${iLabel(cl.ins)}</span>`:'';
+      const muBdg=item.makeup?'<span class="bdg b-mu">Make-up</span>':'';
+      const cxBdg=item.status==='CX'?`<div class="mys-sess-cx">❌ ${item.cx||'Cancelled'}</div>`:'';
+      // Duration
+      const[sh,sm]=item.s.split(':').map(Number);
+      const[eh,em]=item.e.split(':').map(Number);
+      const dur=((eh*60+em)-(sh*60+sm));
+      const durLbl=dur>=60?Math.floor(dur/60)+'h'+(dur%60?''+dur%60+'m':''):(dur+'m');
+      const clName=cl?cl.name:sTypeLabel(item.type);
+      return`<div class="mys-sess${item.status==='CX'?' cx':''}" style="--ins-clr:${insBg}">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${insBg};border-radius:4px 0 0 4px"></div>
+        <div class="mys-sess-time">${ftm(item.s)} – ${ftm(item.e)}<span class="mys-sess-dur">${durLbl}</span></div>
+        <div class="mys-sess-client">${clName}</div>
+        <div class="mys-sess-meta">${tbdg}${insBdg}${muBdg}</div>
+        ${cxBdg}
+        ${cl?.hasOT&&item.type==='ABA'?'<div style="font-size:10px;color:#004D40;font-weight:600;margin-top:5px">🦾 OT follows this session</div>':''}
+        ${item.notes?`<div style="font-size:11px;color:var(--t2);margin-top:5px;font-style:italic">${item.notes}</div>`:''}
+      </div>`;
+    }).join('');
+  }
+
+  // ── Weekly summary section ──
+  const weekAllSess=S.sessions.filter(x=>wdates.includes(x.date)&&x.stid===mySchedStid);
+  const weekMins=weekAllSess.filter(x=>x.status!=='CX').reduce((sum,x)=>{
+    const[sh,sm]=x.s.split(':').map(Number);
+    const[eh,em]=x.e.split(':').map(Number);
+    return sum+Math.max(0,(eh*60+em)-(sh*60+sm));
+  },0);
+  const weekHrs=(weekMins/60).toFixed(1);
+  const contractHrs=s.hrs||0;
+  const weekSummary=`<div style="background:#fff;border-radius:10px;border:1px solid var(--bd);padding:12px 16px;margin-top:16px;box-shadow:var(--sh)">
+    <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">This Week</div>
+    <div style="display:flex;gap:16px;flex-wrap:wrap">
+      <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:var(--nv)">${weekAllSess.filter(x=>x.status!=='CX').length}</div><div style="font-size:10px;color:var(--mt)">Sessions</div></div>
+      <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:var(--nv)">${weekHrs}h</div><div style="font-size:10px;color:var(--mt)">${contractHrs?'of '+contractHrs+'h contract':'Scheduled'}</div></div>
+      <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:${weekAllSess.filter(x=>x.status==='CX').length?'var(--rd)':'var(--gn)'}">${weekAllSess.filter(x=>x.status==='CX').length}</div><div style="font-size:10px;color:var(--mt)">Cancellations</div></div>
+      <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:var(--nv)">${[...new Set(weekAllSess.filter(x=>x.cid&&x.status!=='CX').map(x=>x.cid))].length}</div><div style="font-size:10px;color:var(--mt)">Clients</div></div>
+    </div>
+    ${contractHrs?`<div style="margin-top:10px"><div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden"><div style="height:100%;background:${weekHrs/contractHrs>=0.9?'var(--gn)':'var(--am)'};width:${Math.min(100,Math.round(weekHrs/contractHrs*100))}%;border-radius:3px;transition:width .4s"></div></div><div style="font-size:10px;color:var(--mt);margin-top:3px">${Math.round(weekHrs/contractHrs*100)}% of contract hours scheduled</div></div>`:''}
+  </div>`;
+
+  con.innerHTML = header + weekNav +
+    `<div class="mys-week">${weekStrip}</div>` +
+    busBar + bdayBar +
+    `<div class="mys-section-lbl">📋 ${dayLabel}</div>` +
+    `<div class="mys-sess-wrap">${sessHtml}</div>` +
+    weekSummary;
+}
+
+function mySchedPrevWk(){wkStart.setDate(wkStart.getDate()-7);if(mySchedStid)rMyS();}
+function mySchedNextWk(){wkStart.setDate(wkStart.getDate()+7);if(mySchedStid)rMyS();}
+function mySchedToday(){wkStart=wkOf(new Date());mySchedDay=fd(new Date());if(mySchedStid)rMyS();}
+
+// ── AUTH EXPIRY ALERTS ──
+let alertsCollapsed = false;
+const TRICARE_IDS = ['ECHO','TC_PRIME','TC_SELECT'];
+
+function authWindowDays(insId){
+  return TRICARE_IDS.includes(insId) ? 60 : 30;
+}
+
+function authAlertLevel(daysLeft, insId){
+  const window = authWindowDays(insId);
+  if(daysLeft < 0) return 'red';       // expired
+  if(daysLeft <= 14) return 'red';     // critical
+  if(daysLeft <= 30) return 'orange';  // urgent
+  if(daysLeft <= window) return 'yellow'; // in submission window
+  return null; // fine
+}
+
+function rAuthAlerts(){
+  const wrap = document.getElementById('auth-alerts-wrap');
+  if(!wrap) return;
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // Only show clients with a BCBA on their team
+  const alerts = S.clients.filter(c => {
+    if(!c.authEnd) return false;
+    const daysLeft = Math.ceil((pd(c.authEnd) - today) / 864e5);
+    return authAlertLevel(daysLeft, c.ins) !== null;
+  }).map(c => {
+    const daysLeft = Math.ceil((pd(c.authEnd) - today) / 864e5);
+    const level = authAlertLevel(daysLeft, c.ins);
+    const window = authWindowDays(c.ins);
+    const bcba = gs(c.bcba);
+    return { c, daysLeft, level, window, bcba };
+  }).sort((a,b) => a.daysLeft - b.daysLeft);
+
+  if(!alerts.length){ wrap.innerHTML=''; return; }
+
+  const isTri = a => TRICARE_IDS.includes(a.c.ins);
+  const levelIcon = l => l==='red'?'🔴':l==='orange'?'🟠':'🟡';
+  const daysLabel = d => d < 0 ? `Expired ${Math.abs(d)}d ago` : d===0 ? 'Expires TODAY' : `${d}d left`;
+
+  const rows = alertsCollapsed ? '' : alerts.map(a => {
+    const submitNote = isTri(a.c)
+      ? `Tricare: submit ${a.window}-30 days prior`
+      : `Submit within 30 days prior`;
+    const authDateStr = pd(a.c.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    return `<div class="auth-alert lvl-${a.level}" onclick="openClientDetail('${a.c.id}')">
+      <div class="auth-alert-icon">${levelIcon(a.level)}</div>
+      <div class="auth-alert-body">
+        <div class="auth-alert-name">${a.c.name} <span style="font-size:10px;font-weight:500;color:var(--mt)">— ${a.bcba?.name||'Unassigned BCBA'}</span></div>
+        <div class="auth-alert-detail">${iLabel(a.c.ins)} · Auth ends ${authDateStr} · ${submitNote}</div>
+      </div>
+      <div class="auth-alert-badge">${daysLabel(a.daysLeft)}</div>
+    </div>`;
+  }).join('');
+
+  wrap.innerHTML = `<div class="auth-alerts">
+    <div class="auth-alerts-hdr">
+      <h3>⚠️ Authorization Alerts <span style="background:#FEE2E2;color:#991B1B;font-size:10px;padding:2px 7px;border-radius:10px;margin-left:6px">${alerts.length}</span></h3>
+      <button class="auth-collapse" onclick="alertsCollapsed=!alertsCollapsed;rAuthAlerts()">${alertsCollapsed?'Show ▾':'Hide ▴'}</button>
+    </div>
+    ${rows}
+  </div>`;
+}
+
+// ── PRINT ──
+function doPrint(){
+  const wEnd = new Date(wkStart); wEnd.setDate(wEnd.getDate()+4);
+  const el = document.getElementById('print-date-range');
+  if(el) el.textContent = 'Week of ' + fsh(wkStart) + ' – ' + fsh(wEnd) + ', ' + wEnd.getFullYear() +
+    '   ·   Printed ' + new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  // Switch to week view for printing
+  const wasView = curView;
+  if(curView !== 'week'){ curView='week'; rWeek(); }
+  setTimeout(()=>{ window.print(); curView=wasView; if(wasView==='day') rDay(); }, 200);
+}
+
+// ── REPORTS ──
+let curReport = 'billing';
+
+// Billable session types — ABA, OT, PT, SUP, APM all generate revenue
+const BILLABLE_TYPES = ['ABA','OT','PT','APM'];
+// Direct client-facing types (vs indirect/administrative)
+const DIRECT_TYPES = ['ABA','OT'];
+const INDIRECT_TYPES = ['PT','APM'];
+
+function isBillable(s){ return BILLABLE_TYPES.includes(s.type) && s.status !== 'CX'; }
+function isDirect(s){ return DIRECT_TYPES.includes(s.type) && s.status !== 'CX'; }
+function isIndirect(s){ return INDIRECT_TYPES.includes(s.type) && s.status !== 'CX'; }
+
+function sessMins(s){
+  const[sh,sm]=s.s.split(':').map(Number);
+  const[eh,em]=s.e.split(':').map(Number);
+  return Math.max(0,(eh*60+em)-(sh*60+sm));
+}
+
+function setReport(type, el){
+  curReport = type;
+  document.querySelectorAll('.rpt-btn').forEach(b=>b.classList.remove('on'));
+  if(el) el.classList.add('on');
+  document.getElementById('rpt-main').innerHTML=`<div class="rpt-empty"><div class="rpt-empty-icon">📊</div><div style="font-weight:600">Click Run Report to generate</div></div>`;
+}
+
+function initReports(){
+  const now=new Date();
+  const from=new Date(now.getFullYear(),now.getMonth(),1);
+  const to=new Date(now.getFullYear(),now.getMonth()+1,0);
+  const fEl=document.getElementById('rpt-from');
+  const tEl=document.getElementById('rpt-to');
+  if(fEl&&!fEl.value) fEl.value=fd(from);
+  if(tEl&&!tEl.value) tEl.value=fd(to);
+  const iEl=document.getElementById('rpt-ins');
+  if(iEl) iEl.innerHTML='<option value="">All Insurance</option>'+INS.map(i=>`<option value="${i.id}">${i.label}</option>`).join('');
+  const sEl=document.getElementById('rpt-staff');
+  if(sEl) sEl.innerHTML='<option value="">All Staff</option>'+S.staff.map(s=>`<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
+}
+
+function getReportSessions(){
+  const from=document.getElementById('rpt-from')?.value||'';
+  const to=document.getElementById('rpt-to')?.value||'';
+  const ins=document.getElementById('rpt-ins')?.value||'';
+  const stid=document.getElementById('rpt-staff')?.value||'';
+  return S.sessions.filter(s=>{
+    if(s._virtual||s._autoAdmin) return false;
+    if(from&&s.date<from) return false;
+    if(to&&s.date>to) return false;
+    if(ins){ const cl=gc(s.cid); if(!cl||cl.ins!==ins) return false; }
+    if(stid&&s.stid!==stid) return false;
+    return true;
+  }).sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
+}
+
+function periodLabel(){
+  const f=document.getElementById('rpt-from')?.value;
+  const t=document.getElementById('rpt-to')?.value;
+  if(!f&&!t) return 'All dates';
+  const fmt=d=>pd(d).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  return (f?fmt(f):'') + (f&&t?' – ':'') + (t?fmt(t):'');
+}
+
+function runReport(){
+  initReports();
+  const fn={billing:rptBilling,attendance:rptAttendance,cancellations:rptCancellations,hours:rptHours};
+  (fn[curReport]||rptBilling)();
+}
+
+// ─────────────────────────────────────────
+// BILLING VERIFICATION
+// ─────────────────────────────────────────
+function rptBilling(){
+  // Include all sessions with clients + APM/SUP/PT even without client
+  const sess=getReportSessions();
+  const clientSess=sess.filter(s=>s.cid||INDIRECT_TYPES.includes(s.type));
+  if(!clientSess.length){
+    document.getElementById('rpt-main').innerHTML='<div class="rpt-empty"><div class="rpt-empty-icon">🔍</div>No sessions found for this period.</div>';return;
+  }
+  const billable=clientSess.filter(isBillable);
+  const cancelled=clientSess.filter(s=>s.status==='CX');
+  const totalHrs=billable.reduce((sum,s)=>sum+sessMins(s),0)/60;
+  const abaHrs=billable.filter(s=>s.type==='ABA').reduce((sum,s)=>sum+sessMins(s),0)/60;
+  const otHrs=billable.filter(s=>s.type==='OT').reduce((sum,s)=>sum+sessMins(s),0)/60;
+  const inHrs=billable.filter(isIndirect).reduce((sum,s)=>sum+sessMins(s),0)/60;
+
+  // Group by insurance (client sessions) or type (indirect)
+  const insGroups={};
+  clientSess.forEach(s=>{
+    const cl=gc(s.cid);
+    const key=cl?cl.ins:('INDIRECT_'+s.type);
+    if(!insGroups[key])insGroups[key]=[];
+    insGroups[key].push(s);
+  });
+
+  const billTag=(s)=>BILLABLE_TYPES.includes(s.type)
+    ?`<span class="billable-tag bill-yes">${s.type}</span>`
+    :`<span class="billable-tag bill-no">non-bill</span>`;
+
+  let tableHTML='';
+  // Client sessions grouped by insurance first
+  const insKeys=Object.keys(insGroups).filter(k=>!k.startsWith('INDIRECT'));
+  insKeys.sort().forEach(ins=>{
+    const gSess=insGroups[ins];
+    const obj=iById(ins);
+    const gBill=gSess.filter(isBillable);
+    const gHrs=gBill.reduce((sum,s)=>sum+sessMins(s),0)/60;
+    tableHTML+=`<div class="rpt-group-hdr" style="background:${obj.color}">${obj.label} &nbsp;·&nbsp; ${gSess.length} sessions &nbsp;·&nbsp; ${gHrs.toFixed(2)} billable hrs</div>
+    <table class="rpt-table"><thead><tr>
+      <th>Date</th><th>Client</th><th>Therapist</th><th>Code</th><th>Start</th><th>End</th><th>Hrs</th><th>Billable</th><th>Status</th><th>CX Code</th>
+    </tr></thead><tbody>
+    ${gSess.map(s=>{
+      const cl=gc(s.cid);const st=gs(s.stid);
+      const hrs=(sessMins(s)/60).toFixed(2);
+      const dateStr=pd(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      return`<tr class="${s.status==='CX'?'cx-row':''}">
+        <td>${dateStr}</td>
+        <td>${cDisplayName(cl)}</td>
+        <td>${st?.initials||'—'}</td>
+        <td>${billTag(s)}</td>
+        <td>${ftm(s.s)}</td><td>${ftm(s.e)}</td>
+        <td>${s.status==='CX'?'—':hrs}</td>
+        <td><span style="font-size:10px;font-weight:700;color:${isBillable(s)?'var(--gn)':'var(--mt)'}">${isBillable(s)?'✓ Billable':'—'}</span></td>
+        <td><span style="font-size:10px;font-weight:700;color:${s.status==='CX'?'var(--rd)':'var(--gn)'}">${s.status==='CX'?'CANCELLED':'ATTENDED'}</span></td>
+        <td style="color:var(--rd);font-size:10px;font-weight:700">${s.cx||''}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+  });
+  // Indirect/no-client sessions (PT, SUP, APM logged standalone)
+  const indirKeys=Object.keys(insGroups).filter(k=>k.startsWith('INDIRECT'));
+  if(indirKeys.length){
+    const indirSess=indirKeys.flatMap(k=>insGroups[k]);
+    tableHTML+=`<div class="rpt-group-hdr" style="background:#4A148C">Indirect Billable (PT / APM)</div>
+    <table class="rpt-table"><thead><tr>
+      <th>Date</th><th>Staff</th><th>Code</th><th>Start</th><th>End</th><th>Hrs</th><th>Notes</th>
+    </tr></thead><tbody>
+    ${indirSess.map(s=>{
+      const st=gs(s.stid);
+      const hrs=(sessMins(s)/60).toFixed(2);
+      const dateStr=pd(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      return`<tr class="${s.status==='CX'?'cx-row':''}">
+        <td>${dateStr}</td><td>${st?.name||'—'}</td>
+        <td><span class="bdg ${sTypeBdg(s.type)}">${sTypeLabel(s.type)}</span></td>
+        <td>${ftm(s.s)}</td><td>${ftm(s.e)}</td>
+        <td>${hrs}</td><td style="color:var(--mt);font-size:10px">${s.notes||''}</td>
+      </tr>`;
+    }).join('')}</tbody></table>`;
+  }
+
+  document.getElementById('rpt-main').innerHTML=`
+    <div class="rpt-main-hdr">
+      <div><h2>Billing Verification</h2><div class="rpt-period">${periodLabel()}</div></div>
+      <div class="rpt-exports">
+        <button class="btn bsm" onclick="exportCSV('billing')">⬇ CSV</button>
+        <button class="btn bsm" onclick="window.print()">🖨 Print</button>
+      </div>
+    </div>
+    <div class="rpt-summary">
+      <div class="rsb"><div class="rsn">${clientSess.length}</div><div class="rsl">Total Sessions</div></div>
+      <div class="rsb"><div class="rsn">${billable.length}</div><div class="rsl">Billable</div></div>
+      <div class="rsb"><div class="rsn">${cancelled.length}</div><div class="rsl">Cancelled</div></div>
+      <div class="rsb"><div class="rsn">${totalHrs.toFixed(1)}h</div><div class="rsl">Total Bill. Hrs</div></div>
+      <div class="rsb"><div class="rsn">${abaHrs.toFixed(1)}h</div><div class="rsl">ABA Hrs</div></div>
+      <div class="rsb"><div class="rsn">${otHrs.toFixed(1)}h</div><div class="rsl">OT Hrs</div></div>
+      <div class="rsb"><div class="rsn">${inHrs.toFixed(1)}h</div><div class="rsl">PT/SUP/APM Hrs</div></div>
+      <div class="rsb"><div class="rsn">${clientSess.length?Math.round(cancelled.length/clientSess.length*100):0}%</div><div class="rsl">Cancel Rate</div></div>
+    </div>
+    ${tableHTML}`;
+}
+
+// ─────────────────────────────────────────
+// ATTENDANCE LOG
+// ─────────────────────────────────────────
+function rptAttendance(){
+  const sess=getReportSessions().filter(s=>s.cid);
+  if(!sess.length){document.getElementById('rpt-main').innerHTML='<div class="rpt-empty"><div class="rpt-empty-icon">🔍</div>No sessions found.</div>';return;}
+  // Group by client
+  const byClient={};
+  sess.forEach(s=>{
+    if(!byClient[s.cid])byClient[s.cid]={attended:[],cancelled:[],total:[]};
+    byClient[s.cid].total.push(s);
+    if(s.status==='CX')byClient[s.cid].cancelled.push(s);
+    else byClient[s.cid].attended.push(s);
+  });
+  const totalSess=sess.length;
+  const totalAtt=sess.filter(s=>s.status!=='CX').length;
+  const totalCX=sess.filter(s=>s.status==='CX').length;
+  const totalHrs=sess.filter(s=>s.status!=='CX').reduce((sum,s)=>sum+sessMins(s),0)/60;
+
+  let tableHTML='<table class="rpt-table"><thead><tr><th>Client</th><th>Insurance</th><th>Scheduled</th><th>Attended</th><th>Cancelled</th><th>Attend. Rate</th><th>Total Hrs</th><th>Billable Hrs</th></tr></thead><tbody>';
+  Object.keys(byClient).forEach(cid=>{
+    const cl=gc(cid);if(!cl)return;
+    const d=byClient[cid];
+    const rate=d.total.length?Math.round(d.attended.length/d.total.length*100):0;
+    const hrs=d.attended.reduce((sum,s)=>sum+sessMins(s),0)/60;
+    const billHrs=d.attended.filter(isBillable).reduce((sum,s)=>sum+sessMins(s),0)/60;
+    const rateColor=rate>=85?'var(--gn)':rate>=70?'var(--am)':'var(--rd)';
+    tableHTML+=`<tr>
+      <td style="font-weight:600">${cDisplayName(cl)}</td>
+      <td><span class="bdg ${iBdg(cl.ins)}">${iLabel(cl.ins)}</span></td>
+      <td>${d.total.length}</td>
+      <td>${d.attended.length}</td>
+      <td>${d.cancelled.length}</td>
+      <td><span style="font-weight:700;color:${rateColor}">${rate}%</span></td>
+      <td>${hrs.toFixed(2)}h</td>
+      <td>${billHrs.toFixed(2)}h</td>
+    </tr>`;
+  });
+  tableHTML+='</tbody></table>';
+
+  document.getElementById('rpt-main').innerHTML=`
+    <div class="rpt-main-hdr">
+      <div><h2>Attendance Log</h2><div class="rpt-period">${periodLabel()}</div></div>
+      <div class="rpt-exports">
+        <button class="btn bsm" onclick="exportCSV('attendance')">⬇ CSV</button>
+        <button class="btn bsm" onclick="window.print()">🖨 Print</button>
+      </div>
+    </div>
+    <div class="rpt-summary">
+      <div class="rsb"><div class="rsn">${totalSess}</div><div class="rsl">Scheduled</div></div>
+      <div class="rsb"><div class="rsn">${totalAtt}</div><div class="rsl">Attended</div></div>
+      <div class="rsb"><div class="rsn">${totalCX}</div><div class="rsl">Cancelled</div></div>
+      <div class="rsb"><div class="rsn">${totalSess?Math.round(totalAtt/totalSess*100):0}%</div><div class="rsl">Attend. Rate</div></div>
+      <div class="rsb"><div class="rsn">${totalHrs.toFixed(1)}h</div><div class="rsl">Total Hrs</div></div>
+    </div>
+    ${tableHTML}`;
+}
+
+// ─────────────────────────────────────────
+// CANCELLATIONS REPORT
+// ─────────────────────────────────────────
+function rptCancellations(){
+  const sess=getReportSessions().filter(s=>s.status==='CX');
+  if(!sess.length){document.getElementById('rpt-main').innerHTML='<div class="rpt-empty"><div class="rpt-empty-icon">✅</div>No cancellations in this period!</div>';return;}
+  // Breakdown by code
+  const byCX={};
+  sess.forEach(s=>{
+    const k=s.cx||'Unknown';
+    if(!byCX[k])byCX[k]=0;
+    byCX[k]++;
+  });
+  const cxSummary=Object.entries(byCX).sort((a,b)=>b[1]-a[1]).map(([code,n])=>{
+    const def=S.cfg.cxCodes.find(c=>c.code===code);
+    return`<div class="rsb"><div class="rsn">${n}</div><div class="rsl">${code}</div>${def?`<div style="font-size:9px;color:var(--mt);margin-top:2px">${def.label}</div>`:''}</div>`;
+  }).join('');
+
+  let tableHTML=`<table class="rpt-table"><thead><tr>
+    <th>Date</th><th>Client</th><th>Therapist</th><th>Session Type</th><th>Time</th><th>Hrs Lost</th><th>CX Code</th><th>Reason</th><th>Make-up?</th>
+  </tr></thead><tbody>
+  ${sess.map(s=>{
+    const cl=gc(s.cid);const st=gs(s.stid);
+    const def=S.cfg.cxCodes.find(c=>c.code===s.cx);
+    const dateStr=pd(s.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    const hrs=(sessMins(s)/60).toFixed(2);
+    // Check if make-up was scheduled after this cancellation for same client
+    const hasMU=S.sessions.some(x=>x.cid===s.cid&&x.makeup&&x.date>=s.date&&x.status!=='CX');
+    return`<tr>
+      <td>${dateStr}</td>
+      <td>${cDisplayName(cl)}</td>
+      <td>${st?.initials||'—'}</td>
+      <td><span class="bdg ${sTypeBdg(s.type)}">${sTypeLabel(s.type)}</span></td>
+      <td>${ftm(s.s)}–${ftm(s.e)}</td>
+      <td style="color:var(--rd)">${hrs}h</td>
+      <td style="font-weight:700;color:var(--rd)">${s.cx||'—'}</td>
+      <td style="color:var(--t2);font-size:10px">${def?.label||'—'}</td>
+      <td>${hasMU?'<span style="color:var(--gn);font-weight:700">✓ MU sched.</span>':'<span style="color:var(--mt);font-size:10px">—</span>'}</td>
+    </tr>`;
+  }).join('')}</tbody></table>`;
+
+  const hrsLost=sess.reduce((sum,s)=>sum+sessMins(s),0)/60;
+  document.getElementById('rpt-main').innerHTML=`
+    <div class="rpt-main-hdr">
+      <div><h2>Cancellation Report</h2><div class="rpt-period">${periodLabel()}</div></div>
+      <div class="rpt-exports">
+        <button class="btn bsm" onclick="exportCSV('cancellations')">⬇ CSV</button>
+        <button class="btn bsm" onclick="window.print()">🖨 Print</button>
+      </div>
+    </div>
+    <div class="rpt-summary">
+      <div class="rsb"><div class="rsn">${sess.length}</div><div class="rsl">Total</div></div>
+      <div class="rsb"><div class="rsn">${hrsLost.toFixed(1)}h</div><div class="rsl">Hrs Lost</div></div>
+      <div class="rsb"><div class="rsn">${sess.filter(s=>s.cx&&s.cx.includes('-S')).length}</div><div class="rsl">Client Sick</div></div>
+      <div class="rsb"><div class="rsn">${sess.filter(s=>s.cx&&s.cx.includes('-T')).length}</div><div class="rsl">Staff Sick</div></div>
+      <div class="rsb"><div class="rsn">${sess.filter(s=>s.cx==='CX-NS').length}</div><div class="rsl">No Show</div></div>
+      <div class="rsb"><div class="rsn">${sess.filter(s=>s.makeup).length}</div><div class="rsl">Made Up</div></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">By Cancellation Code</div>
+    <div class="rpt-summary" style="margin-bottom:18px">${cxSummary}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Detail</div>
+    ${tableHTML}`;
+}
+
+// ─────────────────────────────────────────
+// EMPLOYEE HOURS
+// ─────────────────────────────────────────
+function rptHours(){
+  const allSess=getReportSessions();
+  const stidFilter=document.getElementById('rpt-staff')?.value||'';
+  const staffList=stidFilter?S.staff.filter(s=>s.id===stidFilter):S.staff;
+  if(!staffList.length){document.getElementById('rpt-main').innerHTML='<div class="rpt-empty">No staff found.</div>';return;}
+
+  let totalBillHrs=0, totalHrs=0;
+  const cards=staffList.map(st=>{
+    const stSess=allSess.filter(s=>s.stid===st.id&&!s._autoAdmin&&!s._virtual);
+    const attended=stSess.filter(s=>s.status!=='CX');
+    const cancelled=stSess.filter(s=>s.status==='CX');
+    const directSess=attended.filter(isDirect);
+    const indirectSess=attended.filter(isIndirect);
+    const adminSess=attended.filter(s=>s.type==='ADMIN');
+    const directHrs=directSess.reduce((sum,s)=>sum+sessMins(s),0)/60;
+    const indirectHrs=indirectSess.reduce((sum,s)=>sum+sessMins(s),0)/60;
+    const adminHrs=adminSess.reduce((sum,s)=>sum+sessMins(s),0)/60;
+    const billHrs=directHrs+indirectHrs; // PT, SUP, APM are billable
+    const schHrs=billHrs+adminHrs;
+    const contractHrs=st.hrs||0;
+    const pct=contractHrs?Math.min(100,Math.round(billHrs/contractHrs*100)):null;
+    const bg=tClr(st.id),tx=tTxt(st.id);
+    totalBillHrs+=billHrs;totalHrs+=schHrs;
+
+    return`<div class="emp-card">
+      <div class="emp-card-hdr">
+        <div class="emp-av" style="background:${bg};color:${tx}">${st.initials}</div>
+        <div>
+          <div class="emp-nm">${st.name}</div>
+          <div class="emp-rl">${st.role}${st.hrs?` · ${st.hrs}h/wk contract`:''}</div>
+        </div>
+        <div style="margin-left:auto;text-align:right">
+          <div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif">${billHrs.toFixed(1)}h</div>
+          <div style="font-size:10px;color:var(--mt)">billable hrs</div>
+        </div>
+      </div>
+      ${contractHrs?`<div style="font-size:10px;color:var(--mt);margin-bottom:3px">${pct}% of ${contractHrs}h contract</div>
+      <div class="hrs-bar"><div class="hrs-fill" style="width:${pct}%;background:${pct>=90?'var(--gn)':pct>=70?'var(--am)':'var(--rd)'}"></div></div>`:''}
+      <div class="emp-breakdown">
+        <div class="emp-stat"><div class="emp-stat-n">${attended.length}</div><div class="emp-stat-l">Sessions</div></div>
+        <div class="emp-stat"><div class="emp-stat-n" style="color:var(--nv)">${directHrs.toFixed(1)}h</div><div class="emp-stat-l">Direct (ABA/OT)</div></div>
+        <div class="emp-stat"><div class="emp-stat-n" style="color:#4A148C">${indirectHrs.toFixed(1)}h</div><div class="emp-stat-l">Indirect (PT/APM)</div></div>
+        <div class="emp-stat"><div class="emp-stat-n" style="color:var(--mt)">${adminHrs.toFixed(1)}h</div><div class="emp-stat-l">Admin</div></div>
+        <div class="emp-stat"><div class="emp-stat-n" style="color:${cancelled.length?'var(--rd)':'var(--gn)'}">${cancelled.length}</div><div class="emp-stat-l">Cancellations</div></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('rpt-main').innerHTML=`
+    <div class="rpt-main-hdr">
+      <div><h2>Employee Billable Hours</h2><div class="rpt-period">${periodLabel()}</div></div>
+      <div class="rpt-exports">
+        <button class="btn bsm" onclick="exportCSV('hours')">⬇ CSV</button>
+        <button class="btn bsm" onclick="window.print()">🖨 Print</button>
+      </div>
+    </div>
+    <div class="rpt-summary" style="margin-bottom:16px">
+      <div class="rsb"><div class="rsn">${totalBillHrs.toFixed(1)}h</div><div class="rsl">Total Billable Hrs</div></div>
+      <div class="rsb"><div class="rsn">${totalHrs.toFixed(1)}h</div><div class="rsl">Total Scheduled Hrs</div></div>
+      <div class="rsb"><div class="rsn">${staffList.length}</div><div class="rsl">Staff Members</div></div>
+    </div>
+    <div style="font-size:10px;background:#E8F5E9;border:1px solid #A5D6A7;border-radius:7px;padding:8px 12px;margin-bottom:14px;color:#1B5E20;font-weight:600">
+      ✓ Billable codes: ABA · OT · Parent Training (PT) · Assessment/Program Mod (APM) &nbsp;·&nbsp; <span style="color:#BF360C">Non-billable: Supervision (SUP) · Admin</span>
+    </div>
+    ${cards}`;
+}
+
+// ─────────────────────────────────────────
+// CSV EXPORT
+// ─────────────────────────────────────────
+function exportCSV(type){
+  const from=document.getElementById('rpt-from')?.value||'';
+  const to=document.getElementById('rpt-to')?.value||'';
+  const sess=getReportSessions();
+  let rows=[], headers=[];
+
+  if(type==='billing'){
+    headers=['Date','Client ID','Insurance','Therapist','Session Type','Billable','Start','End','Hours','Status','CX Code','Notes'];
+    sess.filter(s=>s.cid||INDIRECT_TYPES.includes(s.type)).forEach(s=>{
+      const cl=gc(s.cid);const st=gs(s.stid);
+      rows.push([
+        s.date, cDisplayName(cl), cl?iLabel(cl.ins):'—', st?.initials||'—',
+        sTypeLabel(s.type), BILLABLE_TYPES.includes(s.type)?'Yes':'No',
+        ftm(s.s), ftm(s.e), (sessMins(s)/60).toFixed(2),
+        s.status==='CX'?'CANCELLED':'ATTENDED', s.cx||'', s.notes||''
+      ]);
+    });
+  } else if(type==='attendance'){
+    headers=['Date','Client ID','Insurance','Therapist','Type','Status','Hours','CX Code'];
+    sess.filter(s=>s.cid).forEach(s=>{
+      const cl=gc(s.cid);const st=gs(s.stid);
+      rows.push([s.date,cDisplayName(cl),cl?iLabel(cl.ins):'—',st?.initials||'—',sTypeLabel(s.type),s.status==='CX'?'CANCELLED':'ATTENDED',(sessMins(s)/60).toFixed(2),s.cx||'']);
+    });
+  } else if(type==='cancellations'){
+    headers=['Date','Client ID','Therapist','Type','Hours Lost','CX Code','Reason','Make-up Scheduled'];
+    sess.filter(s=>s.status==='CX').forEach(s=>{
+      const cl=gc(s.cid);const st=gs(s.stid);
+      const def=S.cfg.cxCodes.find(c=>c.code===s.cx);
+      const hasMU=S.sessions.some(x=>x.cid===s.cid&&x.makeup&&x.date>=s.date&&x.status!=='CX');
+      rows.push([s.date,cDisplayName(cl),st?.initials||'—',sTypeLabel(s.type),(sessMins(s)/60).toFixed(2),s.cx||'',def?.label||'',hasMU?'Yes':'No']);
+    });
+  } else if(type==='hours'){
+    headers=['Staff','Role','Direct Hrs (ABA/OT)','Indirect Hrs (PT/APM)','Admin Hrs','Total Billable Hrs','Sessions Attended','Cancellations'];
+    S.staff.forEach(st=>{
+      const stSess=sess.filter(s=>s.stid===st.id&&!s._autoAdmin);
+      const att=stSess.filter(s=>s.status!=='CX');
+      const directH=att.filter(isDirect).reduce((sum,s)=>sum+sessMins(s),0)/60;
+      const indH=att.filter(isIndirect).reduce((sum,s)=>sum+sessMins(s),0)/60;
+      const admH=att.filter(s=>s.type==='ADMIN').reduce((sum,s)=>sum+sessMins(s),0)/60;
+      rows.push([st.name,st.role,directH.toFixed(2),indH.toFixed(2),admH.toFixed(2),(directH+indH).toFixed(2),att.length,stSess.filter(s=>s.status==='CX').length]);
+    });
+  }
+
+  const csv=[headers,...rows].map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`adaptability-${type}-${from}-${to}.csv`;a.click();
+}
+
+// ── DOUBLE-BOOKING DETECTION ──
+function timesOverlap(s1,e1,s2,e2){
+  // Returns true if [s1,e1) overlaps [s2,e2)
+  return s1 < e2 && e1 > s2;
+}
+
+function findConflicts(stid, date, startTime, endTime, excludeId=''){
+  return S.sessions.filter(x=>
+    x.stid === stid &&
+    x.date === date &&
+    x.id !== excludeId &&
+    x.status !== 'CX' &&
+    !x._autoAdmin &&
+    !x._virtual &&
+    timesOverlap(startTime, endTime, x.s, x.e)
+  );
+}
+
+// Show conflict warning modal — calls onConfirm(isGroup) when resolved
+function checkConflictThenSave(stid, date, startTime, endTime, excludeId, onConfirm){
+  const conflicts = findConflicts(stid, date, startTime, endTime, excludeId);
+  if(!conflicts.length){ onConfirm(false); return; }
+
+  const st = gs(stid);
+  const conflictItems = conflicts.map(s=>{
+    const cl = gc(s.cid);
+    return `<div class="conflict-item">
+      <span style="font-size:16px">⚠️</span>
+      <div>
+        <strong>${cl ? cDisplayName(cl) : sTypeLabel(s.type)}</strong>
+        <span style="color:var(--mt);margin-left:6px">${ftm(s.s)}–${ftm(s.e)} · ${sTypeLabel(s.type)}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Build confirmation inside the current modal
+  const existingContent = document.getElementById('mc').innerHTML;
+  document.getElementById('mc').innerHTML = `
+    <h3>Scheduling Conflict</h3>
+    <div class="conflict-box">
+      <h4>⚠️ ${st?.name||'This therapist'} is already scheduled at this time</h4>
+      ${conflictItems}
+    </div>
+    <div style="font-size:13px;color:var(--t2);margin-bottom:14px;line-height:1.6">
+      Is this a <strong>group session</strong> where ${st?.initials||'the therapist'} works with multiple clients simultaneously?
+    </div>
+    <div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;padding:10px 13px;font-size:11px;color:#1B5E20;margin-bottom:14px">
+      <strong>Group session:</strong> One therapist, multiple clients at the same time — all sessions remain scheduled.<br>
+      <strong>Scheduling error:</strong> Go back and choose a different therapist or time.
+    </div>
+    <div class="conflict-actions">
+      <button class="btn" onclick="document.getElementById('mc').innerHTML=_conflictPrev;document.getElementById('mbg').classList.add('open')">← Go Back</button>
+      <button class="btn" onclick="_onConflictConfirm(false)" style="border-color:var(--am);color:var(--am)">Proceed with Change</button>
+      <button class="btn bp" onclick="_onConflictConfirm(true)" style="background:var(--gn);border-color:var(--gn)">✓ Group Session</button>
+    </div>`;
+  window._onConflictConfirm = function(isGroup){
+    window._conflictPrev = null;
+    window._onConflictConfirm = null;
+    onConfirm(isGroup);
+  };
+  window._conflictPrev = existingContent;
+}
+// ── BOOT ──
+init();
+</script>
+</body>
+</html>
