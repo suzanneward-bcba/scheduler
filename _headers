@@ -1,0 +1,22 @@
+# Netlify response headers
+# ─────────────────────────────────────────────────────────────────────
+# Purpose: ensure staff see the latest version of the app after a deploy,
+# without needing to hard-refresh their browser.
+#
+# How it works: "no-cache" does NOT mean "don't cache." It means the
+# browser keeps a local copy but must ask the server "is this still
+# current?" before using it. The server replies with a tiny 304 (Not
+# Modified) if nothing changed → instant load. If the file changed → a
+# fresh copy is fetched. End result: updates appear immediately, without
+# any extra bandwidth cost on unchanged visits.
+#
+# We apply this only to index.html (and the root path that serves it),
+# because that's the single file that contains the whole app. External
+# assets (Firebase, Google Fonts) manage their own caching on CDNs.
+# ─────────────────────────────────────────────────────────────────────
+
+/index.html
+  Cache-Control: no-cache, must-revalidate
+
+/
+  Cache-Control: no-cache, must-revalidate
