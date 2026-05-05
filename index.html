@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-04T15:00Z-flex-tz">
+<meta name="app-version" content="2026-05-05T10:30Z-grpfix">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1347,6 +1347,16 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
         <div id="email-test-status" style="font-size:11px;min-height:16px"></div>
       </div>
       <div class="scard">
+        <h3>🔗 External Links</h3>
+        <p style="font-size:11px;color:var(--mt);margin-bottom:12px">Configure links to external resources (Google Sheets, etc.) that show up contextually in the app. Leave a field blank to hide that link.</p>
+        <div class="fg">
+          <label>Admin Tasks Spreadsheet URL <span style="font-weight:400;color:var(--mt);font-size:10px">— shown next to admin time blocks</span></label>
+          <input type="url" id="cfg-admin-tasks-url" placeholder="https://docs.google.com/spreadsheets/..." style="font-size:12px">
+        </div>
+        <button class="btn bsm bp" onclick="saveExternalLinks()">💾 Save Links</button>
+        <div id="external-links-status" style="font-size:11px;min-height:16px;margin-top:6px"></div>
+      </div>
+      <div class="scard">
         <h3>🏖 Leave Management</h3>
         <p style="font-size:11px;color:var(--mt);margin-bottom:12px">
           Run at the end of each calendar year to reset PTO and sick day counters. First-year employees are automatically pro-rated based on their company start date.
@@ -1884,6 +1894,13 @@ async function loadFromFirestore(){
       S = Object.assign({},S,L);
       if(!S.cfg)S.cfg={};
       if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
+      // One-time seed of the admin tasks URL — set on first load only, then
+      // never touched again. If admin clears the value later (to hide the
+      // link), we don't re-seed because adminTasksUrlSeeded stays true.
+      if(!S.cfg.adminTasksUrlSeeded){
+        S.cfg.adminTasksUrl = S.cfg.adminTasksUrl || 'https://docs.google.com/spreadsheets/d/1QhJ-FSYh7gfP-468WreYAnWxlcHC3mzjD1Vq6RGH_VI/edit';
+        S.cfg.adminTasksUrlSeeded = true;
+      }
       loaded = true;
     }
   } catch(e){ console.warn('Firestore read error:',e); }
@@ -2409,7 +2426,12 @@ function rWeekFull(){
       const clName=cl?(isCX?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):`<em style="color:var(--mt)">${gs(s.stid)?.initials||''} – ${sessLabel(s)}</em>`;
       const insCls=cl?`ins-${cl.ins}`:'';
       const autoStyle=isAuto?'border-left-color:#9E9E9E;background:#FAFAFA;border:1px dashed #B0BEC5;':'';
-      const grpChip=isGrp?'<div style="position:absolute;top:2px;left:2px;font-size:7px;background:#E8EAF6;color:#283593;padding:1px 4px;border-radius:2px;font-weight:800">GRP</div>':'';
+      // GRP chip: ON = solid badge, OFF (scheduler mode) = ghost +GRP placeholder for quick toggle.
+      // Clicking either toggles isGroup on the session. View-only users see only the solid badge (no ghost),
+      // and the chip is decorative — the onclick guard prevents toggling.
+      const grpChip = isGrp
+        ? `<div onclick="toggleGroup('${s.id}',event)" style="position:absolute;top:2px;left:2px;font-size:7px;background:#E8EAF6;color:#283593;padding:1px 4px;border-radius:2px;font-weight:800;cursor:pointer" title="Group session — click to remove">GRP</div>`
+        : (!isViewOnly && !isAuto ? `<div onclick="toggleGroup('${s.id}',event)" style="position:absolute;top:2px;left:2px;font-size:7px;background:#F5F5F5;color:#9E9E9E;padding:1px 4px;border-radius:2px;font-weight:600;cursor:pointer;opacity:.4;transition:opacity .12s" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.4'" title="Click to mark as group session">+GRP</div>` : '');
       const cptChip=s.cptCode?(()=>{const noteOk=s.serviceNote&&s.serviceNote.trim();return `<div style="position:absolute;bottom:2px;right:2px;font-size:7px;background:#F3E5F5;color:#4A235A;padding:1px 4px;border-radius:2px;font-weight:800" title="Indirect: ${s.cptCode}${noteOk?'':' — note missing'}">${s.cptCode}${noteOk?'':' ⚠'}</div>`;})():'';
       return`<div class="sbl ${insCls}${cxcl}${isUnassigned?' unassigned':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
     }).join('');
@@ -2579,7 +2601,10 @@ function rDay(){
         const tbdg=`<span class="bdg ${sTypeBdg(s.type)}">${sessLabel(s)}</span>`;
         const insLbl=cl?`<span class="bdg ${iBdg(cl.ins)}">${iLabel(cl.ins)}</span>`:'';
         const muBdg=s.makeup?'<span class="bdg b-mu">MU</span>':'';
-        const grpBdg=s.isGroup?'<span class="bdg" style="background:#E8EAF6;color:#283593">GRP</span>':'';
+        // GRP badge: ON = clickable solid, OFF (scheduler mode) = ghost +GRP placeholder.
+        const grpBdg = s.isGroup
+          ? `<span class="bdg" style="background:#E8EAF6;color:#283593;cursor:pointer" onclick="toggleGroup('${s.id}',event)" title="Group session — click to remove">GRP</span>`
+          : (!isViewOnly ? `<span class="bdg" style="background:#F5F5F5;color:#9E9E9E;cursor:pointer;opacity:.5" onclick="toggleGroup('${s.id}',event)" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.5'" title="Click to mark as group session">+GRP</span>` : '');
         const otFlag=(cl?.hasOT&&s.type==='ABA')?'<span class="bdg b-ot">+OT</span>':'';
         const cxBdg=s.status==='CX'?`<span class="sr-cx">${s.cx||'CX'}</span>`:'';
         const clName=cl?cDisplayName(cl):`${gs(s.stid)?.initials||'—'} – ${sessLabel(s)}`;
@@ -2902,6 +2927,29 @@ function rSettings(){
   document.getElementById('hollist').innerHTML=S.holidays.length?S.holidays.map((h,i)=>`<div class="holi"><div><div style="font-weight:600;font-size:11px">${h.name}</div><div style="font-size:10px;color:var(--mt)">${pd(h.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</div></div><button class="btn bxs bd" onclick="rmHol(${i})">×</button></div>`).join(''):'<div style="font-size:11px;color:var(--mt);margin-bottom:7px">None added.</div>';
   document.getElementById('ins-legend').innerHTML=INS.map(i=>`<div class="lrow"><div class="ldot" style="background:${i.color}"></div><span class="bdg ${i.badge}">${i.label}</span><span style="color:var(--mt);font-size:10px">${i.group}</span></div>`).join('');
   document.getElementById('thr-legend').innerHTML=S.staff.map(s=>{const bg=s.color||'#9E9E9E',tx=txtForBg(bg);return`<div class="lrow"><div class="ldot" style="background:${bg};border:1px solid #ccc"></div><strong style="font-size:11px">${s.initials}</strong><span style="font-size:11px">${s.name}</span><span class="bdg ${ROLE_BADGE[s.role]||'b-adm'}" style="font-size:9px">${s.role}</span></div>`;}).join('');
+  // External links — populate from cfg, blank if not set.
+  const _adminTasksInput = document.getElementById('cfg-admin-tasks-url');
+  if(_adminTasksInput) _adminTasksInput.value = (S.cfg && S.cfg.adminTasksUrl) || '';
+}
+
+// Saves all external link URLs from Settings → External Links card.
+// Validates URL format and trims whitespace; empty values clear the link.
+function saveExternalLinks(){
+  const url = (document.getElementById('cfg-admin-tasks-url')?.value || '').trim();
+  const status = document.getElementById('external-links-status');
+  // Light validation — just check it looks like an http(s) URL if non-empty.
+  if(url && !/^https?:\/\//i.test(url)){
+    if(status) status.innerHTML = '<span style="color:var(--rd)">URL must start with http:// or https://</span>';
+    return;
+  }
+  if(!S.cfg) S.cfg = {};
+  S.cfg.adminTasksUrl = url;
+  save();
+  if(status) status.innerHTML = '<span style="color:var(--gn)">✓ Saved</span>';
+  // Re-render schedule + my schedule so the link buttons appear/disappear.
+  if(typeof rSched === 'function') try{ rSched(); }catch(e){}
+  if(typeof rMyS === 'function' && mySchedStid) try{ rMyS(); }catch(e){}
+  setTimeout(()=>{ if(status) status.innerHTML=''; }, 3000);
 }
 function addHol(){const dt=document.getElementById('nhd').value,nm=document.getElementById('nhn').value.trim();if(!dt||!nm)return alert('Enter date and name.');S.holidays.push({id:uid(),date:dt,name:nm});document.getElementById('nhd').value='';document.getElementById('nhn').value='';applyHolidayAutoCx();save();rSettings();rSched();}
 function rmHol(i){S.holidays.splice(i,1);save();rSettings();rSched();}
@@ -3249,6 +3297,28 @@ function saveSess(){
   });
 }
 
+// ── GROUP SESSION TOGGLE ──
+// Inline GRP badge toggle — flips the isGroup flag on a session without
+// any confirmation dialog. Used by the GRP/+GRP chip on schedule cards
+// (clicking the chip stops propagation so the underlying card click
+// handler doesn't open the session detail modal).
+//
+// Permissions: only schedulers can toggle. View-only users (admins in
+// Staff View, therapists, billing) get a no-op so the badge is decorative
+// for them. The chip's onclick guard checks isViewOnly before calling.
+function toggleGroup(sid, ev){
+  if(ev){ ev.stopPropagation(); ev.preventDefault(); }
+  if(typeof isViewOnly !== 'undefined' && isViewOnly) return;
+  const s=S.sessions.find(x=>x.id===sid);
+  if(!s) return;
+  s.isGroup = !s.isGroup;
+  save();
+  // Re-render schedule so the chip flips. Coverage strip recalcs too.
+  if(typeof rSched === 'function') try{ rSched(); }catch(e){}
+  if(typeof rMyS === 'function' && mySchedStid) try{ rMyS(); }catch(e){}
+  showToast(s.isGroup ? 'Marked as group session ✓' : 'Group flag removed', s.isGroup ? 'var(--gn)' : 'var(--mt)');
+}
+
 // ── SESSION DETAIL ──
 function openSess(id){
   const s=S.sessions.find(x=>x.id===id);if(!s)return;
@@ -3270,6 +3340,7 @@ function openSess(id){
     <div class="fr2"><div class="fg"><label>Start</label>${tpicker('sd-s', s.s)}</div><div class="fg"><label>End</label>${tpicker('sd-e', s.e)}</div></div>
     <div style="display:flex;gap:14px;margin:6px 0;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-mu" ${s.makeup?'checked':''}> Make-up</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-grp" ${s.isGroup?'checked':''}> Group session</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-note" ${s.noteWritten?'checked':''}> Session note written</label>
     </div>
     <div class="fg"><label>Cancellation Code</label><select id="sd-cx">${co}</select></div>
@@ -3299,13 +3370,19 @@ function updSess(id){
   }
   pushUndo('Edit session');
   const newMakeup=document.getElementById('sd-mu').checked;
+  const newGroupChk=document.getElementById('sd-grp')?.checked||false;
   const cx=document.getElementById('sd-cx').value;
   const newNotes=document.getElementById('sd-nt').value;
 
   const doUpdate = function(isGroup){
     s.stid=newStid;s.cid=newCid;s.type=newType;s.date=newDate;s.s=newS;s.e=newE;
     s.makeup=newMakeup;s.noteWritten=document.getElementById('sd-note')?.checked||false;// preserve sessionLog
-  s.notes=newNotes;s.isGroup=isGroup||s.isGroup||false;
+    s.notes=newNotes;
+    // Group flag: checkbox wins. If user explicitly checked "Group session" in
+    // the modal, set true. If they unchecked it, set false (allows un-marking).
+    // Conflict-modal "✓ Group Session" can also force true even if checkbox
+    // wasn't ticked (this is the original auto-flow).
+    s.isGroup = newGroupChk || isGroup || false;
     // Unified service dropdown writes both type AND cptCode
     if(newCpt){
       s.cptCode=newCpt;
@@ -4278,6 +4355,10 @@ function rMyS(){
           <span style="font-size:15px">📋</span>
           <span>${item.sessionLog?'Log: '+item.sessionLog.slice(0,40)+(item.sessionLog.length>40?'…':''):item.cid?'Add session note (late arrival, early pickup…)':'Add admin note (cleaned _, organized _, created _, reviewed _…)'}</span>
         </div>`:''}
+        ${item.type==='ADMIN'&&item.status!=='CX'&&S.cfg?.adminTasksUrl?`<a class="sess-log-btn" href="${S.cfg.adminTasksUrl}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="border-color:#90CAF9;color:#0D47A1;background:#E3F2FD;text-decoration:none">
+          <span style="font-size:15px">📋</span>
+          <span>Open Admin Tasks list ↗</span>
+        </a>`:''}
       </div>`;
     }).join('');
   }
@@ -5391,6 +5472,9 @@ function checkConflictThenSave(stid, date, startTime, endTime, excludeId, onConf
       <strong>Group session:</strong> One therapist, multiple clients at the same time — all sessions remain scheduled.<br>
       <strong>Scheduling error:</strong> Go back and choose a different therapist or time.
     </div>
+    <div style="background:#FFF8E1;border:1px solid #FFCC80;border-radius:8px;padding:9px 12px;font-size:11px;color:#5D4037;margin-bottom:14px;line-height:1.5">
+      💡 <strong>Tip:</strong> Only this new session will be marked as group. To avoid double-counting in the coverage strip, click the <code style="background:#fff;padding:1px 4px;border-radius:3px;font-size:10px">+GRP</code> chip on any existing conflicting sessions to flag them too.
+    </div>
     <div class="conflict-actions">
       <button class="btn" onclick="document.getElementById('mc').innerHTML=_conflictPrev;document.getElementById('mbg').classList.add('open')">← Go Back</button>
       <button class="btn" onclick="_onConflictConfirm(false)" style="border-color:var(--am);color:var(--am)">Proceed with Change</button>
@@ -5591,7 +5675,10 @@ function rTimeline(){
       const right=100-tlPct(s.e);
       const insBg=cl?iColor(cl.ins):'#9E9E9E';
       const typBg=s.type==='ABA'?'#7C4DFF':s.type==='OT'?'#009688':s.type==='PT'?'#E65100':'#9E9E9E';
-      const grpChip=s.isGroup?'<span style="font-size:7px;background:#E8EAF6;color:#283593;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">GRP</span>':'';
+      // GRP chip: ON = solid clickable, OFF (scheduler mode) = ghost +GRP placeholder.
+      const grpChip = s.isGroup
+        ? `<span onclick="toggleGroup('${s.id}',event)" style="font-size:7px;background:#E8EAF6;color:#283593;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px;cursor:pointer" title="Group session — click to remove">GRP</span>`
+        : (!isViewOnly ? `<span onclick="toggleGroup('${s.id}',event)" style="font-size:7px;background:#F5F5F5;color:#9E9E9E;padding:1px 3px;border-radius:2px;font-weight:600;margin-right:2px;cursor:pointer;opacity:.5" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.5'" title="Click to mark as group session">+GRP</span>` : '');
       const muChip=s.makeup?'<span style="font-size:7px;background:#FFF9C4;color:#F57F17;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">MU</span>':'';
       return`<div class="tl-sess ins-${cl?.ins||''}" 
         style="left:${left}%;right:${right}%;border-left-color:${insBg};background:${insBg}11"
@@ -5922,9 +6009,18 @@ function renderAvailStripDaily(daySessions, ds){
     return true;
   });
   var hrsByStaff = {};
+  // Track which group time slots we've already counted, so multi-client group
+  // sessions only count once toward the therapist's hours.
+  // Key shape: stid|date|start|end (date is implicit since it's all daySessions).
+  var countedGroupSlots = {};
   (daySessions||[]).forEach(function(s){
     if(s.status === 'CX' || s._virtual) return;
     if(!s.stid || s.stid === 'UNASSIGNED') return;
+    if(s.isGroup){
+      var key = s.stid + '|' + s.s + '|' + s.e;
+      if(countedGroupSlots[key]) return; // already counted another client in this group
+      countedGroupSlots[key] = true;
+    }
     // sessMins() takes the whole session object, not (start, end). The legacy
     // sessionMins() function it used to call doesn't exist; that's why this
     // function silently bombed and took rDay()'s render down with it.
@@ -5989,9 +6085,17 @@ function renderAvailStrip(weekSessions){
     return true;
   });
   var hrsByStaff = {};
+  // Track group slots — see daily version above for explanation.
+  // Includes date in the key since this loops over a full week.
+  var countedGroupSlots = {};
   (weekSessions||[]).forEach(function(s){
     if(s.status === 'CX' || s._virtual) return;
     if(!s.stid || s.stid === 'UNASSIGNED') return;
+    if(s.isGroup){
+      var key = s.stid + '|' + s.date + '|' + s.s + '|' + s.e;
+      if(countedGroupSlots[key]) return;
+      countedGroupSlots[key] = true;
+    }
     var mins = sessMins(s);
     hrsByStaff[s.stid] = (hrsByStaff[s.stid] || 0) + mins/60;
   });
@@ -6941,7 +7045,10 @@ function rClientSched(){
         ? `top:${(s._lane||0)*_laneStep+4}px;height:${_laneH}px`
         : 'top:4px;bottom:4px';
       const tbdg=sTypeBdg(s.type);
-      const grpChip=s.isGroup?'<span style="font-size:7px;background:#E8EAF6;color:#283593;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">GRP</span>':'';
+      // GRP chip: ON = solid clickable, OFF (scheduler mode) = ghost +GRP placeholder.
+      const grpChip = s.isGroup
+        ? `<span onclick="toggleGroup('${s.id}',event)" style="font-size:7px;background:#E8EAF6;color:#283593;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px;cursor:pointer" title="Group session — click to remove">GRP</span>`
+        : (!isViewOnly ? `<span onclick="toggleGroup('${s.id}',event)" style="font-size:7px;background:#F5F5F5;color:#9E9E9E;padding:1px 3px;border-radius:2px;font-weight:600;margin-right:2px;cursor:pointer;opacity:.5" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.5'" title="Click to mark as group session">+GRP</span>` : '');
       const muChip=s.makeup?'<span style="font-size:7px;background:#FFF9C4;color:#F57F17;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">MU</span>':'';
       const noteChip=s.cid&&!s.noteWritten?'<span style="font-size:7px;background:#FFEBEE;color:#C62828;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">!N</span>':'';
       const logChip=s.sessionLog?'<span style="font-size:7px;background:#E8F5E9;color:#1B5E20;padding:1px 3px;border-radius:2px;font-weight:800">LOG</span>':'';
@@ -8535,6 +8642,6 @@ init();
 })();
 </script>
 <!-- Version indicator — helps identify which build a user is running for troubleshooting -->
-<div id="app-version" title="App version — useful when reporting issues">v2026-05-04T15:00Z-flex-tz</div>
+<div id="app-version" title="App version — useful when reporting issues">v2026-05-05T10:30Z-grpfix</div>
 </body>
 </html>
