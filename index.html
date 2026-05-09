@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-13T12:30Z-xaccess">
+<meta name="app-version" content="2026-05-13T13:30Z-svcfilt">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -7054,10 +7054,14 @@ function rClientSched(){
     return`<div class="cs-th${isBlk?' is-block':''}">${sl.label}</div>`;
   }).join('');
 
-  // Sort clients: first those with sessions today, then alphabetically
+  // Sort clients: first those with sessions today, then alphabetically.
+  // IMPORTANT: filter by allSess (which respects the ABA/OT/All filter via
+  // _schedShowSess) — do NOT fall back to the unfiltered S.sessions list,
+  // which would let ABA clients leak into the OT view (and vice versa).
+  // BOTH-service clients still appear in both views correctly because
+  // _schedShowSess permits their sessions through both filters.
   const clientsToday=S.clients.filter(c=>{
-    const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');
-    return allSess.some(s=>s.cid===c.id)||S.sessions.some(s=>s.cid===c.id&&s.date===dayDate);
+    return allSess.some(s=>s.cid===c.id);
   }).sort((a,b)=>{
     const aHas=allSess.some(s=>s.cid===a.id)?0:1;
     const bHas=allSess.some(s=>s.cid===b.id)?0:1;
@@ -9031,6 +9035,6 @@ init();
 })();
 </script>
 <!-- Version indicator — helps identify which build a user is running for troubleshooting -->
-<div id="app-version" title="App version — useful when reporting issues">v2026-05-13T12:30Z-xaccess</div>
+<div id="app-version" title="App version — useful when reporting issues">v2026-05-13T13:30Z-svcfilt</div>
 </body>
 </html>
