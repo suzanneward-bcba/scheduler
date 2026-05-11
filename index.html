@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-13T13:30Z-svcfilt">
+<meta name="app-version" content="2026-05-13T14:30Z-fixes">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -2678,7 +2678,10 @@ function rDay(){
   let staffPanel='<div class="stf-pnl"><h4>Staff Today</h4>';
   S.staff.forEach(st=>{
     const av=st.av[dowIdx>=0?dowIdx:0];
-    const pto=!!ptoOnDate(st,dayDate);
+    // ptoEntry holds {date, type:'PTO'|'SICK'} or null. We branch the
+    // status label on entry.type so sick days don't display as "PTO".
+    const ptoEntry=ptoOnDate(st,dayDate);
+    const pto=!!ptoEntry;
     const stSess=dsess.filter(s=>s.stid===st.id);
     const realSess=stSess.filter(s=>!s._autoAdmin&&s.status!=='CX');
     const bg=tClr(st.id),tx=tTxt(st.id);
@@ -2691,7 +2694,11 @@ function rDay(){
     }
     const blocksHtml=renderBlocks(st.id,dayDate);
     let statusLabel='';
-    if(pto) statusLabel='<span style="color:var(--am);font-size:10px;font-weight:600">PTO</span>';
+    if(pto){
+      // Use the actual leave type so "Sick" appears for sick days, not "PTO".
+      const lblColor = ptoEntry.type==='SICK' ? 'var(--rd)' : 'var(--am)';
+      statusLabel='<span style="color:'+lblColor+';font-size:10px;font-weight:600">'+ptoTypeLabel(ptoEntry.type)+'</span>';
+    }
     else if(!av) statusLabel='<span style="color:var(--mt);font-size:10px">Off</span>';
     else if(allOff) statusLabel='<span style="color:var(--mt);font-size:10px">Off</span>';
     else if(freeBlocks===0) statusLabel='<span style="font-size:10px;font-weight:700;color:var(--rd)">Full</span>';
@@ -4267,7 +4274,10 @@ function rMyS(){
 
   // ── Header card ──
   const dowIdx=wdates.indexOf(mySchedDay);
-  const pto=!!ptoOnDate(s,mySchedDay);
+  // pto here holds the FULL entry {date, type} (or null) — not boolean — so
+  // we can distinguish PTO vs SICK in display logic below. Other helpers
+  // that need a boolean can use !!pto.
+  const pto=ptoOnDate(s,mySchedDay);
   const avail=dowIdx>=0?s.av[dowIdx]:1;
   const log=S.logs[mySchedDay]||{};
   const isBusToday=log.busStaff===mySchedStid;
@@ -4278,7 +4288,7 @@ function rMyS(){
     <div class="mys-av" style="background:${bg};color:${tx}">${s.initials}</div>
     <div class="mys-name">${s.name}</div>
     <div class="mys-role">${s.role}${hrsLabel?' · '+hrsLabel:''}</div>
-    <div class="mys-date">${dayLabel}${pto?' · <span style="color:#FFE082;font-weight:700">PTO</span>':!avail?' · <span style="opacity:.6">Day off</span>':''}</div>
+    <div class="mys-date">${dayLabel}${pto?' · <span style="color:#FFE082;font-weight:700">'+ptoTypeLabel(pto.type)+'</span>':!avail?' · <span style="opacity:.6">Day off</span>':''}</div>
   </div>`;
 
   // ── Week navigation ──
@@ -4317,7 +4327,7 @@ function rMyS(){
 
   let sessHtml='';
   if(pto||!avail){
-    sessHtml=`<div class="mys-empty"><div class="mi">${pto?'🏖':'😴'}</div><div style="font-size:14px;font-weight:600">${pto?'PTO':'Day off'}</div></div>`;
+    sessHtml=`<div class="mys-empty"><div class="mi">${pto?(pto.type==='SICK'?'🤒':'🏖'):'😴'}</div><div style="font-size:14px;font-weight:600">${pto?ptoTypeLabel(pto.type):'Day off'}</div></div>`;
   } else if(!daySess.filter(s=>!s._autoAdmin&&s.status!=='CX').length&&!breaks.length){
     const admType='Admin';
     sessHtml=`<div class="mys-sess" style="border:1px dashed #B0BEC5;background:#FAFAFA">
@@ -9013,11 +9023,22 @@ function parseCSVLine(line){
 init();
 
 // ── VERSION-AVAILABLE CHECK ──
+// Polls the server for the live HTML's app-version meta tag. When it differs
+// from the version this page was loaded with, surfaces the orange "new
+// version available" banner so the user can hard-refresh.
+//
+// Tuning: first check 10s after load (catches near-deploy refreshes
+// quickly), then every 60s (lighter than the old 5-min interval but still
+// negligible network load — one HTML fetch per minute). Also exposes a
+// manual trigger via clicking the version stamp at the bottom-right
+// corner — useful when someone wants to verify they're up-to-date NOW
+// without waiting for the next poll.
 (function(){
   var meta = document.querySelector('meta[name="app-version"]');
   if(!meta) return;
   var current = meta.getAttribute('content');
-  function check(){
+  function check(opts){
+    var manual = !!(opts && opts.manual);
     try {
       fetch(window.location.pathname + '?_v=' + Date.now(), {cache:'no-store'})
         .then(function(r){ return r.text(); })
@@ -9026,15 +9047,27 @@ init();
           if(m && m[1] && m[1] !== current){
             var b = document.getElementById('versionBanner');
             if(b) b.style.display = 'flex';
+          } else if(manual){
+            // No new version — give the user feedback so they know the
+            // check actually fired (otherwise click-the-stamp looks broken).
+            if(typeof showToast === 'function'){
+              showToast('You\u2019re on the latest version ✓','var(--gn)');
+            }
           }
-        }).catch(function(){});
+        }).catch(function(){
+          if(manual && typeof showToast === 'function'){
+            showToast('Version check failed — check your connection','var(--rd)');
+          }
+        });
     } catch(e){}
   }
-  setTimeout(check, 60000);
-  setInterval(check, 5*60*1000);
+  setTimeout(check, 10*1000);          // first check 10s after load
+  setInterval(check, 60*1000);          // then every 60s
+  // Expose for the click-the-version-stamp handler at the bottom of the body.
+  window._manualVersionCheck = function(){ check({manual:true}); };
 })();
 </script>
-<!-- Version indicator — helps identify which build a user is running for troubleshooting -->
-<div id="app-version" title="App version — useful when reporting issues">v2026-05-13T13:30Z-svcfilt</div>
+<!-- Version indicator — helps identify which build a user is running for troubleshooting. Click to manually check for a newer version (otherwise auto-checks every 60s). -->
+<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T14:30Z-fixes</div>
 </body>
 </html>
