@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-13T14:30Z-fixes">
+<meta name="app-version" content="2026-05-13T15:00Z-cptchips">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -56,6 +56,12 @@ button, a, select, [onclick], label,
 .b-civ{background:#F1F8E9;color:#33691E}.b-ger{background:#FCE4EC;color:#880E4F}
 .b-aba{background:#E3F2FD;color:#0D47A1}.b-ot{background:#E0F2F1;color:#004D40}.b-pt{background:#FFF3E0;color:#E65100}
 .b-sup{background:#F3E5F5;color:#4A148C}.b-adm{background:#ECEFF1;color:#455A64}.b-apm{background:#F9FBE7;color:#558B2F}.b-mu{background:#FFF9C4;color:#F57F17}
+/* CPT-derived indirect chip colors. Distinct from each other and from ABA/OT/SUP/ADMIN so a glance reveals what kind of indirect activity it is.
+   b-ind = fallback for INDIRECT with no CPT yet set; b-cpm = 97155 Program Modification; b-cpt = 97156 Parent Training; b-casmt = 97151 Behavior Assessment. */
+.b-ind{background:#EDE7F6;color:#4527A0}
+.b-cpm{background:#FFF3E0;color:#E65100}
+.b-cpt{background:#FCE4EC;color:#AD1457}
+.b-casmt{background:#E8F5E9;color:#1B5E20}
 /* STATS */
 .srow{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:16px}
 .sb{background:#fff;border-radius:9px;border:1px solid var(--bd);padding:12px 14px;box-shadow:var(--sh)}
@@ -79,6 +85,17 @@ button, a, select, [onclick], label,
 .dbody{padding:6px;display:flex;flex-direction:column;gap:4px;flex:1}
 /* SESSION BLOCKS */
 .sbl{border-radius:6px;padding:6px 8px;border-left:3px solid #ccc;background:var(--bg);cursor:pointer;transition:box-shadow .15s,transform .1s;position:relative}
+/* Time-band ribbon: 3px colored strip on the LEFT edge of each session block,
+   INSIDE the block, immediately to the right of the existing insurance
+   border. Color = start-time band, calm pastel so it doesn't compete
+   with insurance/therapist colors. Bands chosen for clinic workflow:
+   morning, late-morning, lunch, early-afternoon, late-afternoon. */
+.sbl::before{content:'';position:absolute;left:0;top:6px;bottom:6px;width:3px;border-radius:0 2px 2px 0;background:transparent;pointer-events:none}
+.sbl.tb-0810::before{background:#FFE082}  /* 08:00-10:00 soft yellow */
+.sbl.tb-1012::before{background:#A5D6A7}  /* 10:00-12:00 soft green */
+.sbl.tb-1213::before{background:#CFD8DC}  /* 12:00-13:00 soft grey (midday) */
+.sbl.tb-1315::before{background:#90CAF9}  /* 13:00-15:00 soft blue */
+.sbl.tb-1517::before{background:#CE93D8}  /* 15:00-17:00 soft purple */
 .sbl:hover{box-shadow:var(--shm);transform:translateY(-1px)}.sbl.cx{opacity:1;background:repeating-linear-gradient(45deg,#F5F5F5,#F5F5F5 4px,#EBEBEB 4px,#EBEBEB 8px)!important;border-left-color:#9E9E9E!important;color:#888}
 .stm{font-size:9px;font-weight:600;color:var(--mt);margin-bottom:1px}
 .scln{font-size:11px;font-weight:700;line-height:1.25}
@@ -1598,6 +1615,47 @@ function sTypeLabel(t){return(STYPES.find(x=>x.id===t)||{label:t}).label;}
 // Compact label for schedule/timeline badges — shows the CPT code for billable indirect services,
 // otherwise falls back to the type label. e.g. INDIRECT+97155 → "97155" instead of "Indirect Services".
 function sessLabel(s){ if(s && s.cptCode) return s.cptCode; return sTypeLabel(s ? s.type : ''); }
+
+// ── SMART CHIP LABELS & BADGES (CPT-AWARE) ──
+// Used for the small per-session chip on schedule cards. Splits INDIRECT
+// into PM (97155 Program Modification), PT (97156 Parent Training), and
+// ASMT (97151 Behavior Assessment) so admins/clinicians can spot what kind
+// of indirect work at a glance. ABA/OT/SUP/ADMIN unchanged.
+//
+// Returning a short label keeps the chip narrow even on tight grids.
+const INDIRECT_CHIP_LABELS = {'97155':'PM','97156':'PT','97151':'ASMT'};
+const INDIRECT_CHIP_BADGES = {'97155':'b-cpm','97156':'b-cpt','97151':'b-casmt'};
+function sessChipLabel(s){
+  if(!s) return '';
+  if(s.type === 'INDIRECT' && s.cptCode && INDIRECT_CHIP_LABELS[s.cptCode]){
+    return INDIRECT_CHIP_LABELS[s.cptCode];
+  }
+  return sTypeLabel(s.type);
+}
+function sessChipBdg(s){
+  if(!s) return 'b-adm';
+  if(s.type === 'INDIRECT' && s.cptCode && INDIRECT_CHIP_BADGES[s.cptCode]){
+    return INDIRECT_CHIP_BADGES[s.cptCode];
+  }
+  return sTypeBdg(s.type);
+}
+// Returns the CSS class for the time-band ribbon based on the session start
+// time. Bands: 08-10 morning, 10-12 late-morning, 12-13 midday, 13-15
+// early-afternoon, 15-17 late-afternoon. Sessions outside these ranges
+// (before 08, after 17) get no ribbon ('').
+function tbCls(s){
+  if(!s || !s.s) return '';
+  const hm = String(s.s).split(':');
+  const h = parseInt(hm[0], 10);
+  if(isNaN(h)) return '';
+  if(h >= 8 && h < 10) return 'tb-0810';
+  if(h >= 10 && h < 12) return 'tb-1012';
+  if(h >= 12 && h < 13) return 'tb-1213';
+  if(h >= 13 && h < 15) return 'tb-1315';
+  if(h >= 15 && h < 17) return 'tb-1517';
+  return '';
+}
+
 // Full label for modal headers/tooltips — uses the SERVICE_OPTIONS label when available.
 function sessFullLabel(s){
   if(s && s.cptCode){
@@ -2402,7 +2460,7 @@ function rWeekFull(){
     const log=S.logs[ds]||{};
     const bdays=bdaysOn(ds);
     const hasBday=bdays.staff.length||bdays.clients.length;
-    const dsess=S.sessions.filter(s=>s.date===ds&&_schedShowSess(s)).sort((a,b)=>{const _p=x=>x._autoAdmin?2:x.status==='CX'?1:0;const _d=_p(a)-_p(b);return _d!==0?_d:a.s.localeCompare(b.s);});
+    const dsess=S.sessions.filter(s=>s.date===ds&&_schedShowSess(s)).sort((a,b)=>{/* Pure chronological by start time. Tie-break: CPT-coded sessions sort above admin/_autoAdmin. CX sessions sort chronologically too — strikethrough styling already signals their cancelled state. */const _t=a.s.localeCompare(b.s);if(_t!==0)return _t;const _isAdmin=x=>x._autoAdmin||x.type==='ADMIN';return (_isAdmin(a)?1:0)-(_isAdmin(b)?1:0);});
     let busbar='';
     if(log.busStaff||(log.busRiders&&log.busRiders.length)){
       const duty=log.busStaff?(gs(log.busStaff)?.initials||'—'):'—';
@@ -2422,9 +2480,9 @@ function rWeekFull(){
       const cxch=s.status==='CX'&&s.cx?`<div class="cxch">${s.cx}</div>`:'';
       const tt_=cl?(cl.therapyType||(cl.hasOT?'BOTH':'ABA')):'ABA';const otfl=(tt_==='BOTH'&&s.type==='ABA')?'<div class="otch">+OT</div>':'';
       const much=s.makeup?'<div class="much">MU</div>':'';
-      const tbdg=`<span class="bdg ${sTypeBdg(s.type)}">${sessLabel(s)}</span>`;
+      const tbdg=`<span class="bdg ${sessChipBdg(s)}">${sessChipLabel(s)}</span>`;
       const isCX=s.status==='CX';
-      const clName=cl?(isCX?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):`<em style="color:var(--mt)">${gs(s.stid)?.initials||''} – ${sessLabel(s)}</em>`;
+      const clName=cl?(isCX?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):`<em style="color:var(--mt)">${gs(s.stid)?.initials||''} – ${sessChipLabel(s)}</em>`;
       const insCls=cl?`ins-${cl.ins}`:'';
       const autoStyle=isAuto?'border-left-color:#9E9E9E;background:#FAFAFA;border:1px dashed #B0BEC5;':'';
       // GRP chip: solid badge shown only when the session IS a group, for
@@ -2436,7 +2494,7 @@ function rWeekFull(){
         ? `<div onclick="toggleGroup('${s.id}',event)" style="position:absolute;top:2px;left:2px;font-size:7px;background:#E8EAF6;color:#283593;padding:1px 4px;border-radius:2px;font-weight:800;cursor:pointer" title="Group session — click to remove">GRP</div>`
         : '';
       const cptChip=s.cptCode?(()=>{const noteOk=s.serviceNote&&s.serviceNote.trim();return `<div style="position:absolute;bottom:2px;right:2px;font-size:7px;background:#F3E5F5;color:#4A235A;padding:1px 4px;border-radius:2px;font-weight:800" title="Indirect: ${s.cptCode}${noteOk?'':' — note missing'}">${s.cptCode}${noteOk?'':' ⚠'}</div>`;})():'';
-      return`<div class="sbl ${insCls}${cxcl}${isUnassigned?' unassigned':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
+      return`<div class="sbl ${tbCls(s)} ${insCls}${cxcl}${isUnassigned?' unassigned':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
     }).join('');
     if(!sh)sh=hol?`<div style="text-align:center;padding:14px"><div style="font-size:20px">🎌</div><div style="font-size:10px;margin-top:3px">${hol.name}</div></div>`:'<div style="text-align:center;padding:12px;font-size:10px;color:var(--mt)">No sessions</div>';
     html+=`<div class="dc"><div class="${hcls}"><div><div class="ddn">${dn}</div><div class="ddv">${d.getDate()}</div></div><div style="text-align:right">${hol?`<span class="hch">${hol.name}</span>`:''}${isT?'<span style="font-size:9px;font-weight:700;opacity:.75;display:block;margin-top:2px">TODAY</span>':''}</div></div>${bdayBar}<div class="dbody">${sh}<button class="asb" onclick="openAddSess('${ds}')">+ Session</button></div>${busbar}</div>`;
@@ -2470,7 +2528,7 @@ function rWeekAgenda(){
     const d=pd(ds);
     const isT=ds===today;
     const hol=isHol(ds);
-    const dsess=S.sessions.filter(s=>s.date===ds&&!s._autoAdmin&&!s._virtual&&_schedShowSess(s)).sort((a,b)=>{const _p=x=>x._autoAdmin?2:x.status==='CX'?1:0;const _d=_p(a)-_p(b);return _d!==0?_d:a.s.localeCompare(b.s);});
+    const dsess=S.sessions.filter(s=>s.date===ds&&!s._autoAdmin&&!s._virtual&&_schedShowSess(s)).sort((a,b)=>{/* Pure chronological by start time. Tie-break: CPT-coded sessions sort above admin/_autoAdmin. CX sessions sort chronologically too — strikethrough styling already signals their cancelled state. */const _t=a.s.localeCompare(b.s);if(_t!==0)return _t;const _isAdmin=x=>x._autoAdmin||x.type==='ADMIN';return (_isAdmin(a)?1:0)-(_isAdmin(b)?1:0);});
     const bdays=bdaysOn(ds);
     const hdrCls='ag-day-hdr'+(isT?' ag-today':'')+(hol?' ag-hol':'');
     const sessCount=dsess.filter(s=>s.status!=='CX').length;
@@ -2491,7 +2549,7 @@ function rWeekAgenda(){
       const cxcl=s.status==='CX'?' cx':'';
       const clName=cl?(s.status==='CX'?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):(st?.initials||'—');
       const stName=st?st.initials:'?';
-      const tbdg='<span class="bdg '+sTypeBdg(s.type)+'">'+sessLabel(s)+'</span>';
+      const tbdg='<span class="bdg '+sessChipBdg(s)+'">'+sessChipLabel(s)+'</span>';
       const insBdg=cl?'<span class="bdg '+iBdg(cl.ins)+'">'+iLabel(cl.ins)+'</span>':'';
       const muChip=s.makeup?'<span class="bdg" style="background:#FFF3E0;color:#E65100">MU</span>':'';
       const medIcons=cl&&cl.medAlerts&&cl.medAlerts.length?medChips(cl,true):'';
@@ -2532,7 +2590,7 @@ function rDay(){
   const d=pd(dayDate);
   setVlbl(ffull(d), dayDate===todayBerlin());
   const bdays=bdaysOn(dayDate);
-  const dsess=S.sessions.filter(s=>s.date===dayDate&&_schedShowSess(s)).sort((a,b)=>{const _p=x=>x._autoAdmin?2:x.status==='CX'?1:0;const _d=_p(a)-_p(b);return _d!==0?_d:a.s.localeCompare(b.s);});
+  const dsess=S.sessions.filter(s=>s.date===dayDate&&_schedShowSess(s)).sort((a,b)=>{/* Pure chronological by start time. Tie-break: CPT-coded sessions sort above admin/_autoAdmin. CX sessions sort chronologically too — strikethrough styling already signals their cancelled state. */const _t=a.s.localeCompare(b.s);if(_t!==0)return _t;const _isAdmin=x=>x._autoAdmin||x.type==='ADMIN';return (_isAdmin(a)?1:0)-(_isAdmin(b)?1:0);});
   const log=S.logs[dayDate]||{};
   const today=todayBerlin();
   const wds=[0,1,2,3,4].map(i=>{const dt=new Date(wkStart);dt.setDate(dt.getDate()+i);return fd(dt);});
@@ -2574,7 +2632,7 @@ function rDay(){
         type:admType,status:'OK',cx:'',makeup:false,recurGroup:'',notes:'Default – no sessions scheduled',_virtual:true});
     }
   });
-  dsess.sort((a,b)=>{const _p=x=>x._autoAdmin?2:x.status==='CX'?1:0;const _d=_p(a)-_p(b);return _d!==0?_d:a.s.localeCompare(b.s);});
+  dsess.sort((a,b)=>{/* Pure chronological by start time. Tie-break: CPT-coded sessions sort above admin/_autoAdmin. CX sessions sort chronologically too — strikethrough styling already signals their cancelled state. */const _t=a.s.localeCompare(b.s);if(_t!==0)return _t;const _isAdmin=x=>x._autoAdmin||x.type==='ADMIN';return (_isAdmin(a)?1:0)-(_isAdmin(b)?1:0);});
 
   // Session rows
   // ── BLOCK-BY-BLOCK DAY VIEW ──
@@ -2585,7 +2643,7 @@ function rDay(){
   DAY_BLOCKS.forEach(blk=>{
     // Sessions that overlap this block (including cancelled for visibility)
     const blkSess=realDsess.filter(s=>timesOverlap(s.s,s.e,blk.s,blk.e))
-      .sort((a,b)=>{const _p=x=>x._autoAdmin?2:x.status==='CX'?1:0;const _d=_p(a)-_p(b);return _d!==0?_d:a.s.localeCompare(b.s);});
+      .sort((a,b)=>{/* Pure chronological by start time. Tie-break: CPT-coded sessions sort above admin/_autoAdmin. CX sessions sort chronologically too — strikethrough styling already signals their cancelled state. */const _t=a.s.localeCompare(b.s);if(_t!==0)return _t;const _isAdmin=x=>x._autoAdmin||x.type==='ADMIN';return (_isAdmin(a)?1:0)-(_isAdmin(b)?1:0);});
     const activeSess=blkSess.filter(s=>s.status!=='CX');
     const isSoft=blk.soft||false;
 
@@ -2601,7 +2659,7 @@ function rDay(){
         const cl=gc(s.cid);
         const bg=tClr(s.stid),tx=tTxt(s.stid);
         const insBg=cl?iColor(cl.ins):'#9E9E9E';
-        const tbdg=`<span class="bdg ${sTypeBdg(s.type)}">${sessLabel(s)}</span>`;
+        const tbdg=`<span class="bdg ${sessChipBdg(s)}">${sessChipLabel(s)}</span>`;
         const insLbl=cl?`<span class="bdg ${iBdg(cl.ins)}">${iLabel(cl.ins)}</span>`:'';
         const muBdg=s.makeup?'<span class="bdg b-mu">MU</span>':'';
         // GRP badge: solid only — to mark a session as group, use the modal checkbox.
@@ -2610,7 +2668,7 @@ function rDay(){
           : '';
         const otFlag=(cl?.hasOT&&s.type==='ABA')?'<span class="bdg b-ot">+OT</span>':'';
         const cxBdg=s.status==='CX'?`<span class="sr-cx">${s.cx||'CX'}</span>`:'';
-        const clName=cl?cDisplayName(cl):`${gs(s.stid)?.initials||'—'} – ${sessLabel(s)}`;
+        const clName=cl?cDisplayName(cl):`${gs(s.stid)?.initials||'—'} – ${sessChipLabel(s)}`;
         const stName=gs(s.stid)?.name||'—';
         const blkIsUnassigned=s.stid==='UNASSIGNED'&&!isViewOnly;
         return`<div class="blk-sess ${s.status==='CX'?'cx':''}" data-sid="${s.id}" data-unassigned="${blkIsUnassigned}" onclick="openSess(this.dataset.sid)" style="${s.stid==='UNASSIGNED'?'border:1.5px dashed #9E9E9E;background:repeating-linear-gradient(45deg,#FAFAFA,#FAFAFA 5px,#fff 5px,#fff 10px);':''}">
@@ -2840,13 +2898,13 @@ function rDaily(){
   const busC=S.clients.filter(c=>c.hasBus);
   const rc=log.busRiders||[];
   document.getElementById('buslist').innerHTML=busC.length?'<div style="display:flex;flex-direction:column;gap:4px">'+busC.map(c=>`<div class="brow"><input type="checkbox" id="br-${c.id}" ${rc.includes(c.id)?'checked':''} onchange="togR('${c.id}',this.checked)"><label for="br-${c.id}">${c.name}</label><span class="bdg ${iBdg(c.ins)}" style="font-size:9px">${c.ins}</span></div>`).join('')+'</div>':'<div style="font-size:11px;color:var(--mt)">No bus clients.</div>';
-  const ts=S.sessions.filter(s=>s.date===dayDate).sort((a,b)=>{const _p=x=>x._autoAdmin?2:x.status==='CX'?1:0;const _d=_p(a)-_p(b);return _d!==0?_d:a.s.localeCompare(b.s);});
+  const ts=S.sessions.filter(s=>s.date===dayDate).sort((a,b)=>{/* Pure chronological by start time. Tie-break: CPT-coded sessions sort above admin/_autoAdmin. CX sessions sort chronologically too — strikethrough styling already signals their cancelled state. */const _t=a.s.localeCompare(b.s);if(_t!==0)return _t;const _isAdmin=x=>x._autoAdmin||x.type==='ADMIN';return (_isAdmin(a)?1:0)-(_isAdmin(b)?1:0);});
   const ce=document.getElementById('crows'),nce=document.getElementById('nocrow');
   if(!ts.length){ce.innerHTML='';nce.style.display='block';}
-  else{nce.style.display='none';ce.innerHTML=ts.map(s=>{const cl=gc(s.cid);const st=gs(s.stid);if(!cl&&!s.cid)return'';const nm=cl?cDisplayName(cl):sessLabel(s);const co='<option value="" '+(s.cx?'':'selected')+'>✅ OK</option>'+S.cfg.cxCodes.map(c=>`<option value="${c.code}" ${s.cx===c.code?'selected':''}>${c.code}</option>`).join('');const bg=tClr(s.stid),tx=tTxt(s.stid);const tb=sTypeBdg(s.type);
+  else{nce.style.display='none';ce.innerHTML=ts.map(s=>{const cl=gc(s.cid);const st=gs(s.stid);if(!cl&&!s.cid)return'';const nm=cl?cDisplayName(cl):sessChipLabel(s);const co='<option value="" '+(s.cx?'':'selected')+'>✅ OK</option>'+S.cfg.cxCodes.map(c=>`<option value="${c.code}" ${s.cx===c.code?'selected':''}>${c.code}</option>`).join('');const bg=tClr(s.stid),tx=tTxt(s.stid);const tb=sessChipBdg(s);const tlbl=sessChipLabel(s);
     const cxStatus=s.cx?`<span class="bdg" style="background:#FFEBEE;color:#C62828;font-size:9px">${s.cx}</span>`:'<span style="font-size:10px;color:var(--gn)">✅ OK</span>';
-    if(isViewOnly) return`<div class="crow"><div class="crn">${nm}</div><div class="crt">${ftm(s.s)}</div><span class="bdg ${tb}" style="font-size:9px">${s.type}</span><span class="tchip" style="background:${bg};color:${tx};font-size:9px">${st?.initials||'—'}</span>${cxStatus}</div>`;
-    return`<div class="crow"><div class="crn">${nm}</div><div class="crt">${ftm(s.s)}</div><span class="bdg ${tb}" style="font-size:9px">${s.type}</span><span class="tchip" style="background:${bg};color:${tx};font-size:9px">${st?.initials||'—'}</span><select class="csel" onchange="setCX('${s.id}',this.value)">${co}</select></div>`;}).join('');}
+    if(isViewOnly) return`<div class="crow"><div class="crn">${nm}</div><div class="crt">${ftm(s.s)}</div><span class="bdg ${tb}" style="font-size:9px">${tlbl}</span><span class="tchip" style="background:${bg};color:${tx};font-size:9px">${st?.initials||'—'}</span>${cxStatus}</div>`;
+    return`<div class="crow"><div class="crn">${nm}</div><div class="crt">${ftm(s.s)}</div><span class="bdg ${tb}" style="font-size:9px">${tlbl}</span><span class="tchip" style="background:${bg};color:${tx};font-size:9px">${st?.initials||'—'}</span><select class="csel" onchange="setCX('${s.id}',this.value)">${co}</select></div>`;}).join('');}
   const brks=log.breaks||[];
   document.getElementById('brkl').innerHTML=brks.length?brks.map((b,i)=>{const st=gs(b.stid);const bg=tClr(b.stid||''),tx=tTxt(b.stid||'');return`<div class="brkr"><div style="display:flex;align-items:center;gap:5px"><span class="tchip" style="background:${bg};color:${tx};font-size:9px">${st?.initials||'—'}</span><span>${st?.name||'—'}</span></div><span style="color:var(--mt)">${ftm(b.s)}–${ftm(b.e)}</span><button class="btn bxs bd" onclick="rmBrk(${i})">×</button></div>`;}).join(''):'<div style="font-size:11px;color:var(--mt)">No breaks.</div>';
   document.getElementById('dnotes').value=log.notes||'';
@@ -4311,7 +4369,7 @@ function rMyS(){
   }
 
   // ── Sessions for selected day ──
-  const daySess=S.sessions.filter(x=>x.date===mySchedDay&&x.stid===mySchedStid).sort((a,b)=>{const _p=x=>x._autoAdmin?2:x.status==='CX'?1:0;const _d=_p(a)-_p(b);return _d!==0?_d:a.s.localeCompare(b.s);});
+  const daySess=S.sessions.filter(x=>x.date===mySchedDay&&x.stid===mySchedStid).sort((a,b)=>{/* Pure chronological by start time. Tie-break: CPT-coded sessions sort above admin/_autoAdmin. CX sessions sort chronologically too — strikethrough styling already signals their cancelled state. */const _t=a.s.localeCompare(b.s);if(_t!==0)return _t;const _isAdmin=x=>x._autoAdmin||x.type==='ADMIN';return (_isAdmin(a)?1:0)-(_isAdmin(b)?1:0);});
   const breaks=(log.breaks||[]).filter(b=>b.stid===mySchedStid);
 
   // Mark-all-done button for the day
@@ -4341,7 +4399,7 @@ function rMyS(){
     const items=[
       ...daySess.map(x=>({...x,_type:'sess'})),
       ...breaks.map(x=>({...x,_type:'brk',s:x.s,e:x.e}))
-    ].sort((a,b)=>{const _p=x=>x._autoAdmin?2:x.status==='CX'?1:0;const _d=_p(a)-_p(b);return _d!==0?_d:a.s.localeCompare(b.s);});
+    ].sort((a,b)=>{/* Pure chronological by start time. Tie-break: CPT-coded sessions sort above admin/_autoAdmin. CX sessions sort chronologically too — strikethrough styling already signals their cancelled state. */const _t=a.s.localeCompare(b.s);if(_t!==0)return _t;const _isAdmin=x=>x._autoAdmin||x.type==='ADMIN';return (_isAdmin(a)?1:0)-(_isAdmin(b)?1:0);});
 
     sessHtml=items.map(item=>{
       if(item._type==='brk'){
@@ -4351,7 +4409,7 @@ function rMyS(){
       }
       const cl=gc(item.cid);
       const insBg=cl?iColor(cl.ins):'#9E9E9E';
-      const tbdg=`<span class="bdg ${sTypeBdg(item.type)}">${sessLabel(item)}</span>`;
+      const tbdg=`<span class="bdg ${sessChipBdg(item)}">${sessChipLabel(item)}</span>`;
       const insBdg=cl?`<span class="bdg ${iBdg(cl.ins)}">${iLabel(cl.ins)}</span>`:'';
       const muBdg=item.makeup?'<span class="bdg b-mu">Make-up</span>':'';
       const cxBdg=item.status==='CX'?`<div class="mys-sess-cx">❌ ${item.cx||'Cancelled'}</div>`:'';
@@ -4828,7 +4886,7 @@ function rptBilling(){
       const dateStr=pd(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
       return`<tr class="${s.status==='CX'?'cx-row':''}">
         <td>${dateStr}</td><td>${st?.name||'—'}</td>
-        <td><span class="bdg ${sTypeBdg(s.type)}">${sessLabel(s)}</span></td>
+        <td><span class="bdg ${sessChipBdg(s)}">${sessChipLabel(s)}</span></td>
         <td>${ftm(s.s)}</td><td>${ftm(s.e)}</td>
         <td>${hrs}</td><td style="color:var(--mt);font-size:10px">${s.notes||''}</td>
       </tr>`;
@@ -4984,7 +5042,7 @@ function rptClientAtt(){
         return`<tr class="${s.status==='CX'?'cx-row':''}">
           <td>${dateStr}</td>
           <td>${ftm(s.s)}–${ftm(s.e)}</td>
-          <td><span class="bdg ${sTypeBdg(s.type)}">${sessLabel(s)}</span></td>
+          <td><span class="bdg ${sessChipBdg(s)}">${sessChipLabel(s)}</span></td>
           <td><span class="tchip" style="background:${bg};color:${tx};font-size:10px">${st?.initials||'—'}</span> ${st?.name||'—'}</td>
           <td style="text-align:center">${s.status==='CX'?'—':hrs+'h'}</td>
           <td style="text-align:center">${cxBadge}${s.status!=='CX'?noteBadge:''} ${logBadge}</td>
@@ -5093,7 +5151,7 @@ function rptCancellations(){
       <td>${dateStr}</td>
       <td>${cDisplayName(cl)}</td>
       <td>${st?.initials||'—'}</td>
-      <td><span class="bdg ${sTypeBdg(s.type)}">${sessLabel(s)}</span></td>
+      <td><span class="bdg ${sessChipBdg(s)}">${sessChipLabel(s)}</span></td>
       <td>${ftm(s.s)}–${ftm(s.e)}</td>
       <td style="color:var(--rd)">${hrs}h</td>
       <td style="font-weight:700;color:var(--rd)">${s.cx||'—'}</td>
@@ -5744,7 +5802,7 @@ function rTimeline(){
         onclick="openSess('${s.id}')"
         title="${cl?cDisplayName(cl):sessFullLabel(s)}: ${ftm(s.s)}–${ftm(s.e)}">
         <div class="tl-sess-cl">${grpChip}${muChip}${cl?cDisplayName(cl):sessFullLabel(s)}</div>
-        <div class="tl-sess-meta">${ftm(s.s)}–${ftm(s.e)} · <span class="bdg ${sTypeBdg(s.type)}" style="font-size:7px">${s.type}</span></div>
+        <div class="tl-sess-meta">${ftm(s.s)}–${ftm(s.e)} · <span class="bdg ${sessChipBdg(s)}" style="font-size:7px">${sessChipLabel(s)}</span></div>
       </div>`;
     }).join('');
 
@@ -7127,7 +7185,7 @@ function rClientSched(){
       const _vstyle=_hasOverlap
         ? `top:${(s._lane||0)*_laneStep+4}px;height:${_laneH}px`
         : 'top:4px;bottom:4px';
-      const tbdg=sTypeBdg(s.type);
+      const tbdg=sessChipBdg(s);
       // GRP chip: solid only — modal checkbox is the way to mark new groups.
       const grpChip = s.isGroup
         ? `<span onclick="toggleGroup('${s.id}',event)" style="font-size:7px;background:#E8EAF6;color:#283593;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px;cursor:pointer" title="Group session — click to remove">GRP</span>`
@@ -7154,7 +7212,7 @@ function rClientSched(){
         onclick="openSess('${s.id}')"
         title="${st?.name||'—'}: ${ftm(s.s)}–${ftm(s.e)} · ${sTypeLabel(s.type)}">
         <div class="cs-thr">${grpChip}${muChip}${noteChip}${logChip}<span class="tchip" style="background:${bg};color:${tx};font-size:9px;padding:1px 6px;border-radius:3px">${st?.initials||'?'}</span> ${st?.name||'—'}</div>
-        <div class="cs-time">${ftm(s.s)}–${ftm(s.e)} · <span class="bdg ${tbdg}" style="font-size:7px">${s.type}</span></div>
+        <div class="cs-time">${ftm(s.s)}–${ftm(s.e)} · <span class="bdg ${tbdg}" style="font-size:7px">${sessChipLabel(s)}</span></div>
       </div>`;
     }).join('');
 
@@ -9068,6 +9126,6 @@ init();
 })();
 </script>
 <!-- Version indicator — helps identify which build a user is running for troubleshooting. Click to manually check for a newer version (otherwise auto-checks every 60s). -->
-<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T14:30Z-fixes</div>
+<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T15:00Z-cptchips</div>
 </body>
 </html>
