@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-13T18:00Z-ptohours-p1">
+<meta name="app-version" content="2026-05-13T19:00Z-cxaudit">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -3003,6 +3003,8 @@ function setCX(id,code){
   const s=S.sessions.find(x=>x.id===id);if(!s)return;
   const wasCX=s.status==='CX';
   s.cx=code;s.status=code?'CX':'OK';
+  // Audit: stamp on transition INTO CX (not clears, not re-saves of an existing CX).
+  if(code && !wasCX) stampCxAudit(s);
   if(code==='CX-T'&&!wasCX) setTimeout(()=>showSubstitutes(s),300);
 
   if(code&&!wasCX){
@@ -3041,9 +3043,14 @@ function setCX(id,code){
     const dateStr=pd(s.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
     const who=st?.slackId?'<@'+st.slackId+'> ':(st?st.initials+' ':'');
     const clientName=cl?cDisplayName(cl):'—';
+    // Cancellation audit: include who marked it as cancelled, so when a
+    // client shows up after being marked sick, the responsible person is
+    // identifiable. The full timestamp is on the session record for
+    // post-hoc lookups; the Slack message just needs the initials.
+    const markedBy = s.cxBy ? '\nMarked by: '+s.cxBy : '';
     const msg='[CX] *Cancellation -- '+clientName+'*\n'
       +dateStr+' '+ftm(s.s)+'-'+ftm(s.e)+' '+who+'\n'
-      +'Reason: '+cxLabel+' ('+code+')';
+      +'Reason: '+cxLabel+' ('+code+')'+markedBy;
     sendSlackMessage('C05NDMNJRT3', msg).catch(function(e){
       console.warn('Slack CX notify failed:', e);
     });
@@ -3500,7 +3507,7 @@ function openSess(id){
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-grp" ${s.isGroup?'checked':''}> Group session</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-note" ${s.noteWritten?'checked':''}> Session note written</label>
     </div>
-    <div class="fg"><label>Cancellation Code</label><select id="sd-cx">${co}</select></div>
+    <div class="fg"><label>Cancellation Code</label><select id="sd-cx">${co}</select>${s.cxBy?`<div style="font-size:10px;color:var(--mt);margin-top:4px;font-style:italic" title="Audit trail — recorded automatically when CX was applied">Marked CX by <strong>${s.cxBy}</strong> at ${fmtCxAudit(s).replace(s.cxBy+' at ','')}</div>`:''}</div>
     <div class="fg"><label>Notes</label><textarea id="sd-nt" rows="2">${s.notes||''}</textarea></div>
     ${s.sessionLog?`<div style="background:#F1F8E9;border:1.5px solid #A5D6A7;border-radius:8px;padding:10px 13px;margin-top:6px">
       <div style="font-size:10px;font-weight:700;color:#2E7D32;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">📋 Session Log (from therapist)</div>
@@ -3512,6 +3519,10 @@ function openSess(id){
 }
 function updSess(id){
   const s=S.sessions.find(x=>x.id===id);if(!s)return;
+  // Capture pre-edit state for audit purposes — used to detect a transition
+  // INTO CX so we can stamp who/when. Computed before any DOM reads in case
+  // we early-return.
+  const wasCX = s.status === 'CX';
   const newStid=document.getElementById('sd-st').value;
   const newCid=document.getElementById('sd-cl')?.value||'';
   const newDate=document.getElementById('sd-dt')?.value||s.date;
@@ -3550,6 +3561,10 @@ function updSess(id){
     delete s.serviceNote;
     S.sessions=S.sessions.filter(x=>!(x._autoAdmin&&x._fromCx===id));
     s.cx=cx;s.status=cx?'CX':'OK';
+    // Audit: stamp on transition INTO CX. Skip if it was already CX
+    // (re-save of an existing cancellation should not overwrite the
+    // original record).
+    if(cx && !wasCX) stampCxAudit(s);
     if(cx&&!NO_ADMIN_CX.includes(cx)&&s.stid&&s.stid!=='UNASSIGNED'){
       // Normal cancellation — create Admin block for assigned therapist
       const st=gs(s.stid);
@@ -3569,7 +3584,10 @@ function updSess(id){
       const dateStr=pd(s.date).toLocaleDateString('en-US',{weekday:'long',month:'short',day:'numeric'});
       const cxLabel=S.cfg.cxCodes?.find(function(c){return c.code===cx;})?.label||cx;
       const who=st?.slackId?'<@'+st.slackId+'>':(st?.initials||'--');
-      const msg='*CANCELLED: '+cDisplayName(cl)+'*'+'\n'+dateStr+' · '+ftm(s.s)+'--'+ftm(s.e)+'\n'+'Therapist: '+who+'  ·  Reason: '+cxLabel;
+      // Cancellation audit: include who marked it (only on the transition-in,
+      // not on re-saves of an existing CX).
+      const markedBy = (s.cxBy && !wasCX) ? '  ·  Marked by: '+s.cxBy : '';
+      const msg='*CANCELLED: '+cDisplayName(cl)+'*'+'\n'+dateStr+' · '+ftm(s.s)+'--'+ftm(s.e)+'\n'+'Therapist: '+who+'  ·  Reason: '+cxLabel+markedBy;
       sendSlackMessage('C05NDMNJRT3', msg).catch(function(e){ console.warn('CX Slack failed:',e); });
     }
   };
@@ -3582,7 +3600,7 @@ function updSess(id){
   }
 }
 function delSess(id){if(!confirm('Delete this session?'))return;pushUndo('Delete session');S.sessions=S.sessions.filter(s=>s.id!==id);save();closeM();rSched();rDaily();}
-function cancelFuture(rg, fromDate){if(!confirm('Cancel all future sessions in this recurring group?'))return;pushUndo('Cancel recurring');S.sessions.filter(s=>s.recurGroup===rg&&s.date>fromDate).forEach(s=>{s.status='CX';s.cx='CX-CL';});save();closeM();rSched();}
+function cancelFuture(rg, fromDate){if(!confirm('Cancel all future sessions in this recurring group?'))return;pushUndo('Cancel recurring');S.sessions.filter(s=>s.recurGroup===rg&&s.date>fromDate).forEach(s=>{const wasCX=s.status==='CX';s.status='CX';s.cx='CX-CL';if(!wasCX)stampCxAudit(s);});save();closeM();rSched();}
 
 // ── ADD CLIENT ──
 function openAddClient(){
@@ -4112,6 +4130,40 @@ const SCHEDULER_ROLES = ['bcba', 'billing', 'ot']; // kept for legacy callers
 function _viewerStaffRec(){
   if(!viewerStid) return null;
   return S.staff.find(function(s){ return s.id === viewerStid; }) || null;
+}
+// ── CANCELLATION AUDIT ──
+// Stamp a session with WHO cancelled it and WHEN, so when "a client was
+// marked sick but actually showed up" disputes happen, the responsible
+// person is identifiable. Only stamped when CX is being SET — we don't
+// audit re-opens (per design decision: track cancellations only).
+//
+// Fields written:
+//   s.cxBy   — viewer's initials (preferred) or name, or 'unknown' as
+//              defensive fallback. Initials matches what the Slack messages
+//              already use for the assigned therapist.
+//   s.cxAt   — ISO timestamp. Formatted to local time on display.
+//
+// Idempotency: only stamps if we currently have a real CX viewer identity.
+// Doesn't touch existing stamp if the session was cancelled long ago and
+// is just being re-saved (caller controls when to stamp).
+function stampCxAudit(s){
+  if(!s) return;
+  const viewer = _viewerStaffRec();
+  s.cxBy = viewer ? (viewer.initials || viewer.name || 'unknown') : 'unknown';
+  s.cxAt = new Date().toISOString();
+}
+// Display helper: turns the stamp into a human-readable string like
+// "Sara at 14:32 on Thu, May 13". Returns empty string if no stamp.
+function fmtCxAudit(s){
+  if(!s || !s.cxBy || !s.cxAt) return '';
+  let when;
+  try {
+    const d = new Date(s.cxAt);
+    const tm = d.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit', hour12:false});
+    const dt = d.toLocaleDateString('en-US', {weekday:'short', month:'short', day:'numeric'});
+    when = tm + ' on ' + dt;
+  } catch(e){ when = s.cxAt; }
+  return s.cxBy + ' at ' + when;
 }
 function isAdminViewer(){
   if(!viewerStid) return false;
@@ -9296,6 +9348,6 @@ init();
 })();
 </script>
 <!-- Version indicator — helps identify which build a user is running for troubleshooting. Click to manually check for a newer version (otherwise auto-checks every 60s). -->
-<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T18:00Z-ptohours-p1</div>
+<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T19:00Z-cxaudit</div>
 </body>
 </html>
