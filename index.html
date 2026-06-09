@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-13T16:00Z-csearch">
+<meta name="app-version" content="2026-05-13T17:00Z-staffsort">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -2104,6 +2104,21 @@ function wkOf(d){const dt=new Date(d),dw=dt.getDay();dt.setDate(dt.getDate()+(dw
 function uid(){return Math.random().toString(36).slice(2,8);}
 function gc(id){return S.clients.find(c=>c.id===id);}
 function gs(id){return S.staff.find(s=>s.id===id);}
+// Returns a NEW array sorted alphabetically by the LAST word in `.name`
+// (case-insensitive), then full name, then id as final tie-break. Used to
+// alphabetize dropdown lists for picking a client or staff member.
+// Returns a new array — callers can chain `.map()` etc. safely.
+function _byLastName(arr){
+  return [...arr].sort((a,b) => {
+    const lastA = (a.name || '').split(/\s+/).filter(Boolean).pop() || '';
+    const lastB = (b.name || '').split(/\s+/).filter(Boolean).pop() || '';
+    const _l = lastA.localeCompare(lastB, undefined, {sensitivity:'base'});
+    if(_l !== 0) return _l;
+    const _n = (a.name || '').localeCompare(b.name || '', undefined, {sensitivity:'base'});
+    if(_n !== 0) return _n;
+    return (a.id || '').localeCompare(b.id || '');
+  });
+}
 function ftm(t){if(!t)return''; const[h,m]=t.split(':').map(Number); return String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');}
 // ── 24-HOUR TIME PICKER ──
 function tpicker(id, value, onchangeStr){
@@ -2892,9 +2907,15 @@ function rStaff(){
   const DNL=['M','T','W','T','F'];
   const ROLE_ORDER=['BCBA','OT','RBT','ABAT','Billing'];
   const sortedStaff=[...S.staff].sort((a,b)=>{
-    const ri=(ROLE_ORDER.indexOf(a.role)||99)-(ROLE_ORDER.indexOf(b.role)||99);
-    const lastName=n=>n.trim().split(/\s+/).pop();
-    return ri!==0?ri:lastName(a.name).localeCompare(lastName(b.name));
+    // BUG-FIX: previously used (indexOf(a.role)||99) which treated index 0
+    // (BCBA) as falsy and sent every BCBA to the bottom of the list. We
+    // need an explicit -1 check because 0 is a VALID position. Unknown
+    // roles still get pushed to the end via the 99 fallback.
+    const aIdx=ROLE_ORDER.indexOf(a.role);
+    const bIdx=ROLE_ORDER.indexOf(b.role);
+    const ri=(aIdx===-1?99:aIdx)-(bIdx===-1?99:bIdx);
+    const lastName=n=>(n||'').trim().split(/\s+/).pop()||'';
+    return ri!==0?ri:lastName(a.name).localeCompare(lastName(b.name), undefined, {sensitivity:'base'});
   });
   document.getElementById('stgrid').innerHTML=sortedStaff.map(s=>{
     const bd=dbu(s.birthday);
@@ -2945,7 +2966,7 @@ function rDaily(){
   document.getElementById('dpick').value=dayDate;
   const log=S.logs[dayDate]||{};
   const bds=document.getElementById('busduty');
-  bds.innerHTML='<option value="">— not assigned —</option>'+S.staff.map(s=>`<option value="${s.id}" ${log.busStaff===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
+  bds.innerHTML='<option value="">— not assigned —</option>'+_byLastName(S.staff).map(s=>`<option value="${s.id}" ${log.busStaff===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
   const busC=S.clients.filter(c=>c.hasBus);
   const rc=log.busRiders||[];
   document.getElementById('buslist').innerHTML=busC.length?'<div style="display:flex;flex-direction:column;gap:4px">'+busC.map(c=>`<div class="brow"><input type="checkbox" id="br-${c.id}" ${rc.includes(c.id)?'checked':''} onchange="togR('${c.id}',this.checked)"><label for="br-${c.id}">${c.name}</label><span class="bdg ${iBdg(c.ins)}" style="font-size:9px">${c.ins}</span></div>`).join('')+'</div>':'<div style="font-size:11px;color:var(--mt)">No bus clients.</div>';
@@ -3281,7 +3302,7 @@ function doFillDay(date){
 }
 // ── ADD ADMIN BLOCK ──
 function openAddBlock(){
-  const so=S.staff.map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
+  const so=_byLastName(S.staff).map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
   const tOpts=[{id:'ADMIN',l:'Admin'}].map(t=>`<option value="${t.id}">${t.l}</option>`).join('');
   openM(`<h3>Add Admin Block</h3>
     <div class="fg"><label>Staff Member</label><select id="ab-st">${so}</select></div>
@@ -3298,7 +3319,7 @@ function saveBlock(){
 // ── ADD SESSION ──
 function openAddSessCore(pre){
   const dv=pre||todayBerlin();
-  const co=S.clients.filter(c=>c.status!=='discharged').map(c=>`<option value="${c.id}">${c.name} (${iLabel(c.ins)})</option>`).join('');
+  const co=_byLastName(S.clients.filter(c=>c.status!=='discharged')).map(c=>`<option value="${c.id}">${c.name} (${iLabel(c.ins)})</option>`).join('');
   const so='<option value="UNASSIGNED">— Unassigned (placeholder) —</option>'+staffOptionsWithAvail(dv);
   // Unified service dropdown (CPT-coded). isEditMode=true → show all options regardless of role,
   // since the therapist may not yet be selected when this form opens.
@@ -3450,7 +3471,7 @@ function openSess(id){
   const ownBlock = (s.stid===viewerStid) && (s.type==='ADMIN'||s.type==='INDIRECT'||s.type==='SUP');
   const bypassLock = isAdminViewer() || (isClinicianViewer() && ownBlock);
   const cl=gc(s.cid);
-  const so='<option value="UNASSIGNED" '+(s.stid==='UNASSIGNED'?'selected':'')+'>— Unassigned (placeholder) —</option>'+S.staff.filter(x=>x.role!=='Billing').map(x=>`<option value="${x.id}" ${x.id===s.stid?'selected':''}>${x.initials} – ${x.name}</option>`).join('');
+  const so='<option value="UNASSIGNED" '+(s.stid==='UNASSIGNED'?'selected':'')+'>— Unassigned (placeholder) —</option>'+_byLastName(S.staff.filter(x=>x.role!=='Billing')).map(x=>`<option value="${x.id}" ${x.id===s.stid?'selected':''}>${x.initials} – ${x.name}</option>`).join('');
   const co='<option value="" '+(s.cx?'':'selected')+'>✅ Scheduled</option>'+S.cfg.cxCodes.map(c=>`<option value="${c.code}" ${s.cx===c.code?'selected':''}>${c.code} – ${c.label}</option>`).join('');
   const to=STYPES.map(t=>`<option value="${t.id}" ${t.id===s.type?'selected':''}>${t.label}</option>`).join('');
   const isRec=!!s.recurGroup;
@@ -3458,7 +3479,7 @@ function openSess(id){
   (bypassLock?_openM:openM)(`<h3>Session: ${cl?(isViewOnly?cDisplayName(cl):cl.name):sessFullLabel(s)}</h3>
     <div style="background:var(--bg);border-radius:7px;padding:10px;margin-bottom:12px;font-size:11px;color:var(--t2)">${ffull(pd(s.date))}<br>${ftm(s.s)}–${ftm(s.e)} · ${sessFullLabel(s)}${s.makeup?' · <strong style="color:#F57F17">Make-up</strong>':''}${isRec?` · <span style="color:#558B2F">🔁 Recurring (${futureSiblings} future)</span>`:''}</div>
     <div class="fg"><label>Therapist</label><select id="sd-st">${so}</select></div>
-    <div class="fg"><label>Client <span style="font-weight:400;color:var(--mt);font-size:10px">— required for billable services</span></label><select id="sd-cl">${'<option value="">— No client (admin/supervision) —</option>'+S.clients.filter(c=>c.status!=='discharged').sort((a,b)=>(a.name||'').localeCompare(b.name||'')).map(c=>`<option value="${c.id}" ${c.id===s.cid?'selected':''}>${c.name}</option>`).join('')}</select></div>
+    <div class="fg"><label>Client <span style="font-weight:400;color:var(--mt);font-size:10px">— required for billable services</span></label><select id="sd-cl">${'<option value="">— No client (admin/supervision) —</option>'+_byLastName(S.clients.filter(c=>c.status!=='discharged')).map(c=>`<option value="${c.id}" ${c.id===s.cid?'selected':''}>${c.name}</option>`).join('')}</select></div>
     <div class="fg"><label>Service</label><select id="sd-svc">${serviceOptsHtml(s.type, s.cptCode||'', gs(s.stid)?.role, !isViewOnly)}</select></div>
     <div class="fr2"><div class="fg"><label>Date</label><input type="date" id="sd-dt" value="${s.date}"></div><div class="fg"><label></label><div style="padding-top:22px;font-size:10px;color:var(--mt)">Change date to reschedule</div></div></div>
     <div class="fr2"><div class="fg"><label>Start</label>${tpicker('sd-s', s.s)}</div><div class="fg"><label>End</label>${tpicker('sd-e', s.e)}</div></div>
@@ -3554,8 +3575,8 @@ function cancelFuture(rg, fromDate){if(!confirm('Cancel all future sessions in t
 // ── ADD CLIENT ──
 function openAddClient(){
   if(isViewOnly && !isClientManagerViewer() && !isBillingViewer()){promptUnlock();return;}
-  const so=S.staff.filter(s=>s.role!=='Billing').map(s=>`<option value="${s.id}">${s.initials} – ${s.name} (${s.role})</option>`).join('');
-  const bo=S.staff.filter(s=>s.role==='BCBA').map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}">${s.initials} – ${s.name} (${s.role})</option>`).join('');
+  const bo=_byLastName(S.staff.filter(s=>s.role==='BCBA')).map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   openM(`<h3>Add Client</h3>
     <div class="fg"><label>Name</label><input id="nc-n" placeholder="Client name"></div>
     <div class="fg"><label>External ID <span style="font-weight:400;color:var(--mt);font-size:10px">— HiRasmus / Cowork / billing system ID (optional)</span></label><input id="nc-ext" placeholder="e.g. HR-10042"></div>
@@ -3613,11 +3634,11 @@ function openClientDetail(id){
     return;
   }
   _tplSlots=(c.scheduleTpl||[]).map(s=>Object.assign({},s));
-  const so=S.staff.filter(s=>s.role!=='Billing').map(s=>`<option value="${s.id}" ${(c.team||[]).includes(s.id)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}" ${(c.team||[]).includes(s.id)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
   const _isOTcl=((c.therapyType||(c.hasOT?'BOTH':'ABA'))==='OT');
   const _cmPool=_isOTcl?S.staff.filter(s=>s.role==='OT'):S.staff.filter(s=>s.role==='BCBA');
   const bo=_cmPool.map(s=>`<option value="${s.id}" ${c.bcba===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
-  const soOT=S.staff.filter(s=>s.role==='OT').map(s=>`<option value="${s.id}" ${(c.team||[]).includes(s.id)?'selected':''}>${s.initials} – ${s.name} (${s.role})</option>`).join('');
+  const soOT=_byLastName(S.staff.filter(s=>s.role==='OT')).map(s=>`<option value="${s.id}" ${(c.team||[]).includes(s.id)?'selected':''}>${s.initials} – ${s.name} (${s.role})</option>`).join('');
   // existRec precomputed above
   // Precompute to avoid nested template literal issues
   const pipeHtml=['NONE','PENDING','SUBMITTED','APPROVED'].map(st=>{const lbl={NONE:'Not Started',PENDING:'Pending',SUBMITTED:'Submitted',APPROVED:'Approved'}[st];const cur=(c.authPipeline||'NONE')===st;return'<div class="pipe-step ps-'+st.toLowerCase()+(cur?' ps-active':'')+('" onclick="setPipe(\"'+st+'\")">')+lbl+'</div>';}).join('');
@@ -3754,14 +3775,14 @@ function openClientDetail(id){
 }
 
 function renderTplSlots(){
-  const so=S.staff.filter(s=>s.role!=='Billing').map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
+  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
   const days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
   const to=STYPES.filter(t=>t.id!=='ADMIN').map(t=>`<option value="${t.id}">${t.label}</option>`).join('');
   const wrap=document.getElementById('tpl-slots');
   if(!wrap)return;
   wrap.innerHTML=_tplSlots.length?_tplSlots.map((sl,i)=>{
     const dOpts=days.map((d,di)=>`<option value="${di+1}" ${sl.dow==di+1?'selected':''}>${d}</option>`).join('');
-    const stOpts=S.staff.filter(s=>s.role!=='Billing').map(s=>`<option value="${s.id}" ${s.id===sl.stid?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+    const stOpts=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}" ${s.id===sl.stid?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
     const tyOpts=STYPES.map(t=>`<option value="${t.id}" ${t.id===sl.type?'selected':''}>${t.label}</option>`).join('');
     return `<div class="tpl-slot" id="tsl-${i}">
       <select onchange="_tplSlots[${i}].dow=+this.value">${dOpts}</select>
@@ -3969,11 +3990,11 @@ function renderStplSlots(s){
   const hoursEl=document.getElementById('stpl-hours');
   if(!wrap)return;
   const days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
-  const co=S.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  const co=_byLastName(S.clients).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   const to=STYPES.filter(t=>t.id!=='ADMIN').map(t=>`<option value="${t.id}">${t.label}</option>`).join('');
   wrap.innerHTML=_stplSlots.length?_stplSlots.map((sl,i)=>{
     const dOpts=days.map((d,di)=>`<option value="${di+1}" ${sl.dow==di+1?'selected':''}>${d.slice(0,3)}</option>`).join('');
-    const clOpts='<option value="">— any —</option>'+S.clients.map(c=>`<option value="${c.id}" ${c.id===sl.cid?'selected':''}>${c.name}</option>`).join('');
+    const clOpts='<option value="">— any —</option>'+_byLastName(S.clients).map(c=>`<option value="${c.id}" ${c.id===sl.cid?'selected':''}>${c.name}</option>`).join('');
     const tyOpts=STYPES.filter(t=>t.id!=='ADMIN').map(t=>`<option value="${t.id}" ${t.id===sl.type?'selected':''}>${t.label}</option>`).join('');
     return`<div class="stpl-slot">
       <select onchange="_stplSlots[${i}].dow=+this.value;renderStplSlots()">${dOpts}</select>
@@ -4047,7 +4068,7 @@ function updStaff(id){
 
 // ── ADD BREAK ──
 function openAddBreak(){
-  const so=S.staff.map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
+  const so=_byLastName(S.staff).map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
   openM(`<h3>Add Break</h3>
     <div class="fg"><label>Staff</label><select id="ab2-st">${so}</select></div>
     <div class="fr2"><div class="fg"><label>Start</label>${tpicker('ab2-s', '12:00')}</div><div class="fg"><label>End</label>${tpicker('ab2-e', '12:30')}</div></div>
@@ -4327,7 +4348,7 @@ function initMyS(){
   if(!sel) return;
   const cur=sel.value||viewerStid; // auto-select logged-in user if not already set
   sel.innerHTML='<option value="">— Select your name —</option>'+
-    S.staff.map(s=>`<option value="${s.id}" ${s.id===cur?'selected':''}>${s.name} (${s.role})</option>`).join('');
+    _byLastName(S.staff).map(s=>`<option value="${s.id}" ${s.id===cur?'selected':''}>${s.name} (${s.role})</option>`).join('');
   // For therapists: lock dropdown to their own name (read-only), hide selector UI
   if(isTherapistViewer()&&viewerStid){
     sel.value=viewerStid;
@@ -4823,7 +4844,7 @@ function initReports(){
   const iEl=document.getElementById('rpt-ins');
   if(iEl) iEl.innerHTML='<option value="">All Insurance</option>'+INS.map(i=>`<option value="${i.id}">${i.label}</option>`).join('');
   const sEl=document.getElementById('rpt-staff');
-  if(sEl) sEl.innerHTML='<option value="">All Staff</option>'+S.staff.map(s=>`<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
+  if(sEl) sEl.innerHTML='<option value="">All Staff</option>'+_byLastName(S.staff).map(s=>`<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
   const cEl=document.getElementById('rpt-client');
   if(cEl) cEl.innerHTML='<option value="">All Clients</option>'+[...S.clients].filter(c=>c.status!=='discharged').sort((a,b)=>a.name.localeCompare(b.name)).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
 }
@@ -6034,7 +6055,7 @@ function rWaitlist(){
 function openAddWL(){
   const io=insOpts('');
   const ttOpts=['ABA','BOTH','OT'].map(t=>`<option value="${t}">${t==='BOTH'?'ABA+OT':t}</option>`).join('');
-  const boWL=S.staff.filter(s=>s.role==='BCBA'||s.role==='OT').map(s=>`<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
+  const boWL=_byLastName(S.staff.filter(s=>s.role==='BCBA'||s.role==='OT')).map(s=>`<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
   _openM(`<h3>Add to Waitlist</h3>
     <div class="fr2"><div class="fg"><label>Name</label><input id="wl-n" placeholder="Client name"></div><div class="fg"><label>DOB</label><input type="date" id="wl-dob"></div></div>
     <div class="fr2"><div class="fg"><label>Insurance</label><select id="wl-ins"><option value="">Unknown</option>${io}</select></div><div class="fg"><label>Therapy Type</label><select id="wl-tt">${ttOpts}</select></div></div>
@@ -6083,7 +6104,7 @@ function openEditWL(id){
   const io=insOpts(w.ins||'');
   const so=['WAITING','PT','AUTH','URGENT'].map(s=>`<option value="${s}" ${s===w.status?'selected':''}>${{WAITING:'Waiting',PT:'Parent Training',AUTH:'Auth Ready',URGENT:'Urgent'}[s]}</option>`).join('');
   const ttOptsE=['ABA','BOTH','OT'].map(t=>`<option value="${t}" ${(w.therapyType||'ABA')===t?'selected':''}>${t==='BOTH'?'ABA+OT':t}</option>`).join('');
-  const boWLE=S.staff.filter(s=>s.role==='BCBA'||s.role==='OT').map(s=>`<option value="${s.id}" ${w.bcba===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
+  const boWLE=_byLastName(S.staff.filter(s=>s.role==='BCBA'||s.role==='OT')).map(s=>`<option value="${s.id}" ${w.bcba===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
   _openM(`<h3>Edit Waitlist: ${w.name}</h3>
     <div class="fr2"><div class="fg"><label>Name</label><input id="wl-n" value="${w.name}"></div><div class="fg"><label>DOB</label><input type="date" id="wl-dob" value="${w.dob||''}"></div></div>
     <div class="fr2"><div class="fg"><label>Insurance</label><select id="wl-ins"><option value="">Unknown</option>${io}</select></div><div class="fg"><label>Therapy Type</label><select id="wl-tt">${ttOptsE}</select></div></div>
@@ -6689,7 +6710,7 @@ function dismissNote(id){
 }
 
 function openPostNote(){
-  const so=S.staff.filter(s=>s.role!=='Billing').map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   // If a therapist is viewing My Schedule, pre-select the current viewer as author
   const myId=mySchedStid||'';
   const myName=myId?(gs(myId)?.name||'Scheduler'):'Scheduler';
@@ -7412,7 +7433,7 @@ function openSubmitRequest(){
   if(!st) return;
   const co=S.clients.filter(c=>(st.clients||[]).includes(c.id)||c.bcba===mySchedStid)
     .map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  const coAll=S.clients.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  const coAll=_byLastName(S.clients).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
   const so=S.staff.filter(s=>s.role!=='Billing'&&s.id!==mySchedStid)
     .map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
   const typeOpts=REQ_TYPES.map(t=>`<option value="${t.id}">${t.icon} ${t.label}</option>`).join('');
@@ -7658,8 +7679,8 @@ function editApproveRequest(id){
   const r=(S.schedRequests||[]).find(x=>x.id===id);
   if(!r) return;
   const cl=gc(r.cid);
-  const co=S.clients.map(c=>`<option value="${c.id}" ${c.id===r.cid?'selected':''}>${c.name}</option>`).join('');
-  const so='<option value="UNASSIGNED">— Unassigned —</option>'+S.staff.filter(s=>s.role!=='Billing').map(s=>`<option value="${s.id}" ${s.id===(r.prefStid||r.from)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+  const co=_byLastName(S.clients).map(c=>`<option value="${c.id}" ${c.id===r.cid?'selected':''}>${c.name}</option>`).join('');
+  const so='<option value="UNASSIGNED">— Unassigned —</option>'+_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}" ${s.id===(r.prefStid||r.from)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
   openM(`<h3>Approve Request</h3>
     <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:#92400E">
       Requested by <strong>${r.fromName}</strong> · ${REQ_TYPES.find(t=>t.id===r.type)?.label||r.type}
@@ -8525,7 +8546,7 @@ function openManualLeaveEntry(){
   if(!isAdminViewer()) return;
   // Build staff dropdown — exclude former/inactive entries if any (none in
   // current data model, but the filter is here for forward compatibility).
-  const staffOpts = S.staff.map(s=>`<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
+  const staffOpts = _byLastName(S.staff).map(s=>`<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
   // Type dropdown uses the central LEAVE_TYPES dict so it stays in sync.
   const typeOpts = Object.entries(LEAVE_TYPES).map(([v,m])=>
     `<option value="${v}">${m.emoji} ${m.longLabel}</option>`
@@ -8801,7 +8822,7 @@ function openEditLeaveReq(id){
   const statusOpts=['pending','approved','declined'].map(s=>
     `<option value="${s}" ${r.status===s?'selected':''}>${s.charAt(0).toUpperCase()+s.slice(1)}</option>`
   ).join('');
-  const staffOpts='<option value="">— unmatched / former staff —</option>'+S.staff.map(s=>`<option value="${s.id}" ${r.stid===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
+  const staffOpts='<option value="">— unmatched / former staff —</option>'+_byLastName(S.staff).map(s=>`<option value="${s.id}" ${r.stid===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
   const typeOpts=Object.entries(LEAVE_TYPES).map(([v,m])=>
     `<option value="${v}" ${r.type===v?'selected':''}>${m.emoji} ${m.longLabel}</option>`
   ).join('');
@@ -9177,6 +9198,6 @@ init();
 })();
 </script>
 <!-- Version indicator — helps identify which build a user is running for troubleshooting. Click to manually check for a newer version (otherwise auto-checks every 60s). -->
-<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T16:00Z-csearch</div>
+<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T17:00Z-staffsort</div>
 </body>
 </html>
