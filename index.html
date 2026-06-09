@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-13T15:00Z-cptchips">
+<meta name="app-version" content="2026-05-13T16:00Z-csearch">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1212,6 +1212,13 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
 <!-- CLIENTS TAB -->
 <div class="tp" id="tp-clients">
   <div class="sh2"><h2>Client Roster</h2><div style="display:flex;align-items:center;gap:8px"><span id="wl-pill" style="display:none;font-size:11px;font-weight:700;padding:2px 10px;background:var(--pl);border-radius:10px;color:var(--pu);cursor:pointer" onclick="sw('waitlist')"></span><button class="btn bp bsm edit-only" data-cm-visible onclick="openAddClient()">+ Add Client</button></div></div>
+  <!-- Live client search. Matches case-insensitive substring against client name and external ID.
+       Composed with the filter chips below (search narrows whatever the chip selected).
+       Filled by window._clientSearchQuery and re-rendered via rClients() on every keystroke. -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <input id="client-search" type="search" placeholder="🔍 Search clients — name or ID…" oninput="_clientSearch(this.value)" style="flex:1;max-width:380px;padding:8px 12px;border:1px solid var(--bd);border-radius:6px;font-size:13px;font-family:'DM Sans',sans-serif">
+    <span id="client-search-meta" style="font-size:10px;color:var(--mt);font-weight:600"></span>
+  </div>
   <div class="fbar">
     <span style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase">Filter:</span>
     <div class="fch on" onclick="fc('all',this)">All</div>
@@ -2812,13 +2819,57 @@ function rClients(f){
   else if(cflt==='UNDER')cl=cl.filter(c=>c.sch<c.rec*0.9);
   else if(cflt==='GERMAN')cl=cl.filter(c=>isGerman(c.ins));
   else if(cflt!=='all')cl=cl.filter(c=>c.ins===cflt);
+  // Live search: free-text substring match across c.name and c.extId.
+  // Empty/falsy search = no-op. Case-insensitive. Trimmed. Applied AFTER
+  // the chip filter so the two compose (e.g. "OT chip + 'sa' in search").
+  const sq = (window._clientSearchQuery || '').trim().toLowerCase();
+  if(sq){
+    cl = cl.filter(c => {
+      const name = (c.name || '').toLowerCase();
+      const ext = (c.extId || '').toLowerCase();
+      return name.includes(sq) || ext.includes(sq);
+    });
+  }
+  // Alphabetize: sort by LAST WORD in name (last name), then full name,
+  // then extId as final tie-break. Last-word approach handles names with
+  // middle words like "Mary Anne Smith" -> sorts under "Smith".
+  cl.sort((a, b) => {
+    const lastA = (a.name || '').split(/\s+/).filter(Boolean).pop() || '';
+    const lastB = (b.name || '').split(/\s+/).filter(Boolean).pop() || '';
+    const _l = lastA.localeCompare(lastB, undefined, {sensitivity:'base'});
+    if(_l !== 0) return _l;
+    const _n = (a.name || '').localeCompare(b.name || '', undefined, {sensitivity:'base'});
+    if(_n !== 0) return _n;
+    return (a.extId || '').localeCompare(b.extId || '');
+  });
   const con=document.getElementById('ccon');
-  if(!cl.length){con.innerHTML='<div style="text-align:center;padding:24px;color:var(--mt)">No clients match this filter.</div>';return;}
+  if(!cl.length){
+    // Empty-state messaging branches on whether search is active so the user
+    // knows whether to clear the search or relax the chip filter.
+    const emptyMsg = sq
+      ? `No clients match <strong>"${sq}"</strong>${cflt!=='all'?' under this filter':''}.`
+      : 'No clients match this filter.';
+    con.innerHTML='<div style="text-align:center;padding:24px;color:var(--mt)">'+emptyMsg+'</div>';
+    const meta=document.getElementById('client-search-meta');
+    if(meta) meta.textContent = sq ? '0 matches' : '';
+    return;
+  }
+  // Update search-meta count if a search is active
+  const meta=document.getElementById('client-search-meta');
+  if(meta) meta.textContent = sq ? cl.length+' match'+(cl.length===1?'':'es') : '';
   const groups=['TRICARE','Private','Civilian','German GKV','Other German'];
   const grps=cflt==='all'?
     groups.map(g=>({g,clients:cl.filter(c=>iById(c.ins).group===g)})).filter(x=>x.clients.length):
     [{g:'',clients:cl}];
   con.innerHTML=grps.map(({g,clients})=>`<div class="isec">${g?`<div class="ihead"><div class="idot" style="background:${iColor(clients[0]?.ins)}"></div><h3>${g}</h3><span class="ict">${clients.length}</span></div>`:''}<div class="cgrid">${clients.map(cCard).join('')}</div></div>`).join('');
+}
+// Live client search: receives keystroke input, stores in module-scope
+// state, triggers a re-render. Kept on `window` so the input element can
+// reference it directly via oninput. No debounce — the client list is
+// small enough (<100 cards) that re-render on each keystroke is instant.
+function _clientSearch(value){
+  window._clientSearchQuery = value || '';
+  rClients();
 }
 function cCard(c){
   const pct=Math.min(100,Math.round(c.sch/c.rec*100));
@@ -9126,6 +9177,6 @@ init();
 })();
 </script>
 <!-- Version indicator — helps identify which build a user is running for troubleshooting. Click to manually check for a newer version (otherwise auto-checks every 60s). -->
-<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T15:00Z-cptchips</div>
+<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T16:00Z-csearch</div>
 </body>
 </html>
