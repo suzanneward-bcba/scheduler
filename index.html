@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-13T17:00Z-staffsort">
+<meta name="app-version" content="2026-05-13T18:00Z-ptohours-p1">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -2216,6 +2216,11 @@ function renderAll(){
   updateFab(atab);
   document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
   S.staff.forEach(migratePto);
+  // Migrate legacy days-based PTO entries to include hours field. Idempotent
+  // via per-staff _ptoHoursMigrated flag. Done at boot so all downstream
+  // displays see hours-based data.
+  S.staff.forEach(migratePtoToHours);
+  migrateLeaveRequestsToHours();
   rSched();rClients();rStaff();rDaily();rSettings();initMyS();rAuthAlerts();rSchedRequests();rLeaveRequests();
   if(!window._tickerStarted){window._tickerStarted=true;startNowTicker();}
   updateUndoBtn();
@@ -2943,16 +2948,23 @@ function rStaff(){
   // PTO/sick used now computed from approved leave requests (single source
   // of truth). The old s.ptoUsed/s.sickUsed manual fields are no longer
   // read or written — they could drift from reality.
-  const ptoUsed = ptoUsedYTD(s.id);
-  const sickUsed = sickUsedYTD(s.id);
-  if(!s.ptoTotal && !ptoUsed && !sickUsed) return '';
-  const ptoPct = s.ptoTotal ? Math.min(100, Math.round(ptoUsed/s.ptoTotal*100)) : 0;
-  const ptoLeft = (s.ptoTotal||0) - ptoUsed;
+  // Hours-based (since the PTO-to-hours migration). Days are derived from
+  // hours ÷ hrsPerDay for display only.
+  const ptoUsedHrs = leaveHoursYTD(s.id, 'PTO');
+  const sickUsedHrs = leaveHoursYTD(s.id, 'SICK');
+  const totalHrs = s.ptoTotalHours || 0;
+  if(!totalHrs && !ptoUsedHrs && !sickUsedHrs) return '';
+  const ptoPct = totalHrs ? Math.min(100, Math.round(ptoUsedHrs/totalHrs*100)) : 0;
+  const ptoLeftHrs = totalHrs - ptoUsedHrs;
+  const hpd = hrsPerDay(s);
+  // Round hours to 1 decimal for compactness; days to 1 decimal too.
+  const fmt = h => (Math.round(h * 10) / 10).toString();
+  const fmtDays = h => hpd>0 ? (Math.round((h/hpd)*10)/10).toString() : '?';
   const sd = s.startDate ? pd(s.startDate).toLocaleDateString('en-US',{month:'short',year:'numeric'}) : '';
   return`<div><div class="sclbl">Leave ${sd?'· Since '+sd:''}</div><div class="leave-row">
-    <div class="leave-box"><div class="leave-n" style="color:${ptoPct>80?'var(--rd)':'var(--nv)'}">${ptoLeft}</div><div class="leave-l">PTO Left</div><div class="leave-bar"><div class="leave-fill" style="width:${ptoPct}%;background:${ptoPct>80?'var(--rd)':'var(--gn)'}"></div></div></div>
-    <div class="leave-box"><div class="leave-n">${ptoUsed}</div><div class="leave-l">PTO Used</div></div>
-    <div class="leave-box"><div class="leave-n" style="color:${sickUsed>5?'var(--rd)':'var(--nv)'}">${sickUsed}</div><div class="leave-l">Sick Used</div></div>
+    <div class="leave-box" title="${fmt(ptoLeftHrs)} hours remaining (${fmtDays(ptoLeftHrs)} days at ${hpd}h/day)"><div class="leave-n" style="color:${ptoPct>80?'var(--rd)':'var(--nv)'}">${fmt(ptoLeftHrs)}h</div><div class="leave-l">PTO Left (${fmtDays(ptoLeftHrs)}d)</div><div class="leave-bar"><div class="leave-fill" style="width:${ptoPct}%;background:${ptoPct>80?'var(--rd)':'var(--gn)'}"></div></div></div>
+    <div class="leave-box" title="${fmt(ptoUsedHrs)} hours used (${fmtDays(ptoUsedHrs)} days)"><div class="leave-n">${fmt(ptoUsedHrs)}h</div><div class="leave-l">PTO Used (${fmtDays(ptoUsedHrs)}d)</div></div>
+    <div class="leave-box" title="${fmt(sickUsedHrs)} hours used (${fmtDays(sickUsedHrs)} days)"><div class="leave-n" style="color:${sickUsedHrs>(5*hpd)?'var(--rd)':'var(--nv)'}">${fmt(sickUsedHrs)}h</div><div class="leave-l">Sick Used (${fmtDays(sickUsedHrs)}d)</div></div>
   </div></div>`;
 })()}
 </div></div>`;
@@ -7989,6 +8001,92 @@ function isStaffWorkday(st, dateStr){
   if(dow === 0 || dow === 6) return false; // Sat/Sun never count
   return !!st.av[dow - 1]; // st.av is [Mon, Tue, Wed, Thu, Fri]
 }
+
+// ── HOURS-BASED PTO HELPERS ──
+// PTO is tracked in HOURS, not days. Each staff member has a daily hours
+// figure derived from their contract: `hrsPerDay = hrs / workdays/week`.
+// A full-day PTO entry consumes hrsPerDay hours; half-day consumes 4 hours
+// (morning 08-12 OR afternoon 13-17). The display still shows both — hours
+// is primary, days in parentheses for readability.
+//
+// Fallback for staff with no contract hours set (st.hrs missing/0):
+// assume 30h/week, 5 workdays → 6 hours/day. This catches edge cases like
+// admin-only staff whose hrs field is blank.
+function hrsPerDay(st){
+  if(!st) return 6;
+  const wd = (st.av||[]).filter(x=>x===1).length;
+  if(!st.hrs || st.hrs <= 0) return 6;     // fallback 30h/5d = 6 hrs/day
+  if(wd === 0) return st.hrs / 5;          // unusual: no workdays flagged
+  return st.hrs / wd;
+}
+
+// Returns total HOURS of leave used YTD for given type. Reads `pto[].hours`
+// when present (post-migration); falls back to computing from `r.days`
+// against `isStaffWorkday`. Used by all balance displays.
+function leaveHoursYTD(stid, type, yr){
+  yr = yr || (new Date().getFullYear()+'');
+  const st = gs(stid);
+  if(!st) return 0;
+  const hpd = hrsPerDay(st);
+  // Sum hours from each approved leaveRequest. New entries have `r.hours`
+  // (sum across days, accounting for half-days). Legacy entries without
+  // r.hours get computed from r.days × hrsPerDay, filtered by workday.
+  return (S.leaveRequests||[])
+    .filter(r => r.stid===stid && r.status==='approved' && r.type===type && (r.from||'').startsWith(yr))
+    .reduce((n, r) => {
+      if(typeof r.hours === 'number') return n + r.hours;
+      const workdays = (r.days||[]).filter(d => isStaffWorkday(st, d)).length;
+      return n + (workdays * hpd);
+    }, 0);
+}
+
+// Display helper: format a PTO balance for the UI as "118.75 hours (19 days)".
+// Hours rounded to 2 decimals (trailing zeros stripped); days rounded to 1
+// decimal (trailing .0 stripped for whole numbers). Days use the staff
+// member's own hrsPerDay so the conversion is per-person.
+function fmtPtoBalance(hours, st){
+  const hpd = hrsPerDay(st);
+  const days = hpd > 0 ? hours / hpd : 0;
+  const hoursStr = (Math.round(hours * 100) / 100).toString();
+  const daysStr = days === Math.floor(days) ? days.toString() : (Math.round(days * 10) / 10).toString();
+  return hoursStr + ' hours (' + daysStr + ' day' + (daysStr==='1'?'':'s') + ')';
+}
+
+// ── MIGRATION: convert legacy days-based PTO entries to hours-based ──
+// Runs once per staff member. Each st.pto[] entry gets `hours` added based
+// on whether the date is actually a workday (phantom Fridays for Marina
+// get hours=0, effectively dropping them). Also adds hours to leaveRequests.
+// The _ptoHoursMigrated flag prevents re-running.
+function migratePtoToHours(st){
+  if(!st || st._ptoHoursMigrated) return;
+  const hpd = hrsPerDay(st);
+  // Convert yearly entitlement: ptoTotal (days) → ptoTotalHours (hours).
+  // Keeps original ptoTotal intact for now in case we need to roll back.
+  if(typeof st.ptoTotalHours !== 'number'){
+    st.ptoTotalHours = (st.ptoTotal || 0) * hpd;
+  }
+  // Existing pto[] entries: add hours field (0 for phantom days)
+  (st.pto||[]).forEach(entry => {
+    if(typeof entry.hours === 'number') return; // already migrated
+    entry.hours = isStaffWorkday(st, entry.date) ? hpd : 0;
+  });
+  st._ptoHoursMigrated = true;
+}
+// Also migrate leaveRequests on first read. This runs separately from
+// migratePtoToHours because leaveRequests live in S, not on staff.
+function migrateLeaveRequestsToHours(){
+  if(S._leaveReqHoursMigrated) return;
+  (S.leaveRequests||[]).forEach(r => {
+    if(typeof r.hours === 'number') return; // already migrated
+    if(r.status !== 'approved') return;     // pending/denied don't need it
+    const st = gs(r.stid);
+    if(!st) return;
+    const hpd = hrsPerDay(st);
+    const workdays = (r.days||[]).filter(d => isStaffWorkday(st, d)).length;
+    r.hours = workdays * hpd;
+  });
+  S._leaveReqHoursMigrated = true;
+}
 function leaveDaysYTD(stid, type, yr){
   yr = yr || (new Date().getFullYear()+'');
   const st = gs(stid);
@@ -9198,6 +9296,6 @@ init();
 })();
 </script>
 <!-- Version indicator — helps identify which build a user is running for troubleshooting. Click to manually check for a newer version (otherwise auto-checks every 60s). -->
-<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T17:00Z-staffsort</div>
+<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T18:00Z-ptohours-p1</div>
 </body>
 </html>
