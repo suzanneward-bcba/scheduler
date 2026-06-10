@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-13T20:00Z-ptohours-p2a">
+<meta name="app-version" content="2026-05-13T21:00Z-halfday">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -5564,8 +5564,13 @@ function rptLeave(){
     const st = gs(r.stid);
     return countWorkdays(r) * hrsPerDay(st);
   };
-  const totalDays=approved.reduce((s,r)=>s+countWorkdays(r),0);
-  const totalHours=approved.reduce((s,r)=>s+countHours(r),0);
+  // "Total time off" excludes FLEX (it's a schedule adjustment, net-zero
+  // across the week, NOT actual time away from work) and UNPAID (tracked
+  // separately, not deducted from any bank). Only PTO/SICK/PERSONAL count
+  // toward the headline "Total Days" stat.
+  const isTimeOff = r => r.type !== 'FLEX' && r.type !== 'UNPAID';
+  const totalDays=approved.filter(isTimeOff).reduce((s,r)=>s+countWorkdays(r),0);
+  const totalHours=approved.filter(isTimeOff).reduce((s,r)=>s+countHours(r),0);
   const ptoDays=approved.filter(r=>r.type==='PTO').reduce((s,r)=>s+countWorkdays(r),0);
   const ptoHours=approved.filter(r=>r.type==='PTO').reduce((s,r)=>s+countHours(r),0);
   const sickDays=approved.filter(r=>r.type==='SICK').reduce((s,r)=>s+countWorkdays(r),0);
@@ -8699,6 +8704,31 @@ function openLeaveRequest(){
     <div class="fg"><label>Notes <span style="font-weight:400;color:var(--mt);font-size:10px">— optional but helpful for short-notice requests</span></label>
       <textarea id="lr-notes" rows="2" placeholder="e.g. family appointment, school holiday, doctor's appointment…"></textarea>
     </div>
+    <!-- Half-day toggle. Hidden by default; only shown when leave type is PTO or PERSONAL
+         (per policy: sick days, flex, and unpaid are always full-day or hour-by-hour tracked elsewhere).
+         The "Need a half day?" link below acts as the entry point. -->
+    <div id="lr-halfday-link-wrap" style="margin:-4px 0 10px;font-size:11px">
+      <a href="#" id="lr-halfday-link" onclick="event.preventDefault();_toggleHalfDayUi()" style="color:var(--pu);font-weight:600;text-decoration:underline;cursor:pointer">Need a half day instead?</a>
+    </div>
+    <div id="lr-halfday-section" style="display:none;background:#E3F2FD;border:1px solid #90CAF9;border-radius:8px;padding:10px 13px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#0D47A1;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+        <span>🕐 Half-day request</span>
+        <a href="#" onclick="event.preventDefault();_toggleHalfDayUi()" style="font-size:10px;color:#1565C0;font-weight:500">Cancel half-day</a>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div class="fg" style="margin:0;flex:1;min-width:100px">
+          <label style="font-size:10px">Hours off <span style="color:var(--mt);font-weight:400">(min 1, max <span id="lr-hd-cap">—</span>)</span></label>
+          <input type="number" id="lr-hd-hours" min="1" step="0.25" placeholder="e.g. 3" oninput="updateLrPreview()">
+        </div>
+        <div class="fg" style="margin:0">
+          <label style="font-size:10px">When</label>
+          <div style="display:flex;gap:10px;font-size:12px;padding:7px 0">
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="lr-hd-when" value="AM" checked onchange="updateLrPreview()"> AM</label>
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="lr-hd-when" value="PM" onchange="updateLrPreview()"> PM</label>
+          </div>
+        </div>
+      </div>
+    </div>
     <div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;padding:10px 13px;margin-bottom:10px">
       <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:12px;line-height:1.5">
         <input type="checkbox" id="lr-confirm" onchange="const b=document.getElementById('lr-submit-btn');b.disabled=!this.checked;b.style.opacity=this.checked?'1':'0.5';" style="margin-top:2px;accent-color:#2E7D32;width:15px;height:15px;flex-shrink:0">
@@ -8709,6 +8739,45 @@ function openLeaveRequest(){
       <button class="btn" onclick="closeM()">Cancel</button>
       <button class="btn bp" id="lr-submit-btn" disabled style="background:#E65100;border-color:#E65100;opacity:.5;transition:opacity .2s" onclick="submitLeaveRequest()">📩 Submit Request</button>
     </div>`);
+  // Show the max hours cap to the user. Marina: 6.25, Suzanne: 8.
+  const cap = hrsPerDay(st);
+  const capEl = document.getElementById('lr-hd-cap');
+  if(capEl) capEl.textContent = cap + 'h';
+  updateLrPreview();
+}
+
+// Toggles the half-day UI section. Locks the To-date to From-date (half-day
+// is single-day only) and enforces the leave-type restriction (PTO/PERSONAL
+// only — switching to SICK/FLEX/UNPAID while half-day is active will auto-disable).
+function _toggleHalfDayUi(){
+  const section = document.getElementById('lr-halfday-section');
+  const linkWrap = document.getElementById('lr-halfday-link-wrap');
+  const toEl = document.getElementById('lr-to');
+  const fromEl = document.getElementById('lr-from');
+  const typeEl = document.getElementById('lr-type');
+  if(!section || !linkWrap) return;
+  const isActive = section.style.display !== 'none';
+  if(isActive){
+    // Turn OFF half-day mode
+    section.style.display = 'none';
+    linkWrap.style.display = 'block';
+    if(toEl){ toEl.disabled = false; toEl.style.opacity = '1'; }
+  } else {
+    // Turn ON half-day mode
+    // Half-day only allowed for PTO and PERSONAL. If current type doesn't qualify,
+    // force-switch to PTO so the modal stays in a valid state.
+    if(typeEl && typeEl.value !== 'PTO' && typeEl.value !== 'PERSONAL'){
+      typeEl.value = 'PTO';
+    }
+    section.style.display = 'block';
+    linkWrap.style.display = 'none';
+    // Lock To-date to From-date (half-day is single-day only)
+    if(toEl && fromEl){
+      toEl.value = fromEl.value;
+      toEl.disabled = true;
+      toEl.style.opacity = '0.5';
+    }
+  }
   updateLrPreview();
 }
 
@@ -8718,16 +8787,72 @@ function updateLrPreview(){
   const el=document.getElementById('lr-preview');
   const notice=document.getElementById('lr-notice');
   if(!from||!el) return;
-  // Count weekdays
-  let count=0;const cur=pd(from);const end=pd(to||from);
-  while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5)count++;cur.setDate(cur.getDate()+1);}
-  el.textContent=count+' weekday'+(count!==1?'s':'')+' requested';
+
+  // Half-day eligibility: only PTO and PERSONAL allow half-day requests.
+  // Hide/show the half-day link based on the current leave type. If half-day
+  // is currently ACTIVE but the user switched to an ineligible type, force
+  // half-day off so the modal stays in a consistent state.
+  const lrType=document.getElementById('lr-type')?.value;
+  const halfDayEligible = (lrType==='PTO' || lrType==='PERSONAL');
+  const halfSection = document.getElementById('lr-halfday-section');
+  const halfLinkWrap = document.getElementById('lr-halfday-link-wrap');
+  const halfActive = halfSection && halfSection.style.display !== 'none';
+  if(halfLinkWrap) halfLinkWrap.style.display = (halfDayEligible && !halfActive) ? 'block' : 'none';
+  if(halfActive && !halfDayEligible){
+    // Switch out of half-day mode silently
+    _toggleHalfDayUi();
+    return;
+  }
+
+  // Clamp half-day hours to staff's daily max (silently — no error).
+  // Min 1.0, max = hrsPerDay for this staff.
+  if(halfActive){
+    const st = gs(mySchedStid);
+    const cap = hrsPerDay(st);
+    const hoursEl = document.getElementById('lr-hd-hours');
+    if(hoursEl){
+      const v = parseFloat(hoursEl.value);
+      if(!isNaN(v) && v > cap){
+        hoursEl.value = cap;
+      }
+    }
+    // Lock To to From while half-day active
+    const fromEl = document.getElementById('lr-from');
+    const toEl = document.getElementById('lr-to');
+    if(toEl && fromEl) toEl.value = fromEl.value;
+  }
+
+  // Count weekdays — for half-day this is always 1
+  let count=0;
+  if(halfActive){
+    // Half-day: From should equal To, count is 1
+    count = (pd(from).getDay()>=1 && pd(from).getDay()<=5) ? 1 : 0;
+  } else {
+    const cur=pd(from);const end=pd(to||from);
+    while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5)count++;cur.setDate(cur.getDate()+1);}
+  }
+  // Build the preview text. For half-day: show hours requested.
+  if(halfActive){
+    const hoursEl = document.getElementById('lr-hd-hours');
+    const whenEl = document.querySelector('input[name="lr-hd-when"]:checked');
+    const hrs = parseFloat(hoursEl?.value) || 0;
+    const when = whenEl?.value || 'AM';
+    if(hrs >= 1 && count === 1){
+      el.textContent = hrs + 'h half-day requested (' + when + ')';
+    } else if(count !== 1){
+      el.textContent = 'Half-day requires a single weekday';
+    } else {
+      el.textContent = 'Enter at least 1 hour';
+    }
+  } else {
+    el.textContent=count+' weekday'+(count!==1?'s':'')+' requested';
+  }
+
   // 2-week notice check — SICK and UNPAID are exempted because both are
   // typically reactive (illness, appointment without doctor's note, ran out
   // of PTO balance) rather than planned in advance.
   const today=pd(todayBerlin());
   const daysUntil=Math.ceil((pd(from)-today)/864e5);
-  const lrType=document.getElementById('lr-type')?.value;
   const isShortNoticeExempt = lrType==='SICK' || lrType==='UNPAID';
   if(notice) notice.style.display=(daysUntil<14 && !isShortNoticeExempt)?'block':'none';
 }
@@ -8746,6 +8871,29 @@ async function submitLeaveRequest(){
   while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5)days.push(fd(new Date(cur)));cur.setDate(cur.getDate()+1);}
 
   const st=gs(mySchedStid);
+  // Check half-day mode + validate
+  const halfSection = document.getElementById('lr-halfday-section');
+  const isHalfDay = halfSection && halfSection.style.display !== 'none';
+  let halfHours = 0;
+  let halfWhen = '';
+  if(isHalfDay){
+    const cap = hrsPerDay(st);
+    halfHours = parseFloat(document.getElementById('lr-hd-hours')?.value) || 0;
+    halfWhen = document.querySelector('input[name="lr-hd-when"]:checked')?.value || 'AM';
+    if(halfHours < 1){
+      alert('Half-day must be at least 1 hour.');
+      return;
+    }
+    if(halfHours > cap){
+      // Should already be clamped by updateLrPreview, but defensive
+      halfHours = cap;
+    }
+    if(days.length !== 1){
+      alert('Half-day requests must be a single weekday.');
+      return;
+    }
+  }
+
   const req={
     id:'lr'+uid(), stid:mySchedStid,
     type, from, to, days, notes,
@@ -8753,10 +8901,21 @@ async function submitLeaveRequest(){
     submittedAt:new Date().toISOString(),
     fromName:st?.name||'—'
   };
+  // For half-day: stamp halfDay flag, halfHours, halfWhen, and set hours
+  // directly (skip the workday-multiplied calculation). For full-day:
+  // hours is computed at approval time the standard way.
+  if(isHalfDay){
+    req.halfDay = true;
+    req.halfHours = halfHours;
+    req.halfWhen = halfWhen;
+    req.hours = halfHours;
+  }
   if(!S.leaveRequests) S.leaveRequests=[];
   S.leaveRequests.push(req);
   save(); closeM();
-  showToast('Leave request submitted — the Scheduler will review it ✓','#E65100');
+  showToast(isHalfDay
+    ? ('Half-day request submitted ('+halfHours+'h '+halfWhen+') — the Scheduler will review it ✓')
+    : 'Leave request submitted — the Scheduler will review it ✓','#E65100');
 
   // Leave requests stay in-app ONLY. The Netlify Slack proxy ignores the
   // channelId argument and routes everything to the webhook channel
@@ -8968,19 +9127,37 @@ async function approveLeaveRequest(id){
     if(!st.pto)st.pto=[];
     migratePto(st);
     migratePtoToHours(st);
-    r.days.forEach(dt=>{
-      if(!ptoOnDate(st,dt)){
-        // New PTO entries carry an hours field — full-day default for now.
-        // Half-day support comes in Phase 2b.
-        st.pto.push({date:dt, type:r.type==='SICK'?'SICK':'PTO', hours: isStaffWorkday(st,dt) ? hpd : 0});
+    if(r.halfDay){
+      // Half-day approval: write a single PTO entry for r.from with
+      // partial hours and the AM/PM marker. The schedule view checks
+      // entry.halfDay/halfWhen to render the partial block correctly.
+      const existing = ptoOnDate(st, r.from);
+      if(!existing){
+        st.pto.push({
+          date: r.from,
+          type: r.type==='SICK'?'SICK':'PTO',
+          hours: r.halfHours,
+          halfDay: true,
+          halfWhen: r.halfWhen || 'AM'
+        });
       }
-    });
+    } else {
+      r.days.forEach(dt=>{
+        if(!ptoOnDate(st,dt)){
+          st.pto.push({date:dt, type:r.type==='SICK'?'SICK':'PTO', hours: isStaffWorkday(st,dt) ? hpd : 0});
+        }
+      });
+    }
     st.pto.sort((a,b)=>a.date.localeCompare(b.date));
   }
   r.status='approved'; r.decidedAt=new Date().toISOString();
-  // Stamp r.hours so future displays don't need to recompute it from days.
-  // Phantom days (non-workdays) contribute 0 hours.
-  r.hours = (r.days||[]).filter(d => isStaffWorkday(st, d)).length * hpd;
+  // Stamp r.hours so future displays don't need to recompute. Half-day uses
+  // the partial value; full-day computes hrsPerDay × workdays.
+  if(r.halfDay){
+    r.hours = r.halfHours || 0;
+  } else {
+    r.hours = (r.days||[]).filter(d => isStaffWorkday(st, d)).length * hpd;
+  }
   save(); rLeaveRequests(); rStaff(); rSched();
   showToast(st.name+' leave approved ✓','var(--gn)');
   // Email the staff member if we have an address on file. Email is a
@@ -9451,6 +9628,6 @@ init();
 })();
 </script>
 <!-- Version indicator — helps identify which build a user is running for troubleshooting. Click to manually check for a newer version (otherwise auto-checks every 60s). -->
-<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T20:00Z-ptohours-p2a</div>
+<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T21:00Z-halfday</div>
 </body>
 </html>
