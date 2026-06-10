@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-13T19:00Z-cxaudit">
+<meta name="app-version" content="2026-05-13T20:00Z-ptohours-p2a">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -3998,10 +3998,28 @@ function openEditStaff(id){
     </div>
     <div class="sep"></div>
     <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">🏖 Employment &amp; Leave</div>
-    ${(()=>{const yr=new Date().getFullYear()+'';const pto=ptoUsedYTD(id,yr);const sick=sickUsedYTD(id,yr);return pto||sick?`<div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#1B5E20"><strong>${yr} from approved requests:</strong> ${pto} PTO day${pto!==1?'s':''} · ${sick} sick day${sick!==1?'s':''}</div>`:''})()}
+    ${(()=>{
+      const yr=new Date().getFullYear()+'';
+      const ptoHrs=leaveHoursYTD(id,'PTO',yr);
+      const sickHrs=leaveHoursYTD(id,'SICK',yr);
+      const hpd=hrsPerDay(s);
+      if(!ptoHrs && !sickHrs) return '';
+      const fmt=h=>(Math.round(h*10)/10).toString();
+      const fmtD=h=>hpd>0?(Math.round((h/hpd)*10)/10).toString():'?';
+      return `<div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:7px;padding:8px 12px;margin-bottom:10px;font-size:11px;color:#1B5E20"><strong>${yr} from approved requests:</strong> ${fmt(ptoHrs)} PTO hrs (${fmtD(ptoHrs)}d) · ${fmt(sickHrs)} sick hrs (${fmtD(sickHrs)}d) <span style="color:#558B2F">· ${hpd}h/day</span></div>`;
+    })()}
     <div class="fr2">
       <div class="fg"><label>Company Start Date</label><input type="date" id="es-sd" value="${s.startDate||''}"></div>
-      <div class="fg"><label>Annual PTO Days</label><input type="number" id="es-pto" value="${s.ptoTotal||0}" min="0" placeholder="e.g. 25"></div>
+      <div class="fg" style="display:flex;flex-direction:column;gap:4px"><label>Annual PTO Entitlement</label>
+        <!-- Linked dual inputs: editing one updates the other. Days input shown for admin convenience; hours is what's actually stored. The data attribute records the staff's hrsPerDay so the inline JS knows the conversion factor without round-trips. -->
+        <div style="display:flex;gap:6px;align-items:center" data-hpd="${hrsPerDay(s)}">
+          <input type="number" id="es-pto-days" value="${(() => { const hpd=hrsPerDay(s); const hrs=s.ptoTotalHours||((s.ptoTotal||0)*hpd); return hpd>0?(Math.round((hrs/hpd)*10)/10):0; })()}" min="0" step="0.5" placeholder="days" style="flex:1" oninput="_syncPtoFields(this,'days')">
+          <span style="font-size:10px;color:var(--mt);font-weight:600">days</span>
+          <span style="color:var(--mt)">=</span>
+          <input type="number" id="es-pto-hours" value="${s.ptoTotalHours||((s.ptoTotal||0)*hrsPerDay(s))||0}" min="0" step="0.25" placeholder="hours" style="flex:1" oninput="_syncPtoFields(this,'hours')">
+          <span style="font-size:10px;color:var(--mt);font-weight:600">hours</span>
+        </div>
+      </div>
     </div>
     <div class="stpl-wrap">
       <div class="stpl-title">🗓 Preferred Weekly Schedule</div>
@@ -4086,11 +4104,23 @@ function updStaff(id){
   s.credential2=document.getElementById('es-cred2')?.value||'';
   s.cred2Expiry=document.getElementById('es-cred2exp')?.value||'';
   s.startDate=document.getElementById('es-sd')?.value||s.startDate||'';
-  s.ptoTotal=+document.getElementById('es-pto')?.value||s.ptoTotal||0;
+  // PTO entitlement: read from the hours field (canonical) and also store
+  // days for backward compat. The two inputs stay in sync via _syncPtoFields.
+  // Fallback to legacy ptoTotal if the new fields aren't present (shouldn't happen).
+  const ptoHrsEl = document.getElementById('es-pto-hours');
+  if(ptoHrsEl){
+    s.ptoTotalHours = +ptoHrsEl.value || 0;
+    // Recompute ptoTotal (days) from the hours for backward-compatible reads.
+    const hpd = hrsPerDay(s);
+    s.ptoTotal = hpd > 0 ? Math.round((s.ptoTotalHours / hpd) * 10) / 10 : 0;
+  } else if(document.getElementById('es-pto')){
+    // legacy path — should not be hit after this build, but safe fallback
+    s.ptoTotal=+document.getElementById('es-pto')?.value||s.ptoTotal||0;
+  }
   // s.ptoUsed and s.sickUsed are no longer written from the form — they're
-  // computed at read time via ptoUsedYTD/sickUsedYTD from approved leave
-  // requests. The legacy stored values are preserved on existing records
-  // until next year-end backup, but they're not read anywhere.
+  // computed at read time via leaveHoursYTD from approved leave requests.
+  // The legacy stored values are preserved on existing records until next
+  // year-end backup, but they're not read anywhere.
   s.prefTpl=_stplSlots.map(x=>Object.assign({},x));
   // PTO dates managed directly via addPtoDate/removePtoDate — already saved, no action needed here
   save();closeM();rStaff();rSched();
@@ -4164,6 +4194,29 @@ function fmtCxAudit(s){
     when = tm + ' on ' + dt;
   } catch(e){ when = s.cxAt; }
   return s.cxBy + ' at ' + when;
+}
+// ── LINKED DAYS/HOURS INPUTS ──
+// Used by the staff edit modal's Annual PTO field. The two number inputs
+// (days, hours) stay in sync as the admin types in either — editing days
+// recomputes hours and vice versa. The conversion factor (hrsPerDay) is
+// stored as `data-hpd` on the wrapper div to avoid global lookups.
+//
+// Called from oninput on each field. Skips the update if the other field
+// is the active element (avoids feedback loops while the admin is typing).
+function _syncPtoFields(el, which){
+  const wrap = el.parentElement;
+  if(!wrap) return;
+  const hpd = parseFloat(wrap.getAttribute('data-hpd') || '8') || 8;
+  const daysEl = wrap.querySelector('#es-pto-days');
+  const hoursEl = wrap.querySelector('#es-pto-hours');
+  if(!daysEl || !hoursEl) return;
+  if(which === 'days' && document.activeElement !== hoursEl){
+    const d = parseFloat(daysEl.value) || 0;
+    hoursEl.value = Math.round(d * hpd * 100) / 100;
+  } else if(which === 'hours' && document.activeElement !== daysEl){
+    const h = parseFloat(hoursEl.value) || 0;
+    daysEl.value = hpd > 0 ? (Math.round((h / hpd) * 10) / 10) : 0;
+  }
 }
 function isAdminViewer(){
   if(!viewerStid) return false;
@@ -5504,14 +5557,28 @@ function rptLeave(){
     const st = gs(r.stid);
     return (r.days||[]).filter(d => isStaffWorkday(st, d)).length;
   };
+  // Convert workdays to hours using each staff's hrsPerDay. If the request
+  // already has r.hours set (post-migration data), prefer that.
+  const countHours = r => {
+    if(typeof r.hours === 'number') return r.hours;
+    const st = gs(r.stid);
+    return countWorkdays(r) * hrsPerDay(st);
+  };
   const totalDays=approved.reduce((s,r)=>s+countWorkdays(r),0);
+  const totalHours=approved.reduce((s,r)=>s+countHours(r),0);
   const ptoDays=approved.filter(r=>r.type==='PTO').reduce((s,r)=>s+countWorkdays(r),0);
+  const ptoHours=approved.filter(r=>r.type==='PTO').reduce((s,r)=>s+countHours(r),0);
   const sickDays=approved.filter(r=>r.type==='SICK').reduce((s,r)=>s+countWorkdays(r),0);
+  const sickHours=approved.filter(r=>r.type==='SICK').reduce((s,r)=>s+countHours(r),0);
 
-  // Per-staff breakdown
+  // Per-staff breakdown — track both hours (canonical) and days (display).
   const byStaff={};
   approved.forEach(r=>{
-    if(!byStaff[r.stid]) byStaff[r.stid]={pto:0,sick:0,personal:0,flex:0,unpaid:0,reqs:[]};
+    if(!byStaff[r.stid]) byStaff[r.stid]={
+      pto:0,sick:0,personal:0,flex:0,unpaid:0,
+      ptoH:0,sickH:0,personalH:0,flexH:0,unpaidH:0,
+      reqs:[]
+    };
     const bucket = r.type==='PTO'?'pto'
       : r.type==='SICK'?'sick'
       : r.type==='PERSONAL'?'personal'
@@ -5519,6 +5586,7 @@ function rptLeave(){
       : r.type==='UNPAID'?'unpaid'
       : 'personal';
     byStaff[r.stid][bucket]+=countWorkdays(r);
+    byStaff[r.stid][bucket+'H']+=countHours(r);
     byStaff[r.stid].reqs.push(r);
   });
 
@@ -5531,18 +5599,26 @@ function rptLeave(){
   // Staff summary table — flex/unpaid don't count toward PTO totals (they
   // aren't deducted from balance) but are shown in their own columns so
   // admins can see who's flexing or taking unpaid time.
+  // Each cell displays HOURS with the days count in parens for readability.
+  const fmtCell = (h, d) => {
+    if(!h && !d) return '—';
+    const hStr = (Math.round(h*10)/10).toString();
+    const dStr = (Math.round(d*10)/10).toString();
+    return hStr+'h <span style="color:var(--mt);font-size:10px">('+dStr+'d)</span>';
+  };
   const staffRows=Object.entries(byStaff).map(([stid,d])=>{
     const st=gs(stid);if(!st)return'';
     const bg=tClr(stid),tx=tTxt(stid);
-    const ptoTotal=d.pto+d.sick+d.personal;
+    const ptoTotalH=d.ptoH+d.sickH+d.personalH;
+    const ptoTotalD=d.pto+d.sick+d.personal;
     return`<tr>
       <td><span class="tchip" style="background:${bg};color:${tx};font-size:10px">${st.initials}</span> ${st.name}</td>
-      <td style="text-align:center">${d.pto}</td>
-      <td style="text-align:center">${d.sick}</td>
-      <td style="text-align:center">${d.personal}</td>
-      <td style="text-align:center;font-weight:700">${ptoTotal}</td>
-      <td style="text-align:center;color:var(--mt)">${d.flex||'—'}</td>
-      <td style="text-align:center;color:var(--mt)">${d.unpaid||'—'}</td>
+      <td style="text-align:center">${fmtCell(d.ptoH,d.pto)}</td>
+      <td style="text-align:center">${fmtCell(d.sickH,d.sick)}</td>
+      <td style="text-align:center">${fmtCell(d.personalH,d.personal)}</td>
+      <td style="text-align:center;font-weight:700">${fmtCell(ptoTotalH,ptoTotalD)}</td>
+      <td style="text-align:center;color:var(--mt)">${fmtCell(d.flexH,d.flex)}</td>
+      <td style="text-align:center;color:var(--mt)">${fmtCell(d.unpaidH,d.unpaid)}</td>
     </tr>`;
   }).join('');
 
@@ -5557,7 +5633,11 @@ function rptLeave(){
       <td><span class="tchip" style="background:${bg};color:${tx};font-size:10px">${st?.initials||'?'}</span> ${st?.name||r.fromName||'—'}</td>
       <td>${typeLabel(r.type)}</td>
       <td>${dateStr}</td>
-      <td style="text-align:center">${countWorkdays(r)||'—'}</td>
+      <td style="text-align:center">${(()=>{
+        const wd=countWorkdays(r); const hrs=countHours(r);
+        if(!wd && !hrs) return '—';
+        return (Math.round(hrs*10)/10)+'h <span style="color:var(--mt);font-size:10px">('+wd+'d)</span>';
+      })()}</td>
       <td>${statusBadge(r.status)}${r.source==='manual'?'<span style="display:inline-block;margin-left:5px;font-size:8px;background:#ECEFF1;color:#37474F;padding:1px 5px;border-radius:3px;font-weight:700;letter-spacing:.3px;text-transform:uppercase" title="Recorded manually by admin (not a therapist-submitted request)">Manual</span>':''}</td>
       <td style="font-size:10px;color:var(--mt)">${r.notes||''}</td>
       <td class="edit-only" style="white-space:nowrap">
@@ -5582,9 +5662,9 @@ function rptLeave(){
       <div class="rsb"><div class="rsn">${approved.length}</div><div class="rsl">Approved</div></div>
       <div class="rsb"><div class="rsn">${pending.length}</div><div class="rsl">Pending</div></div>
       <div class="rsb"><div class="rsn">${declined.length}</div><div class="rsl">Declined</div></div>
-      <div class="rsb"><div class="rsn">${totalDays}</div><div class="rsl">Total Days</div></div>
-      <div class="rsb"><div class="rsn">${ptoDays}</div><div class="rsl">PTO Days</div></div>
-      <div class="rsb"><div class="rsn">${sickDays}</div><div class="rsl">Sick Days</div></div>
+      <div class="rsb"><div class="rsn">${(Math.round(totalHours*10)/10)}h</div><div class="rsl">Total (${totalDays}d)</div></div>
+      <div class="rsb"><div class="rsn">${(Math.round(ptoHours*10)/10)}h</div><div class="rsl">PTO (${ptoDays}d)</div></div>
+      <div class="rsb"><div class="rsn">${(Math.round(sickHours*10)/10)}h</div><div class="rsl">Sick (${sickDays}d)</div></div>
     </div>
     <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 8px">Days by staff member</div>
     <table class="rpt-table" style="margin-bottom:18px">
@@ -5593,7 +5673,7 @@ function rptLeave(){
     </table>
     <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">All requests</div>
     <table class="rpt-table">
-      <thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th>Notes</th><th class="edit-only"></th></tr></thead>
+      <thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Hours</th><th>Status</th><th>Notes</th><th class="edit-only"></th></tr></thead>
       <tbody>${detailRows}</tbody>
     </table>`;
 }
@@ -7085,9 +7165,11 @@ function previewLeaveReset(){
 
   const lines = S.staff.filter(s=>s.role!=='Billing'||s.ptoTotal).map(st=>{
     const newPTO = calcProRataPTO(st.startDate, st.ptoTotal||defaultPTO, year);
+    const hpd = hrsPerDay(st);
+    const newPTOHrs = Math.round(newPTO * hpd * 10) / 10;
     const isFirstYear = st.startDate && pd(st.startDate).getFullYear() === year;
     const tag = isFirstYear ? ` (pro-rated from ${pd(st.startDate).toLocaleDateString('en-US',{month:'short',day:'numeric'})})` : '';
-    return `• ${st.name}: PTO reset to 0 used · Annual PTO → ${newPTO}d${tag} · Sick days reset to 0`;
+    return `• ${st.name}: Annual PTO → ${newPTOHrs}h (${newPTO}d at ${hpd}h/day)${tag} · Sick & PTO used reset to 0`;
   });
   if(el) el.innerHTML='<strong style="color:var(--nv)">Preview for '+year+':</strong><br>' + lines.join('<br>');
 }
@@ -7108,17 +7190,21 @@ function runLeaveReset(){
       id: st.id, name: st.name,
       // Snapshot computed YTD totals — single source of truth via leaveRequests.
       ptoTotal: st.ptoTotal||0,
-      ptoUsed: ptoUsedYTD(st.id, year+''),
-      sickUsed: sickUsedYTD(st.id, year+'')
+      ptoTotalHours: st.ptoTotalHours || ((st.ptoTotal||0) * hrsPerDay(st)),
+      ptoUsedHours: leaveHoursYTD(st.id, 'PTO', year+''),
+      sickUsedHours: leaveHoursYTD(st.id, 'SICK', year+'')
     }))
   });
 
   // Reset all staff PTO allotment for the new year. Used-counts no longer
   // need zeroing — they're computed live from leaveRequests, so as soon as
-  // the year flips, ptoUsedYTD/sickUsedYTD return 0 automatically.
+  // the year flips, leaveHoursYTD returns 0 automatically.
   S.staff.forEach(st=>{
     const newPTO = calcProRataPTO(st.startDate, st.ptoTotal||defaultPTO, year);
     st.ptoTotal = newPTO;
+    // Keep ptoTotalHours in sync with ptoTotal × hrsPerDay so all the
+    // hours-based displays update at year-end too.
+    st.ptoTotalHours = Math.round(newPTO * hrsPerDay(st) * 100) / 100;
   });
 
   save();
@@ -7134,7 +7220,8 @@ function runLeaveReset(){
       <div style="font-size:11px;color:#2E7D32;line-height:1.8">
         ${S.staff.filter(s=>s.role!=='Billing'||s.ptoTotal).map(st=>{
           const isFirstYear = st.startDate && pd(st.startDate).getFullYear()===year;
-          return `<strong>${st.name}</strong> — ${st.ptoTotal}d PTO${isFirstYear?' (pro-rated)':''} · 0 used · 0 sick`;
+          const h = st.ptoTotalHours || ((st.ptoTotal||0) * hrsPerDay(st));
+          return `<strong>${st.name}</strong> — ${Math.round(h*10)/10}h (${st.ptoTotal}d) PTO${isFirstYear?' (pro-rated)':''} · 0 used`;
         }).join('<br>')}
       </div>
     </div>
@@ -8778,13 +8865,17 @@ async function submitManualLeaveEntry(){
     cur.setDate(cur.getDate()+1);
   }
   if(!days.length){alert('No dates fall in the selected range.');return;}
+  const hpd=hrsPerDay(st);
   // Create the leave request record. status:'approved' from the start —
   // a manual entry skips the review step. source:'manual' lets the table
   // distinguish these from request-flow entries via a small badge.
+  // r.hours: sum of hrsPerDay across workdays (matches approval flow logic).
+  const workdayCount=days.filter(d=>isStaffWorkday(st,d)).length;
   const now=new Date().toISOString();
   const req={
     id:'lr'+uid(), stid,
     type, from, to, days, notes,
+    hours: workdayCount * hpd,
     status:'approved',
     submittedAt:now,
     decidedAt:now,
@@ -8799,13 +8890,16 @@ async function submitManualLeaveEntry(){
   if(leaveDeductsPto(type)){
     if(!st.pto) st.pto=[];
     migratePto(st);
+    migratePtoToHours(st);
     days.forEach(dt=>{
-      if(!ptoOnDate(st,dt)) st.pto.push({date:dt,type:type==='SICK'?'SICK':'PTO'});
+      if(!ptoOnDate(st,dt)){
+        st.pto.push({date:dt, type:type==='SICK'?'SICK':'PTO', hours: isStaffWorkday(st,dt) ? hpd : 0});
+      }
     });
     st.pto.sort((a,b)=>a.date.localeCompare(b.date));
   }
   save(); closeM();
-  showToast(st.name+': '+days.length+' day'+(days.length!==1?'s':'')+' of '+leaveTypeMeta(type).shortLabel+' recorded ✓','var(--gn)');
+  showToast(st.name+': '+(workdayCount * hpd)+'h ('+days.length+' day'+(days.length!==1?'s':'')+') of '+leaveTypeMeta(type).shortLabel+' recorded ✓','var(--gn)');
   // Re-render report + schedule + staff so all views reflect the new entry.
   if(typeof rptLeave === 'function' && curReport==='leave') rptLeave();
   if(typeof rStaff === 'function') rStaff();
@@ -8866,18 +8960,27 @@ function rLeaveRequests(){
 async function approveLeaveRequest(id){
   const r=(S.leaveRequests||[]).find(x=>x.id===id);if(!r)return;
   const st=gs(r.stid);if(!st)return;
+  const hpd=hrsPerDay(st);
   // Only PTO/SICK/PERSONAL deduct from the staff PTO record. FLEX and UNPAID
   // are tracked as approved requests but don't add to st.pto[] — Flex means
   // "make up time elsewhere" and Unpaid means "no balance to deduct from".
   if(leaveDeductsPto(r.type)){
     if(!st.pto)st.pto=[];
     migratePto(st);
+    migratePtoToHours(st);
     r.days.forEach(dt=>{
-      if(!ptoOnDate(st,dt)) st.pto.push({date:dt,type:r.type==='SICK'?'SICK':'PTO'});
+      if(!ptoOnDate(st,dt)){
+        // New PTO entries carry an hours field — full-day default for now.
+        // Half-day support comes in Phase 2b.
+        st.pto.push({date:dt, type:r.type==='SICK'?'SICK':'PTO', hours: isStaffWorkday(st,dt) ? hpd : 0});
+      }
     });
     st.pto.sort((a,b)=>a.date.localeCompare(b.date));
   }
   r.status='approved'; r.decidedAt=new Date().toISOString();
+  // Stamp r.hours so future displays don't need to recompute it from days.
+  // Phantom days (non-workdays) contribute 0 hours.
+  r.hours = (r.days||[]).filter(d => isStaffWorkday(st, d)).length * hpd;
   save(); rLeaveRequests(); rStaff(); rSched();
   showToast(st.name+' leave approved ✓','var(--gn)');
   // Email the staff member if we have an address on file. Email is a
@@ -9348,6 +9451,6 @@ init();
 })();
 </script>
 <!-- Version indicator — helps identify which build a user is running for troubleshooting. Click to manually check for a newer version (otherwise auto-checks every 60s). -->
-<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T19:00Z-cxaudit</div>
+<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T20:00Z-ptohours-p2a</div>
 </body>
 </html>
