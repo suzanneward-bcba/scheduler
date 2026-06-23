@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-13T21:00Z-halfday">
+<meta name="app-version" content="2026-05-13T22:30Z-lvemail">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -8729,6 +8729,33 @@ function openLeaveRequest(){
         </div>
       </div>
     </div>
+    <!-- Flex section — visible only when leave type is FLEX. Different from
+         half-day in shape: 1-4 hour cap (not full daily-max), notes required
+         (admin needs the makeup plan in writing), and no PTO bank deduction
+         (FLEX is net-zero across the week via the makeup). Notes field above
+         carries the makeup proposal as free text — admin reviews and can
+         edit when approving. -->
+    <div id="lr-flex-section" style="display:none;background:#F3E5F5;border:1px solid #CE93D8;border-radius:8px;padding:10px 13px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#4A148C;margin-bottom:8px;display:flex;align-items:center;gap:6px">
+        <span>🔄 Flex / Schedule Adjustment</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+        <div class="fg" style="margin:0;flex:1;min-width:100px">
+          <label style="font-size:10px">Hours flexed <span style="color:var(--mt);font-weight:400">(1-4 only)</span></label>
+          <input type="number" id="lr-flex-hours" min="1" max="4" step="0.25" placeholder="e.g. 2" oninput="updateLrPreview()">
+        </div>
+        <div class="fg" style="margin:0">
+          <label style="font-size:10px">When</label>
+          <div style="display:flex;gap:10px;font-size:12px;padding:7px 0">
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="lr-flex-when" value="AM" checked onchange="updateLrPreview()"> AM</label>
+            <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="radio" name="lr-flex-when" value="PM" onchange="updateLrPreview()"> PM</label>
+          </div>
+        </div>
+      </div>
+      <div style="font-size:10px;color:#6A1B9A;margin-top:8px;line-height:1.5;background:#fff;padding:6px 9px;border-radius:5px">
+        💡 <strong>Use the Notes field below</strong> to describe your makeup plan (e.g., "making up Wed 13:00-15:00"). Notes are required for flex requests.
+      </div>
+    </div>
     <div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;padding:10px 13px;margin-bottom:10px">
       <label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:12px;line-height:1.5">
         <input type="checkbox" id="lr-confirm" onchange="const b=document.getElementById('lr-submit-btn');b.disabled=!this.checked;b.style.opacity=this.checked?'1':'0.5';" style="margin-top:2px;accent-color:#2E7D32;width:15px;height:15px;flex-shrink:0">
@@ -8804,6 +8831,36 @@ function updateLrPreview(){
     return;
   }
 
+  // Flex section visibility: shows ONLY when leave type is FLEX. Auto-shows
+  // when switching to FLEX, auto-hides when switching away. Single date is
+  // enforced (To locks to From).
+  const flexSection = document.getElementById('lr-flex-section');
+  const isFlex = lrType === 'FLEX';
+  if(flexSection){
+    flexSection.style.display = isFlex ? 'block' : 'none';
+    if(isFlex){
+      const fromEl = document.getElementById('lr-from');
+      const toEl = document.getElementById('lr-to');
+      if(toEl && fromEl){
+        toEl.value = fromEl.value;
+        toEl.disabled = true;
+        toEl.style.opacity = '0.5';
+      }
+      // Cap flex hours at 4 (silent clamp, same pattern as half-day)
+      const flexHoursEl = document.getElementById('lr-flex-hours');
+      if(flexHoursEl){
+        const v = parseFloat(flexHoursEl.value);
+        if(!isNaN(v) && v > 4){ flexHoursEl.value = 4; }
+      }
+    } else {
+      // Restore to-date input if we're leaving flex (but only if half-day isn't also active)
+      if(!halfActive){
+        const toEl = document.getElementById('lr-to');
+        if(toEl){ toEl.disabled = false; toEl.style.opacity = '1'; }
+      }
+    }
+  }
+
   // Clamp half-day hours to staff's daily max (silently — no error).
   // Min 1.0, max = hrsPerDay for this staff.
   if(halfActive){
@@ -8832,6 +8889,7 @@ function updateLrPreview(){
     while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5)count++;cur.setDate(cur.getDate()+1);}
   }
   // Build the preview text. For half-day: show hours requested.
+  // For flex: show "X hours flexed (AM/PM)" — same shape as half-day.
   if(halfActive){
     const hoursEl = document.getElementById('lr-hd-hours');
     const whenEl = document.querySelector('input[name="lr-hd-when"]:checked');
@@ -8843,6 +8901,18 @@ function updateLrPreview(){
       el.textContent = 'Half-day requires a single weekday';
     } else {
       el.textContent = 'Enter at least 1 hour';
+    }
+  } else if(isFlex){
+    const flexHoursEl = document.getElementById('lr-flex-hours');
+    const flexWhenEl = document.querySelector('input[name="lr-flex-when"]:checked');
+    const fhrs = parseFloat(flexHoursEl?.value) || 0;
+    const fwhen = flexWhenEl?.value || 'AM';
+    if(fhrs >= 1 && count === 1){
+      el.textContent = fhrs + 'h flexed (' + fwhen + ') — describe makeup in notes';
+    } else if(count !== 1){
+      el.textContent = 'Flex requires a single weekday';
+    } else {
+      el.textContent = 'Enter 1-4 hours';
     }
   } else {
     el.textContent=count+' weekday'+(count!==1?'s':'')+' requested';
@@ -8857,6 +8927,69 @@ function updateLrPreview(){
   if(notice) notice.style.display=(daysUntil<14 && !isShortNoticeExempt)?'block':'none';
 }
 
+// ── LEAVE REQUEST ADMIN NOTIFICATION ──
+// On submit, email the two admin recipients (Sara + Suzanne) AND the
+// submitting therapist (as a confirmation copy). Fire-and-forget — failure
+// is logged but never blocks submission. The in-app queue under the Staff
+// tab remains the source of truth; emails are immediate-notification only.
+//
+// Recipients are hardcoded per your request. To change them, edit
+// LEAVE_ADMIN_EMAILS below. If you ever need a Settings UI for this, the
+// constant is the single place to wire to a config-stored array.
+const LEAVE_ADMIN_EMAILS = [
+  'sara@adaptability.co',
+  'suzanneward@adaptability.co'
+];
+async function sendLeaveRequestEmail(req){
+  const st = gs(req.stid);
+  if(!st) return;
+  // Build a readable summary of the request. Includes hours info for
+  // half-day and flex variants; full-day requests show date range and day
+  // count. Notes are always included so admins can see context (and the
+  // submitter sees what they wrote in their confirmation copy).
+  const meta = leaveTypeMeta(req.type);
+  const dateStr = req.from === req.to
+    ? pd(req.from).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})
+    : pd(req.from).toLocaleDateString('en-US',{month:'long',day:'numeric'}) + ' through ' + pd(req.to).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  let detail;
+  if(req.halfDay){
+    detail = req.halfHours + ' hours ' + req.halfWhen + ' (half day)';
+  } else if(req.type === 'FLEX' && req.flexHours){
+    detail = req.flexHours + ' hours ' + req.flexWhen + ' (flex — see notes for makeup plan)';
+  } else {
+    detail = req.days.length + ' day' + (req.days.length!==1?'s':'');
+  }
+  // Short-notice flag is helpful at a glance so admins know what's urgent.
+  const today = pd(todayBerlin());
+  const daysUntil = Math.ceil((pd(req.from) - today) / 864e5);
+  const shortNotice = daysUntil < 14 && req.type !== 'SICK';
+  const subject = '[Leave Request] ' + (st.name||'—') + ' — ' + meta.longLabel
+    + (shortNotice ? ' (SHORT NOTICE)' : '');
+  const body =
+    'A new leave request has been submitted:\n\n'
+    + 'Staff: ' + (st.name||'—') + ' (' + (st.role||'') + ')\n'
+    + 'Type: ' + meta.longLabel + '\n'
+    + 'Date: ' + dateStr + '\n'
+    + 'Detail: ' + detail + '\n'
+    + (shortNotice ? '\n⚠ Short notice — less than 2 weeks ahead.\n' : '')
+    + '\nNotes: ' + (req.notes ? '"' + req.notes + '"' : '(none provided)') + '\n\n'
+    + 'Review in the Staff tab of the Scheduler:\n'
+    + 'https://adaptability-therapie-scheduler.netlify.app/\n\n'
+    + '— adaptABILITY Scheduler';
+  // Build recipient list: hardcoded admins + the submitter if they have an
+  // email. Deduped in case the submitter IS an admin.
+  const recipients = LEAVE_ADMIN_EMAILS.slice();
+  if(st.email && !recipients.includes(st.email)) recipients.push(st.email);
+  // Send in parallel. Promise.all keeps it concurrent but lets us catch any
+  // individual failure without blocking the others (allSettled would be
+  // cleaner here but the sendEmail wrapper already swallows nothing — it
+  // throws — so we use catch per-recipient instead).
+  await Promise.all(recipients.map(addr =>
+    sendEmail(addr, subject, body).catch(e => {
+      console.warn('Leave-request email to ' + addr + ' failed:', e);
+    })
+  ));
+}
 async function submitLeaveRequest(){
   const type=document.getElementById('lr-type')?.value||'PTO';
   const from=document.getElementById('lr-from')?.value;
@@ -8894,6 +9027,32 @@ async function submitLeaveRequest(){
     }
   }
 
+  // FLEX validation: hours 1-4, single weekday, notes REQUIRED (notes carry
+  // the makeup plan as free text — admin reviews and can edit when approving).
+  const isFlex = type === 'FLEX';
+  let flexHours = 0;
+  let flexWhen = '';
+  if(isFlex){
+    flexHours = parseFloat(document.getElementById('lr-flex-hours')?.value) || 0;
+    flexWhen = document.querySelector('input[name="lr-flex-when"]:checked')?.value || 'AM';
+    if(flexHours < 1){
+      alert('Flex requests must be at least 1 hour.');
+      return;
+    }
+    if(flexHours > 4){
+      // Defensive — updateLrPreview already clamps to 4
+      flexHours = 4;
+    }
+    if(days.length !== 1){
+      alert('Flex requests must be a single weekday.');
+      return;
+    }
+    if(!notes){
+      alert('Please describe your makeup plan in the Notes field (e.g., "making up Wed 13:00-15:00"). Notes are required for flex requests.');
+      return;
+    }
+  }
+
   const req={
     id:'lr'+uid(), stid:mySchedStid,
     type, from, to, days, notes,
@@ -8910,19 +9069,38 @@ async function submitLeaveRequest(){
     req.halfWhen = halfWhen;
     req.hours = halfHours;
   }
+  // For flex: stamp flexHours and flexWhen. r.hours mirrors flexHours for
+  // reporting consistency, even though FLEX doesn't deduct from PTO.
+  if(isFlex){
+    req.flexHours = flexHours;
+    req.flexWhen = flexWhen;
+    req.hours = flexHours;
+  }
   if(!S.leaveRequests) S.leaveRequests=[];
   S.leaveRequests.push(req);
   save(); closeM();
-  showToast(isHalfDay
-    ? ('Half-day request submitted ('+halfHours+'h '+halfWhen+') — the Scheduler will review it ✓')
-    : 'Leave request submitted — the Scheduler will review it ✓','#E65100');
+  showToast(
+    isHalfDay ? ('Half-day request submitted ('+halfHours+'h '+halfWhen+') — the Scheduler will review it ✓')
+    : isFlex ? ('Flex request submitted ('+flexHours+'h '+flexWhen+') — the Scheduler will review it ✓')
+    : 'Leave request submitted — the Scheduler will review it ✓',
+    '#E65100'
+  );
 
-  // Leave requests stay in-app ONLY. The Netlify Slack proxy ignores the
-  // channelId argument and routes everything to the webhook channel
-  // (#schedule), so any attempt to "DM" admins exposes personal PTO/sick
-  // details to every staff member in #schedule. The admin queue in the Staff
-  // tab is the canonical place for review. Email notification to the
-  // submitting therapist on approve/decline is handled separately via Resend.
+  // Fire admin + therapist notification emails. Fire-and-forget — the
+  // submission has already saved; this is a side-effect for awareness.
+  // Wrapped in try/catch defensively so any unexpected error doesn't break
+  // the re-render below.
+  try {
+    sendLeaveRequestEmail(req);
+  } catch(e) {
+    console.warn('Leave-request email dispatch failed:', e);
+  }
+
+  // Leave requests stay in-app ONLY for Slack. The Netlify Slack proxy
+  // ignores the channelId argument and routes everything to the webhook
+  // channel (#schedule), so any attempt to "DM" admins exposes personal
+  // PTO/sick details to every staff member in #schedule. Email is the
+  // notification channel (handled above via sendLeaveRequestEmail).
   rLeaveRequests();
 }
 
@@ -9152,9 +9330,12 @@ async function approveLeaveRequest(id){
   }
   r.status='approved'; r.decidedAt=new Date().toISOString();
   // Stamp r.hours so future displays don't need to recompute. Half-day uses
-  // the partial value; full-day computes hrsPerDay × workdays.
+  // the partial value; flex uses the flexed hours (no PTO deduction but
+  // tracked for reporting); full-day computes hrsPerDay × workdays.
   if(r.halfDay){
     r.hours = r.halfHours || 0;
+  } else if(r.type === 'FLEX' && r.flexHours){
+    r.hours = r.flexHours;
   } else {
     r.hours = (r.days||[]).filter(d => isStaffWorkday(st, d)).length * hpd;
   }
@@ -9628,6 +9809,6 @@ init();
 })();
 </script>
 <!-- Version indicator — helps identify which build a user is running for troubleshooting. Click to manually check for a newer version (otherwise auto-checks every 60s). -->
-<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T21:00Z-halfday</div>
+<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T22:30Z-lvemail</div>
 </body>
 </html>
