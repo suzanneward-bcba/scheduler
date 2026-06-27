@@ -3212,14 +3212,14 @@ function openFillDay(date){
   const wds=[0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
   const dowIdx=wds.indexOf(date);
 
-  // Find staff who are available today but have no real sessions
+  // Find staff who are available today — include those with partial schedules
   const unscheduled=S.staff.filter(st=>{
     if(st.role==='Billing') return false;
     const av=st.av[dowIdx>=0?dowIdx:0];
     const pto=!!ptoOnDate(st,date);
     if(!av||pto) return false;
-    const realSess=S.sessions.filter(s=>s.stid===st.id&&s.date===date&&!s._autoAdmin&&!s._virtual&&s.status!=='CX');
-    return realSess.length===0;
+    // Include all available staff (even those with some sessions — they may have open blocks)
+    return true;
   });
 
   if(!unscheduled.length){
@@ -3298,7 +3298,7 @@ function doFillDay(date){
     const av=st.av[dowIdx>=0?dowIdx:0];
     const pto=!!ptoOnDate(st,date);
     if(!av||pto) return false;
-    return S.sessions.filter(s=>s.stid===st.id&&s.date===date&&!s._autoAdmin&&!s._virtual&&s.status!=='CX').length===0;
+    return true;
   });
 
   pushUndo('Fill day');
@@ -3652,7 +3652,7 @@ function openClientDetail(id){
       <div style="background:var(--bg);border-radius:8px;padding:12px;margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap">
         <div><div style="font-size:10px;font-weight:700;color:var(--mt)">AGE</div><div style="font-size:13px;font-weight:700">${age!==null?age+' yrs':'—'}</div></div>
         <div><div style="font-size:10px;font-weight:700;color:var(--mt)">INSURANCE</div><div><span class="bdg ${iBdg(c.ins)}">${iLabel(c.ins)}</span></div></div>
-        <div><div style="font-size:10px;font-weight:700;color:var(--mt)">DOSAGE</div><div style="font-size:13px;font-weight:700">${c.sch}/${c.rec}h/wk</div></div>
+        ${(c.therapyType||(c.hasOT?'BOTH':'ABA'))!=='OT'?`<div><div style="font-size:10px;font-weight:700;color:var(--mt)">DOSAGE</div><div style="font-size:13px;font-weight:700">${c.sch}/${c.rec}h/wk</div></div>`:''}
         ${c.authEnd?`<div><div style="font-size:10px;font-weight:700;color:var(--mt)">AUTH ENDS</div><div style="font-size:12px;font-weight:600">${pd(c.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div></div>`:''}
       </div>
       <div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--mt);margin-bottom:6px">THERAPY TEAM</div>
@@ -3710,6 +3710,11 @@ function openClientDetail(id){
       <div class="tpl-slot-hdr"><span>Day</span><span>Start – End</span><span>Therapist</span><span>Type</span><span></span></div>
       <div id="tpl-slots"></div>
       <button class="btn bsm" style="width:100%;border-style:dashed;margin-top:2px" onclick="addTplSlot()">+ Add Session Slot</button>
+      <div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px;flex-wrap:wrap">
+        <label style="font-size:11px;font-weight:700;color:var(--mt);white-space:nowrap">Start from:</label>
+        <input type="date" id="gen-start-date" value="${todayBerlin()}" style="padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif">
+        <span style="font-size:10px;color:var(--mt)">Leave as today for a new schedule · set a future date for seasonal transitions</span>
+      </div>
       <button class="gen-btn" onclick="genSchedule('${c.id}')">${tplBtnLbl}</button>
       <div class="gen-preview" id="gen-preview"></div>
     </div>
@@ -3728,10 +3733,6 @@ function openClientDetail(id){
       <div class="pipe-steps" id="pipe-steps">${pipeHtml}</div>
       <div class="auth-pipeline-card">
         <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Authorization Dates</div>
-        <div class="fr2" style="margin-bottom:8px">
-          <div class="fg" style="margin:0"><label>Submitted</label><input type="date" id="cd-pipe-sub" class="fi" value="${c.authSubmittedDate||''}"></div>
-          <div class="fg" style="margin:0"><label>Approved</label><input type="date" id="cd-pipe-app" class="fi" value="${c.authApprovedDate||''}"></div>
-        </div>
         <div class="fg" style="margin-bottom:8px"><label>Next Auth Start</label><input type="date" id="cd-pipe-next" class="fi" value="${c.nextAuthStart||''}"></div>
         <div class="sep"></div>
         <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;margin-top:8px">Reassessment</div>
@@ -3797,6 +3798,11 @@ function openClientDetail(id){
       <div class="tpl-slot-hdr"><span>Day</span><span>Start – End</span><span>Therapist</span><span>Type</span><span></span></div>
       <div id="tpl-slots"></div>
       <button class="btn bsm" style="width:100%;border-style:dashed;margin-top:2px" onclick="addTplSlot()">+ Add Session Slot</button>
+      <div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px;flex-wrap:wrap">
+        <label style="font-size:11px;font-weight:700;color:var(--mt);white-space:nowrap">Start from:</label>
+        <input type="date" id="gen-start-date" value="${todayBerlin()}" style="padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif">
+        <span style="font-size:10px;color:var(--mt)">Leave as today for a new schedule · set a future date for seasonal transitions</span>
+      </div>
       <button class="gen-btn" onclick="genSchedule('${c.id}')">${tplBtnLbl}</button>
       <div class="gen-preview" id="gen-preview"></div>
     </div>
@@ -3841,17 +3847,19 @@ function genSchedule(cid){
   if(!_tplSlots.length){alert('Add at least one session slot to the template first.');return;}
   const authEnd=pd(c.authEnd);
   const today=pd(todayBerlin());
-  // Remove existing future recurring sessions for this client
-  S.sessions=S.sessions.filter(s=>!(s.cid===cid&&s.recurGroup&&pd(s.date)>=today));
-  // Generate from today through auth end
+  // Use Start From date if set, otherwise default to today
+  const startEl=document.getElementById('gen-start-date');
+  const startFrom=startEl&&startEl.value?pd(startEl.value):today;
+  // Remove existing future recurring sessions from the start date forward
+  S.sessions=S.sessions.filter(s=>!(s.cid===cid&&s.recurGroup&&pd(s.date)>=startFrom));
+  // Generate from startFrom through auth end
   const rg=uid();
   let count=0;
-  // Start from the current week's Monday
-  let weekMon=wkOf(today);
+  let weekMon=wkOf(startFrom);
   while(weekMon<=authEnd){
     _tplSlots.forEach(sl=>{
       const d=new Date(weekMon);d.setDate(d.getDate()+(sl.dow-1));
-      if(d>=today&&d<=authEnd){
+      if(d>=startFrom&&d<=authEnd){
         S.sessions.push({id:'s'+uid(),cid,stid:sl.stid,date:fd(d),s:sl.s,e:sl.e,type:sl.type,status:'OK',cx:'',makeup:false,recurGroup:rg,notes:''});
         count++;
       }
@@ -3864,7 +3872,7 @@ function genSchedule(cid){
   const prev=document.getElementById('gen-preview');
   if(prev){
     prev.style.display='block';
-    const wks=Math.round((authEnd-today)/864e5/7);
+    const wks=Math.round((authEnd-startFrom)/864e5/7);
     prev.innerHTML=`✅ Generated <strong>${count} sessions</strong> across ~${wks} weeks (${_tplSlots.length} slot${_tplSlots.length!==1?'s':''}/week) through <strong>${authEnd.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</strong>`;
   }
   rSched();rClients();
@@ -3896,8 +3904,6 @@ function updClient(id){
   c.primaryContactEmail=document.getElementById('cd-pcemail')?.value.trim()||'';
   c.medAlerts=MED_ALERTS.map(m=>m.id).filter(id=>document.getElementById('med-'+id)?.checked);
   c.authPipeline=window._pipeStatus||c.authPipeline||'NONE';
-  c.authSubmittedDate=document.getElementById('cd-pipe-sub')?.value||'';
-  c.authApprovedDate=document.getElementById('cd-pipe-app')?.value||'';
   c.nextAuthStart=document.getElementById('cd-pipe-next')?.value||'';
   c.authNotes=document.getElementById('cd-pipe-notes')?.value||'';
   c.lastReassess=document.getElementById('cd-reassess')?.value||'';
