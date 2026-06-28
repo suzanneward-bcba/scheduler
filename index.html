@@ -2210,10 +2210,8 @@ function isMobile(){return window.innerWidth<=640;}
 
 function renderAll(){
   resolveViewerStid(); // identify viewer from login email now that S.staff is loaded
-  resolveViewerStid();
   applyRoleAccess(); // lock therapists, show/hide Settings/lock button
   if(document.getElementById('caseload-view')?.style.display!=='none') renderCaseload();
-  updateFab(atab);
   document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
   S.staff.forEach(migratePto);
   // Migrate legacy days-based PTO entries to include hours field. Idempotent
@@ -2224,7 +2222,7 @@ function renderAll(){
   rSched();rClients();rStaff();rDaily();rSettings();initMyS();rAuthAlerts();rSchedRequests();rLeaveRequests();
   if(!window._tickerStarted){window._tickerStarted=true;startNowTicker();}
   updateUndoBtn();
-  updateFab(atab);
+  updateFab(atab); // single call — duplicate removed
   // ── Permission tier migration: set adminAccess / clientManager flags on the right staff ──
   try {
     let pMigrated = 0;
@@ -2536,8 +2534,8 @@ function rWeekAgenda(){
   const DAY=['Mon','Tue','Wed','Thu','Fri'];
   const today=todayBerlin();
   const wEnd=new Date(wkStart);wEnd.setDate(wEnd.getDate()+4);
-  setVlbl(fsh(wkStart)+' – '+fsh(wEnd)+', '+wEnd.getFullYear(), wds.some(ds=>ds===todayBerlin()));
   const wds=DAY.map((_,i)=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
+  setVlbl(fsh(wkStart)+' – '+fsh(wEnd)+', '+wEnd.getFullYear(), wds.some(ds=>ds===todayBerlin()));
   const ws=S.sessions.filter(s=>wds.includes(s.date)&&_schedShowSess(s));
   // Reuse stats bar
   const cxn=ws.filter(s=>s.status==='CX').length;
@@ -3116,7 +3114,18 @@ function saveExternalLinks(){
   setTimeout(()=>{ if(status) status.innerHTML=''; }, 3000);
 }
 function addHol(){const dt=document.getElementById('nhd').value,nm=document.getElementById('nhn').value.trim();if(!dt||!nm)return alert('Enter date and name.');S.holidays.push({id:uid(),date:dt,name:nm});document.getElementById('nhd').value='';document.getElementById('nhn').value='';applyHolidayAutoCx();save();rSettings();rSched();}
-function rmHol(i){S.holidays.splice(i,1);save();rSettings();rSched();}
+function rmHol(i){
+  const removed=S.holidays.splice(i,1)[0];
+  // Restore sessions that were auto-cancelled specifically because of this holiday
+  if(removed){
+    S.sessions.forEach(s=>{
+      if(s.date===removed.date&&s._holidayAutoCx&&s.cx==='HOL'){
+        delete s.status;delete s.cx;delete s._holidayAutoCx;delete s._leaveType;
+      }
+    });
+  }
+  save();rSettings();rSched();
+}
 
 // Holiday auto-cancel: applies HOL code silently to every non-cancelled session on a holiday.
 // Called when a holiday is added, and on app boot (so prior-deploy holidays catch up).
@@ -3172,31 +3181,26 @@ function confReset(){
     </div>
     <div class="mact">
       <button class="btn" onclick="closeM()">Cancel</button>
-      <button class="btn bd" style="border-color:var(--rd);color:var(--rd);font-weight:700" onclick="doReset()">Delete Everything</button>
+      <button class="btn bd" style="border-color:var(--rd);color:var(--rd);font-weight:700" onclick="doResetConfirmCheck()">Delete Everything</button>
     </div>`);
 }
 function doConfirmedReset(){
   S={clients:[],staff:[],sessions:[],logs:{},holidays:[],waitlist:[],schedNotes:[],schedRequests:[],cfg:{cxCodes:defCX()}};
   save();closeM();renderAll();
 }
-// Override doReset only for the reset confirmation flow
-const _origDoReset=doReset;
-function doReset(){
-  // Check if we're in the reset confirmation modal
+// Validates the typed "RESET" confirmation before wiping all data.
+// Called only by the Delete Everything button in confReset().
+function doResetConfirmCheck(){
   const inp=document.getElementById('reset-confirm');
-  if(inp){
-    if(inp.value.trim()!=='RESET'){
-      inp.style.borderColor='var(--rd)';
-      inp.style.background='#FFEBEE';
-      inp.placeholder='Must type RESET exactly';
-      inp.focus();
-      return;
-    }
-    doConfirmedReset();
+  if(!inp){return;}
+  if(inp.value.trim()!=='RESET'){
+    inp.style.borderColor='var(--rd)';
+    inp.style.background='#FFEBEE';
+    inp.placeholder='Must type RESET exactly';
+    inp.focus();
     return;
   }
-  // Otherwise it's the password reset email flow
-  _origDoReset();
+  doConfirmedReset();
 }
 
 // ── MODAL ──
