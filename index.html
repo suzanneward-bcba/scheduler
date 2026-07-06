@@ -2210,8 +2210,10 @@ function isMobile(){return window.innerWidth<=640;}
 
 function renderAll(){
   resolveViewerStid(); // identify viewer from login email now that S.staff is loaded
+  resolveViewerStid();
   applyRoleAccess(); // lock therapists, show/hide Settings/lock button
   if(document.getElementById('caseload-view')?.style.display!=='none') renderCaseload();
+  updateFab(atab);
   document.getElementById('hdate').textContent=new Date().toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
   S.staff.forEach(migratePto);
   // Migrate legacy days-based PTO entries to include hours field. Idempotent
@@ -2222,7 +2224,7 @@ function renderAll(){
   rSched();rClients();rStaff();rDaily();rSettings();initMyS();rAuthAlerts();rSchedRequests();rLeaveRequests();
   if(!window._tickerStarted){window._tickerStarted=true;startNowTicker();}
   updateUndoBtn();
-  updateFab(atab); // single call — duplicate removed
+  updateFab(atab);
   // ── Permission tier migration: set adminAccess / clientManager flags on the right staff ──
   try {
     let pMigrated = 0;
@@ -2534,8 +2536,8 @@ function rWeekAgenda(){
   const DAY=['Mon','Tue','Wed','Thu','Fri'];
   const today=todayBerlin();
   const wEnd=new Date(wkStart);wEnd.setDate(wEnd.getDate()+4);
-  const wds=DAY.map((_,i)=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
   setVlbl(fsh(wkStart)+' – '+fsh(wEnd)+', '+wEnd.getFullYear(), wds.some(ds=>ds===todayBerlin()));
+  const wds=DAY.map((_,i)=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
   const ws=S.sessions.filter(s=>wds.includes(s.date)&&_schedShowSess(s));
   // Reuse stats bar
   const cxn=ws.filter(s=>s.status==='CX').length;
@@ -3114,18 +3116,7 @@ function saveExternalLinks(){
   setTimeout(()=>{ if(status) status.innerHTML=''; }, 3000);
 }
 function addHol(){const dt=document.getElementById('nhd').value,nm=document.getElementById('nhn').value.trim();if(!dt||!nm)return alert('Enter date and name.');S.holidays.push({id:uid(),date:dt,name:nm});document.getElementById('nhd').value='';document.getElementById('nhn').value='';applyHolidayAutoCx();save();rSettings();rSched();}
-function rmHol(i){
-  const removed=S.holidays.splice(i,1)[0];
-  // Restore sessions that were auto-cancelled specifically because of this holiday
-  if(removed){
-    S.sessions.forEach(s=>{
-      if(s.date===removed.date&&s._holidayAutoCx&&s.cx==='HOL'){
-        delete s.status;delete s.cx;delete s._holidayAutoCx;delete s._leaveType;
-      }
-    });
-  }
-  save();rSettings();rSched();
-}
+function rmHol(i){S.holidays.splice(i,1);save();rSettings();rSched();}
 
 // Holiday auto-cancel: applies HOL code silently to every non-cancelled session on a holiday.
 // Called when a holiday is added, and on app boot (so prior-deploy holidays catch up).
@@ -3181,26 +3172,31 @@ function confReset(){
     </div>
     <div class="mact">
       <button class="btn" onclick="closeM()">Cancel</button>
-      <button class="btn bd" style="border-color:var(--rd);color:var(--rd);font-weight:700" onclick="doResetConfirmCheck()">Delete Everything</button>
+      <button class="btn bd" style="border-color:var(--rd);color:var(--rd);font-weight:700" onclick="doReset()">Delete Everything</button>
     </div>`);
 }
 function doConfirmedReset(){
   S={clients:[],staff:[],sessions:[],logs:{},holidays:[],waitlist:[],schedNotes:[],schedRequests:[],cfg:{cxCodes:defCX()}};
   save();closeM();renderAll();
 }
-// Validates the typed "RESET" confirmation before wiping all data.
-// Called only by the Delete Everything button in confReset().
-function doResetConfirmCheck(){
+// Override doReset only for the reset confirmation flow
+const _origDoReset=doReset;
+function doReset(){
+  // Check if we're in the reset confirmation modal
   const inp=document.getElementById('reset-confirm');
-  if(!inp){return;}
-  if(inp.value.trim()!=='RESET'){
-    inp.style.borderColor='var(--rd)';
-    inp.style.background='#FFEBEE';
-    inp.placeholder='Must type RESET exactly';
-    inp.focus();
+  if(inp){
+    if(inp.value.trim()!=='RESET'){
+      inp.style.borderColor='var(--rd)';
+      inp.style.background='#FFEBEE';
+      inp.placeholder='Must type RESET exactly';
+      inp.focus();
+      return;
+    }
+    doConfirmedReset();
     return;
   }
-  doConfirmedReset();
+  // Otherwise it's the password reset email flow
+  _origDoReset();
 }
 
 // ── MODAL ──
@@ -3510,6 +3506,29 @@ function openSess(id){
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-mu" ${s.makeup?'checked':''}> Make-up</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-grp" ${s.isGroup?'checked':''}> Group session</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-note" ${s.noteWritten?'checked':''}> Session note written</label>
+      ${(()=>{
+        const assignedRole=(gs(s.stid)?.role||'').toLowerCase();
+        const isSupervisableSess = assignedRole==='rbt' || assignedRole==='abat';
+        const viewerIsBCBA = !isViewOnly || (()=>{ const vst=gs(viewerStid); return (vst?.role||'').toLowerCase()==='bcba'; })();
+        if(!isSupervisableSess) return '';
+        if(viewerIsBCBA){
+          // BCBA can check supervision and enter minutes
+          return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
+            <input type="checkbox" id="sd-sup" ${s.supervised?'checked':''} onchange="document.getElementById('sd-sup-mins-wrap').style.display=this.checked?'flex':'none'">
+            Supervision provided
+          </label>
+          <div id="sd-sup-mins-wrap" style="display:${s.supervised?'flex':'none'};align-items:center;gap:6px;font-size:12px">
+            <input type="number" id="sd-sup-mins" value="${s.supMinutes||''}" min="5" max="480" step="5" placeholder="min" style="width:64px;padding:3px 7px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:12px">
+            <span style="color:var(--mt)">minutes of supervision</span>
+          </div>`;
+        } else if(s.supervised){
+          // Supervisee sees read-only badge — cannot edit
+          return `<div style="display:flex;align-items:center;gap:6px;background:#E3F2FD;border:1px solid #90CAF9;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:#1565C0">
+            🔵 Supervised session${s.supMinutes?' ('+s.supMinutes+' min)':''}
+          </div>`;
+        }
+        return '';
+      })()}
     </div>
     <div class="fg"><label>Cancellation Code</label><select id="sd-cx">${co}</select>${s.cxBy?`<div style="font-size:10px;color:var(--mt);margin-top:4px;font-style:italic" title="Audit trail — recorded automatically when CX was applied">Marked CX by <strong>${s.cxBy}</strong> at ${fmtCxAudit(s).replace(s.cxBy+' at ','')}</div>`:''}</div>
     <div class="fg"><label>Notes</label><textarea id="sd-nt" rows="2">${s.notes||''}</textarea></div>
@@ -3543,6 +3562,8 @@ function updSess(id){
   pushUndo('Edit session');
   const newMakeup=document.getElementById('sd-mu').checked;
   const newGroupChk=document.getElementById('sd-grp')?.checked||false;
+  const newSupervised=document.getElementById('sd-sup')?.checked||false;
+  const newSupMins=newSupervised?(parseInt(document.getElementById('sd-sup-mins')?.value)||0):0;
   const cx=document.getElementById('sd-cx').value;
   const newNotes=document.getElementById('sd-nt').value;
 
@@ -3550,6 +3571,9 @@ function updSess(id){
     s.stid=newStid;s.cid=newCid;s.type=newType;s.date=newDate;s.s=newS;s.e=newE;
     s.makeup=newMakeup;s.noteWritten=document.getElementById('sd-note')?.checked||false;// preserve sessionLog
     s.notes=newNotes;
+    // Supervision tracking
+    if(newSupervised){ s.supervised=true; s.supMinutes=newSupMins||null; s.supervisorStid=viewerStid||s.stid; }
+    else { delete s.supervised; delete s.supMinutes; delete s.supervisorStid; }
     // Group flag: checkbox wins. If user explicitly checked "Group session" in
     // the modal, set true. If they unchecked it, set false (allows un-marking).
     // Conflict-modal "✓ Group Session" can also force true even if checkbox
