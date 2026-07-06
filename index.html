@@ -2507,6 +2507,7 @@ function rWeekFull(){
       const cxch=s.status==='CX'&&s.cx?`<div class="cxch">${s.cx}</div>`:'';
       const tt_=cl?(cl.therapyType||(cl.hasOT?'BOTH':'ABA')):'ABA';const otfl=(tt_==='BOTH'&&s.type==='ABA')?'<div class="otch">+OT</div>':'';
       const much=s.makeup?'<div class="much">MU</div>':'';
+      const supch=s.supervised?'<div style="position:absolute;top:2px;left:'+(s.makeup?'20':'2')+'px;font-size:7px;font-weight:800;background:#EDE7F6;color:#4A148C;padding:1px 3px;border-radius:2px">SUP</div>':'';
       const tbdg=`<span class="bdg ${sessChipBdg(s)}">${sessChipLabel(s)}</span>`;
       const isCX=s.status==='CX';
       const clName=cl?(isCX?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):`<em style="color:var(--mt)">${gs(s.stid)?.initials||''} – ${sessChipLabel(s)}</em>`;
@@ -2521,7 +2522,7 @@ function rWeekFull(){
         ? `<div onclick="toggleGroup('${s.id}',event)" style="position:absolute;top:2px;left:2px;font-size:7px;background:#E8EAF6;color:#283593;padding:1px 4px;border-radius:2px;font-weight:800;cursor:pointer" title="Group session — click to remove">GRP</div>`
         : '';
       const cptChip=s.cptCode?(()=>{const noteOk=s.serviceNote&&s.serviceNote.trim();return `<div style="position:absolute;bottom:2px;right:2px;font-size:7px;background:#F3E5F5;color:#4A235A;padding:1px 4px;border-radius:2px;font-weight:800" title="Indirect: ${s.cptCode}${noteOk?'':' — note missing'}">${s.cptCode}${noteOk?'':' ⚠'}</div>`;})():'';
-      return`<div class="sbl ${tbCls(s)} ${insCls}${cxcl}${isUnassigned?' unassigned':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
+      return`<div class="sbl ${tbCls(s)} ${insCls}${cxcl}${isUnassigned?' unassigned':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${supch}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
     }).join('');
     if(!sh)sh=hol?`<div style="text-align:center;padding:14px"><div style="font-size:20px">🎌</div><div style="font-size:10px;margin-top:3px">${hol.name}</div></div>`:'<div style="text-align:center;padding:12px;font-size:10px;color:var(--mt)">No sessions</div>';
     html+=`<div class="dc"><div class="${hcls}"><div><div class="ddn">${dn}</div><div class="ddv">${d.getDate()}</div></div><div style="text-align:right">${hol?`<span class="hch">${hol.name}</span>`:''}${isT?'<span style="font-size:9px;font-weight:700;opacity:.75;display:block;margin-top:2px">TODAY</span>':''}</div></div>${bdayBar}<div class="dbody">${sh}<button class="asb" onclick="openAddSess('${ds}')">+ Session</button></div>${busbar}</div>`;
@@ -2579,13 +2580,14 @@ function rWeekAgenda(){
       const tbdg='<span class="bdg '+sessChipBdg(s)+'">'+sessChipLabel(s)+'</span>';
       const insBdg=cl?'<span class="bdg '+iBdg(cl.ins)+'">'+iLabel(cl.ins)+'</span>':'';
       const muChip=s.makeup?'<span class="bdg" style="background:#FFF3E0;color:#E65100">MU</span>':'';
+      const supChip=s.supervised?'<span class="bdg b-sup">SUP</span>':'';
       const medIcons=cl&&cl.medAlerts&&cl.medAlerts.length?medChips(cl,true):'';
       sessHtml+=`<div class="ag-sess${cxcl}" style="border-left-color:${insClr}" onclick="openSess('${s.id}')">
         <div class="ag-sess-time">${ftm(s.s)}<br><span style="font-size:9px;color:var(--mt)">– ${ftm(s.e)}</span></div>
         <div class="ag-sess-info">
           <div class="ag-sess-name">${clName}</div>
           ${s.status==='CX'&&s.cx?`<div style="margin-top:2px"><span class="cx-badge">&#x2715; ${s.cx}</span></div>`:''}
-          <div class="ag-sess-sub">${tbdg}${insBdg}${muChip}${medIcons}</div>
+          <div class="ag-sess-sub">${tbdg}${insBdg}${muChip}${supChip}${medIcons}</div>
         </div>
         <div class="ag-thr"><span class="tdot" style="background:${bg};width:8px;height:8px;border-radius:50%;display:inline-block"></span><span style="font-size:10px;color:var(--mt);font-weight:600">${stName}</span></div>
       </div>`;
@@ -2698,12 +2700,13 @@ function rDay(){
         const clName=cl?cDisplayName(cl):`${gs(s.stid)?.initials||'—'} – ${sessChipLabel(s)}`;
         const stName=gs(s.stid)?.name||'—';
         const blkIsUnassigned=s.stid==='UNASSIGNED'&&!isViewOnly;
-        return`<div class="blk-sess ${s.status==='CX'?'cx':''}" data-sid="${s.id}" data-unassigned="${blkIsUnassigned}" onclick="openSess(this.dataset.sid)" style="${s.stid==='UNASSIGNED'?'border:1.5px dashed #9E9E9E;background:repeating-linear-gradient(45deg,#FAFAFA,#FAFAFA 5px,#fff 5px,#fff 10px);':''}">
+                const supBdg=s.supervised?'<span class="bdg b-sup">SUP</span>':'';
+return`<div class="blk-sess ${s.status==='CX'?'cx':''}" data-sid="${s.id}" data-unassigned="${blkIsUnassigned}" onclick="openSess(this.dataset.sid)" style="${s.stid==='UNASSIGNED'?'border:1.5px dashed #9E9E9E;background:repeating-linear-gradient(45deg,#FAFAFA,#FAFAFA 5px,#fff 5px,#fff 10px);':''}">
           <div class="blk-ttime"><div class="blk-ts">${ftm(s.s)}</div><div class="blk-te">${ftm(s.e)}</div></div>
           <div class="blk-bar" style="background:${insBg}"></div>
           <div class="blk-body-inner">
             <div class="blk-cl">${clName}${s.stid==='UNASSIGNED'?'<span class="unassigned-badge" style="margin-left:6px">UNASSIGNED</span>':''}</div>
-            <div class="blk-meta">${tbdg}${insLbl}${muBdg}${grpBdg}${otFlag}${cxBdg}</div>
+            <div class="blk-meta">${tbdg}${insLbl}${muBdg}${supBdg}${grpBdg}${otFlag}${cxBdg}</div>
             <div class="blk-thr"><span class="tchip" style="background:${bg};color:${tx};font-size:10px">${stName}</span>${s.notes?`<span style="font-size:10px;color:var(--mt);margin-left:6px;font-style:italic">${s.notes}</span>`:''}</div>
           </div>
         </div>`;
@@ -4635,6 +4638,7 @@ function rMyS(){
       const tbdg=`<span class="bdg ${sessChipBdg(item)}">${sessChipLabel(item)}</span>`;
       const insBdg=cl?`<span class="bdg ${iBdg(cl.ins)}">${iLabel(cl.ins)}</span>`:'';
       const muBdg=item.makeup?'<span class="bdg b-mu">Make-up</span>':'';
+      const supBdg2=item.supervised?'<span class="bdg b-sup">SUP</span>':'';
       const cxBdg=item.status==='CX'?`<div class="mys-sess-cx">❌ ${item.cx||'Cancelled'}</div>`:'';
       // Duration
       const[sh,sm]=item.s.split(':').map(Number);
@@ -4646,7 +4650,7 @@ function rMyS(){
         <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${insBg};border-radius:4px 0 0 4px"></div>
         <div class="mys-sess-time">${ftm(item.s)} – ${ftm(item.e)}<span class="mys-sess-dur">${durLbl}</span></div>
         <div class="mys-sess-client">${clName}</div>
-        <div class="mys-sess-meta">${tbdg}${insBdg}${muBdg}</div>
+        <div class="mys-sess-meta">${tbdg}${insBdg}${muBdg}${supBdg2}</div>
         ${cl?.medAlerts?.length?`<div class="med-alerts" style="margin-top:5px">${medChips(cl)}</div>`:''}
         ${item.status==='CX'&&item.cx?'<div style="margin-top:4px"><span class="cx-badge">✕ '+item.cx+'</span></div>':''}
         ${cxBdg}
@@ -6048,6 +6052,7 @@ function rTimeline(){
         ? `<span onclick="toggleGroup('${s.id}',event)" style="font-size:7px;background:#E8EAF6;color:#283593;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px;cursor:pointer" title="Group session — click to remove">GRP</span>`
         : '';
       const muChip=s.makeup?'<span style="font-size:7px;background:#FFF9C4;color:#F57F17;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">MU</span>':'';
+      const supChip2=s.supervised?'<span style="font-size:7px;background:#EDE7F6;color:#4A148C;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">SUP</span>':'';
       return`<div class="tl-sess ins-${cl?.ins||''}" 
         style="left:${left}%;right:${right}%;border-left-color:${insBg};background:${insBg}11"
         draggable="${isViewOnly?'false':'true'}"
@@ -6056,7 +6061,7 @@ function rTimeline(){
         ondragend="if(!isViewOnly)tlDragEnd(event)"
         onclick="openSess('${s.id}')"
         title="${cl?cDisplayName(cl):sessFullLabel(s)}: ${ftm(s.s)}–${ftm(s.e)}">
-        <div class="tl-sess-cl">${grpChip}${muChip}${cl?cDisplayName(cl):sessFullLabel(s)}</div>
+        <div class="tl-sess-cl">${grpChip}${muChip}${supChip2}${cl?cDisplayName(cl):sessFullLabel(s)}</div>
         <div class="tl-sess-meta">${ftm(s.s)}–${ftm(s.e)} · <span class="bdg ${sessChipBdg(s)}" style="font-size:7px">${sessChipLabel(s)}</span></div>
       </div>`;
     }).join('');
@@ -7453,6 +7458,7 @@ function rClientSched(){
         ? `<span onclick="toggleGroup('${s.id}',event)" style="font-size:7px;background:#E8EAF6;color:#283593;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px;cursor:pointer" title="Group session — click to remove">GRP</span>`
         : '';
       const muChip=s.makeup?'<span style="font-size:7px;background:#FFF9C4;color:#F57F17;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">MU</span>':'';
+      const supChip2=s.supervised?'<span style="font-size:7px;background:#EDE7F6;color:#4A148C;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">SUP</span>':'';
       const noteChip=s.cid&&!s.noteWritten?'<span style="font-size:7px;background:#FFEBEE;color:#C62828;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">!N</span>':'';
       const logChip=s.sessionLog?'<span style="font-size:7px;background:#E8F5E9;color:#1B5E20;padding:1px 3px;border-radius:2px;font-weight:800">LOG</span>':'';
 
@@ -7473,7 +7479,7 @@ function rClientSched(){
         ondragend="if(!isViewOnly)csDragEnd(event)"
         onclick="openSess('${s.id}')"
         title="${st?.name||'—'}: ${ftm(s.s)}–${ftm(s.e)} · ${sTypeLabel(s.type)}">
-        <div class="cs-thr">${grpChip}${muChip}${noteChip}${logChip}<span class="tchip" style="background:${bg};color:${tx};font-size:9px;padding:1px 6px;border-radius:3px">${st?.initials||'?'}</span> ${st?.name||'—'}</div>
+        <div class="cs-thr">${grpChip}${muChip}${supChip2}${noteChip}${logChip}<span class="tchip" style="background:${bg};color:${tx};font-size:9px;padding:1px 6px;border-radius:3px">${st?.initials||'?'}</span> ${st?.name||'—'}</div>
         <div class="cs-time">${ftm(s.s)}–${ftm(s.e)} · <span class="bdg ${tbdg}" style="font-size:7px">${sessChipLabel(s)}</span></div>
       </div>`;
     }).join('');
