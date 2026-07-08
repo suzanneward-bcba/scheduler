@@ -225,10 +225,10 @@ input[type="color"]{border:none;padding:0;cursor:pointer;border-radius:4px;heigh
 /* SCHEDULE TEMPLATE */
 .tpl-wrap{background:#F8F9FF;border:1.5px solid #C5CAE9;border-radius:9px;padding:14px;margin-top:10px}
 .tpl-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#3949AB;margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.tpl-slot{display:grid;grid-template-columns:80px 1fr 1fr 1fr 28px;gap:6px;align-items:center;margin-bottom:7px}
+.tpl-slot{display:grid;grid-template-columns:80px 1fr 1fr 1fr 90px 28px;gap:6px;align-items:center;margin-bottom:7px}
 .tpl-slot select,.tpl-slot input{padding:5px 7px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--nv);background:#fff;width:100%}
 .tpl-slot select:focus,.tpl-slot input:focus{outline:none;border-color:#3949AB}
-.tpl-slot-hdr{display:grid;grid-template-columns:80px 1fr 1fr 1fr 28px;gap:6px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt);margin-bottom:5px}
+.tpl-slot-hdr{display:grid;grid-template-columns:80px 1fr 1fr 1fr 90px 28px;gap:6px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt);margin-bottom:5px}
 .tpl-rm{background:none;border:none;cursor:pointer;color:var(--rd);font-size:16px;line-height:1;padding:0;font-weight:700}
 .tpl-rm:hover{color:#8B0000}
 .gen-btn{background:linear-gradient(135deg,#3949AB,#5C6BC0);color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;width:100%;margin-top:10px;transition:opacity .15s;display:flex;align-items:center;justify-content:center;gap:6px}
@@ -342,7 +342,10 @@ body.view-only .stf-row button{display:none!important}
 .mys-sess-wrap{display:flex;flex-direction:column;gap:8px}
 .mys-sess{background:#fff;border-radius:12px;border:1px solid var(--bd);padding:14px 16px;box-shadow:var(--sh);position:relative;overflow:hidden}
 .mys-sess::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px}
-.mys-sess.cx{opacity:1;background:repeating-linear-gradient(45deg,#F8F8F8,#F8F8F8 5px,#EEEEEE 5px,#EEEEEE 10px)!important;border-left-color:#9E9E9E!important}
+.sbl.in-home{border-left-color:#7B1FA2!important;background:linear-gradient(135deg,rgba(243,229,245,.35) 0%,transparent 60%)!important}
+.blk-sess.in-home{border-left-color:#7B1FA2!important;background:linear-gradient(135deg,rgba(243,229,245,.4) 0%,transparent 60%)!important}
+.tl-sess.in-home{border-color:#CE93D8!important;background:rgba(243,229,245,.5)!important}
+.mys-sess.in-home{border-left-color:#7B1FA2!important;background:linear-gradient(135deg,rgba(243,229,245,.3) 0%,transparent 70%)!important}
 .mys-sess-time{font-size:11px;font-weight:700;color:var(--mt);margin-bottom:4px;display:flex;align-items:center;gap:8px}
 .mys-sess-dur{background:var(--bg);padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;color:var(--t2)}
 .mys-sess-client{font-size:16px;font-weight:700;color:var(--nv);margin-bottom:5px}
@@ -2520,7 +2523,7 @@ function rWeekFull(){
         ? `<div onclick="toggleGroup('${s.id}',event)" style="position:absolute;top:2px;left:2px;font-size:7px;background:#E8EAF6;color:#283593;padding:1px 4px;border-radius:2px;font-weight:800;cursor:pointer" title="Group session — click to remove">GRP</div>`
         : '';
       const cptChip=s.cptCode?(()=>{const noteOk=s.serviceNote&&s.serviceNote.trim();return `<div style="position:absolute;bottom:2px;right:2px;font-size:7px;background:#F3E5F5;color:#4A235A;padding:1px 4px;border-radius:2px;font-weight:800" title="Indirect: ${s.cptCode}${noteOk?'':' — note missing'}">${s.cptCode}${noteOk?'':' ⚠'}</div>`;})():'';
-      return`<div class="sbl ${tbCls(s)} ${insCls}${cxcl}${isUnassigned?' unassigned':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${supch}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
+      return`<div class="sbl ${tbCls(s)} ${insCls}${cxcl}${isUnassigned?' unassigned':''}${s.location==='home'?' in-home':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${supch}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
     }).join('');
     if(!sh)sh=hol?`<div style="text-align:center;padding:14px"><div style="font-size:20px">🎌</div><div style="font-size:10px;margin-top:3px">${hol.name}</div></div>`:'<div style="text-align:center;padding:12px;font-size:10px;color:var(--mt)">No sessions</div>';
     html+=`<div class="dc"><div class="${hcls}"><div><div class="ddn">${dn}</div><div class="ddv">${d.getDate()}</div></div><div style="text-align:right">${hol?`<span class="hch">${hol.name}</span>`:''}${isT?'<span style="font-size:9px;font-weight:700;opacity:.75;display:block;margin-top:2px">TODAY</span>':''}</div></div>${bdayBar}<div class="dbody">${sh}<button class="asb" onclick="openAddSess('${ds}')">+ Session</button></div>${busbar}</div>`;
@@ -2699,7 +2702,7 @@ function rDay(){
         const stName=gs(s.stid)?.name||'—';
         const blkIsUnassigned=s.stid==='UNASSIGNED'&&!isViewOnly;
                 const supBdg=s.supervised?'<span class="bdg b-sup">SUP</span>':'';
-return`<div class="blk-sess ${s.status==='CX'?'cx':''}" data-sid="${s.id}" data-unassigned="${blkIsUnassigned}" onclick="openSess(this.dataset.sid)" style="${s.stid==='UNASSIGNED'?'border:1.5px dashed #9E9E9E;background:repeating-linear-gradient(45deg,#FAFAFA,#FAFAFA 5px,#fff 5px,#fff 10px);':''}">
+return`<div class="blk-sess ${s.status==='CX'?'cx':''}${s.location==='home'?' in-home':''}" data-sid="${s.id}" data-unassigned="${blkIsUnassigned}" onclick="openSess(this.dataset.sid)" style="${s.stid==='UNASSIGNED'?'border:1.5px dashed #9E9E9E;background:repeating-linear-gradient(45deg,#FAFAFA,#FAFAFA 5px,#fff 5px,#fff 10px);':''}">
           <div class="blk-ttime"><div class="blk-ts">${ftm(s.s)}</div><div class="blk-te">${ftm(s.e)}</div></div>
           <div class="blk-bar" style="background:${insBg}"></div>
           <div class="blk-body-inner">
@@ -2900,7 +2903,7 @@ function cCard(c){
   const authLeft=c.authEnd?Math.ceil((pd(c.authEnd)-new Date())/864e5):null;
   return`<div class="ccard" onclick="openClientDetail('${c.id}')"><div class="cctop"><div><div class="ccname">${c.name}</div>${!isViewOnly?`<div style="font-size:10px;font-family:monospace;font-weight:700;color:${c.shortName?'var(--pu)':'#BDBDBD'};margin-top:1px" title="Schedule display name">${c.shortName||'auto: '+cDisplayName(c)}</div>`:''} ${c.extId&&!isViewOnly?`<div style="font-size:9px;font-family:monospace;color:var(--mt);margin-top:1px">${c.extId}</div>`:''}<div class="ccage">${age!==null?age+' yrs':''}</div></div><span class="bdg ${iBdg(c.ins)}">${iLabel(c.ins)}</span></div><div class="dwrap"><div class="dlbls"><span>Dosage</span><span style="font-weight:700;color:${dc}">${c.sch}/${c.rec}h/wk (${pct}%)</span></div><div class="dtrk"><div class="dbar" style="width:${pct}%;background:${dc}"></div></div></div>${c.authEnd&&authLeft!==null?`<div style="font-size:10px;color:${authLeft<30?'var(--rd)':'var(--mt)'};margin-top:3px">Auth ends: ${pd(c.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${authLeft<30?` (${authLeft}d)`:''}  </div>`:''}
 <div class="cteam">${team.map(s=>{const bg=tClr(s.id),tx=tTxt(s.id);const isOT=s.role==='OT';const otBorder=isOT?'border:1.5px solid #009688;box-shadow:0 0 0 1px #B2DFDB inset;':`border:1px solid ${bg}55;`;return`<span class="ctag" style="background:${bg}22;${otBorder}color:${bg==='#E0E0E0'||bg==='#C8C8C8'||bg==='#F5F0DC'?'#333':bg}" title="${s.name}${isOT?' (OT provider)':''}">${isOT?'<span style="background:#009688;color:#fff;font-size:8px;font-weight:800;padding:1px 4px;border-radius:3px;margin-right:3px;letter-spacing:.3px">OT</span>':''}${s.initials} ${isOT?'':`<span style="opacity:.7">${s.role}</span>`}</span>`;}).join('')}${(()=>{const bk=(c.backupTeam||[]).map(id=>gs(id)).filter(Boolean);return bk.length?'<span style="font-size:9px;color:#BA7517;margin:0 3px">·</span>'+bk.map(s=>`<span class="ctag" style="background:#FAEEDA;border:1px solid #EF9F27;color:#633806" title="Backup">★${s.initials}</span>`).join(''):'';})()}${!isViewOnly?`<button class="edit-team-btn" onclick="event.stopPropagation();openEditTeam('${c.id}')">Edit team</button>`:''}
-</div><div class="cflags">${(()=>{const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');const styles={ABA:'background:#E3F2FD;color:#0D47A1',OT:'background:#E0F2F1;color:#004D40',BOTH:'background:linear-gradient(90deg,#E3F2FD,#E0F2F1);color:#004D40'};return`<span class="flg" style="${styles[tt]||styles.ABA}">${tt==='BOTH'?'ABA+OT':tt}</span>`})()}${c.hasBus?'<span class="flg flg-bus">🚌 Bus</span>':''}${(()=>{const isBoth=(c.therapyType||(c.hasOT?'BOTH':'ABA'))==='BOTH';let chips='';if(c.authEnd){const pclr={APPROVED:'#E8F5E9',SUBMITTED:'#E3F2FD',PENDING:'#FFF3E0'}[c.authPipeline]||'var(--pl)';const ptxt={APPROVED:'#1B5E20',SUBMITTED:'#0D47A1',PENDING:'#E65100'}[c.authPipeline]||'#4527A0';const plbl={APPROVED:'Approved',SUBMITTED:'Submitted',PENDING:'Pending',NONE:'Auth'}[c.authPipeline||'NONE']||'Auth';chips+=`<span class="flg" style="background:${pclr};color:${ptxt}">${isBoth?'ABA: ':''}${plbl}</span>`;}if(isBoth&&c.otAuth?.end){const otLeft=Math.ceil((pd(c.otAuth.end)-new Date())/864e5);let otClr='#E8F5E9',otTxt='#1B5E20',otLbl='Active';if(otLeft<0){otClr='#FFEBEE';otTxt='#B71C1C';otLbl='Expired';}else if(otLeft<30){otClr='#FFF3E0';otTxt='#E65100';otLbl=otLeft+'d left';}chips+=`<span class="flg" style="background:${otClr};color:${otTxt}">OT: ${otLbl}</span>`;}return chips;})()}${(()=>{/* OT visit utilization chip: shown for OT-only clients (c.authVisits + c.visitsUsed) and BOTH clients (c.otAuth.visitsAuthorized + .visitsUsed) */const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');let auth,used,thresh;if(tt==='OT'){auth=c.authVisits;used=c.visitsUsed;thresh=c.visitAlertThreshold??20;}else if(tt==='BOTH'&&c.otAuth){auth=c.otAuth.visitsAuthorized;used=c.otAuth.visitsUsed;thresh=c.otAuth.visitAlertThreshold??20;}else return '';if(auth==null||used==null)return tt==='OT'||(tt==='BOTH'&&c.otAuth)?'<span class="flg" style="background:#FFF3E0;color:#E65100">📝 Enter visits</span>':'';const rem=auth-used;const pctUsed=(used/auth)*100;const pctRem=100-pctUsed;let clr='#E8F5E9',tx='#1B5E20';if(rem<=0){clr='#FFEBEE';tx='#B71C1C';}else if(pctRem<=thresh){clr='#FFF3E0';tx='#E65100';}return `<span class="flg" style="background:${clr};color:${tx}" title="${used}/${auth} used, ${Math.max(0,rem)} remaining">🎟 ${used}/${auth}${rem<=0?' (OVER)':''}</span>`;})()}${(c.scheduleTpl&&c.scheduleTpl.length)?`<span class='flg' style='background:#E8EAF6;color:#283593'>🗓 ${c.scheduleTpl.length}slot${c.scheduleTpl.length!==1?'s':''}</span>`:''}${medChips(c)}${(()=>{if(!c.reassessDue)return'';const d=Math.ceil((pd(c.reassessDue)-new Date())/864e5);return`<span class="reassess-chip ${d<0?'rc-over':d<30?'rc-due':'rc-ok'}">${d<0?'Reassess overdue':d<30?'Reassess '+d+'d':'Reassess ✓'}</span>`;})()}</div></div>`;
+</div><div class="cflags">${(()=>{const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');const styles={ABA:'background:#E3F2FD;color:#0D47A1',OT:'background:#E0F2F1;color:#004D40',BOTH:'background:linear-gradient(90deg,#E3F2FD,#E0F2F1);color:#004D40'};return`<span class="flg" style="${styles[tt]||styles.ABA}">${tt==='BOTH'?'ABA+OT':tt}</span>`})()}${c.hasBus?'<span class="flg flg-bus">\u{1F68C} Bus</span>':''}${c.inHome?'<span class="flg" style="background:#F3E5F5;color:#6A1B9A">\u{1F3E0} In-Home</span>':''}${(()=>{const isBoth=(c.therapyType||(c.hasOT?'BOTH':'ABA'))==='BOTH';let chips='';if(c.authEnd){const pclr={APPROVED:'#E8F5E9',SUBMITTED:'#E3F2FD',PENDING:'#FFF3E0'}[c.authPipeline]||'var(--pl)';const ptxt={APPROVED:'#1B5E20',SUBMITTED:'#0D47A1',PENDING:'#E65100'}[c.authPipeline]||'#4527A0';const plbl={APPROVED:'Approved',SUBMITTED:'Submitted',PENDING:'Pending',NONE:'Auth'}[c.authPipeline||'NONE']||'Auth';chips+=`<span class="flg" style="background:${pclr};color:${ptxt}">${isBoth?'ABA: ':''}${plbl}</span>`;}if(isBoth&&c.otAuth?.end){const otLeft=Math.ceil((pd(c.otAuth.end)-new Date())/864e5);let otClr='#E8F5E9',otTxt='#1B5E20',otLbl='Active';if(otLeft<0){otClr='#FFEBEE';otTxt='#B71C1C';otLbl='Expired';}else if(otLeft<30){otClr='#FFF3E0';otTxt='#E65100';otLbl=otLeft+'d left';}chips+=`<span class="flg" style="background:${otClr};color:${otTxt}">OT: ${otLbl}</span>`;}return chips;})()}${(()=>{/* OT visit utilization chip: shown for OT-only clients (c.authVisits + c.visitsUsed) and BOTH clients (c.otAuth.visitsAuthorized + .visitsUsed) */const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');let auth,used,thresh;if(tt==='OT'){auth=c.authVisits;used=c.visitsUsed;thresh=c.visitAlertThreshold??20;}else if(tt==='BOTH'&&c.otAuth){auth=c.otAuth.visitsAuthorized;used=c.otAuth.visitsUsed;thresh=c.otAuth.visitAlertThreshold??20;}else return '';if(auth==null||used==null)return tt==='OT'||(tt==='BOTH'&&c.otAuth)?'<span class="flg" style="background:#FFF3E0;color:#E65100">📝 Enter visits</span>':'';const rem=auth-used;const pctUsed=(used/auth)*100;const pctRem=100-pctUsed;let clr='#E8F5E9',tx='#1B5E20';if(rem<=0){clr='#FFEBEE';tx='#B71C1C';}else if(pctRem<=thresh){clr='#FFF3E0';tx='#E65100';}return `<span class="flg" style="background:${clr};color:${tx}" title="${used}/${auth} used, ${Math.max(0,rem)} remaining">🎟 ${used}/${auth}${rem<=0?' (OVER)':''}</span>`;})()}${(c.scheduleTpl&&c.scheduleTpl.length)?`<span class='flg' style='background:#E8EAF6;color:#283593'>🗓 ${c.scheduleTpl.length}slot${c.scheduleTpl.length!==1?'s':''}</span>`:''}${medChips(c)}${(()=>{if(!c.reassessDue)return'';const d=Math.ceil((pd(c.reassessDue)-new Date())/864e5);return`<span class="reassess-chip ${d<0?'rc-over':d<30?'rc-due':'rc-ok'}">${d<0?'Reassess overdue':d<30?'Reassess '+d+'d':'Reassess ✓'}</span>`;})()}</div></div>`;
 }
 function fc(f,el){document.querySelectorAll('.fch').forEach(c=>c.classList.remove('on'));el.classList.add('on');rClients(f);}
 
@@ -3508,6 +3511,16 @@ function openSess(id){
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-grp" ${s.isGroup?'checked':''}> Group session</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-note" ${s.noteWritten?'checked':''}> Session note written</label>
       ${(()=>{
+        const cl=gc(s.cid);
+        if(!cl||!cl.inHome) return '';
+        const isHome=(s.location||'center')==='home';
+        return '<div id="sd-loc-wrap" style="display:flex;align-items:center;gap:8px;background:'+(isHome?'#F3E5F5':'#F5F5F5')+';border-radius:7px;padding:5px 10px;border:1.5px solid '+(isHome?'#CE93D8':'var(--bd)')+';">'
+          +'<span style="font-size:11px;font-weight:700;color:var(--mt)">LOCATION</span>'
+          +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="radio" name="sd-loc" value="center" '+(isHome?'':'checked')+' onchange="var w=document.getElementById(\'sd-loc-wrap\');w.style.background=\'#F5F5F5\';w.style.borderColor=\'var(--bd)\'"> \uD83C\uDFE2 Center</label>'
+          +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="radio" name="sd-loc" value="home" '+(isHome?'checked':'')+' onchange="var w=document.getElementById(\'sd-loc-wrap\');w.style.background=\'#F3E5F5\';w.style.borderColor=\'#CE93D8\'"> \uD83C\uDFE0 In-Home</label>'
+          +'</div>';
+      })()}
+      ${(()=>{
         const assignedRole=(gs(s.stid)?.role||'').toLowerCase();
         const isSupervisableSess = assignedRole==='rbt' || assignedRole==='abat';
         const viewerIsBCBA = !isViewOnly || (()=>{ const vst=gs(viewerStid); return (vst?.role||'').toLowerCase()==='bcba'; })();
@@ -3575,6 +3588,9 @@ function updSess(id){
     // Supervision tracking
     if(newSupervised){ s.supervised=true; s.supMinutes=newSupMins||null; s.supervisorStid=viewerStid||s.stid; }
     else { delete s.supervised; delete s.supMinutes; delete s.supervisorStid; }
+    // Location
+    const locEl=document.querySelector('input[name="sd-loc"]:checked');
+    s.location=locEl?locEl.value:'center';
     // Group flag: checkbox wins. If user explicitly checked "Group session" in
     // the modal, set true. If they unchecked it, set false (allows un-marking).
     // Conflict-modal "✓ Group Session" can also force true even if checkbox
@@ -3654,13 +3670,24 @@ function openAddClient(){
       <input type="hidden" id="nc-ttype" value="ABA">
     </div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="nc-bus"> Bus Rider</label>
+      <div style="margin-top:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Service Location — check all that apply</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="nc-center" checked> Center-based</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="nc-inhome" onchange="document.getElementById('nc-home-fields').style.display=this.checked?'block':'none'"> In-Home</label>
+        </div>
+        <div id="nc-home-fields" style="display:none;margin-top:8px;padding:10px;background:#F3E5F5;border-radius:8px;border:1px solid #CE93D8">
+          <div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Home Address</label><input id="nc-addr" placeholder="Street, City, Postal Code" style="font-size:12px"></div>
+          <div class="fg"><label style="font-size:11px">Parent / Contact Phone</label><input id="nc-phone" type="tel" placeholder="+49 …" style="font-size:12px"></div>
+        </div>
+      </div>
     </div>
     <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="saveClient()">Add</button></div>`);
 }
 function saveClient(){
   const name=document.getElementById('nc-n').value.trim();if(!name)return alert('Name required.');
   const team=Array.from(document.getElementById('nc-team').selectedOptions).map(o=>o.value);
-  const c={id:'c'+uid(),name,extId:document.getElementById('nc-ext').value.trim()||'',dob:document.getElementById('nc-dob').value,ins:document.getElementById('nc-ins').value,rec:+document.getElementById('nc-rec').value,sch:+document.getElementById('nc-sch').value,bcba:document.getElementById('nc-bcba').value,authEnd:document.getElementById('nc-auth').value,team,therapyType:document.getElementById('nc-ttype').value,hasOT:document.getElementById('nc-ttype').value!=='ABA',hasBus:document.getElementById('nc-bus').checked,notes:''};
+  const c={id:'c'+uid(),name,extId:document.getElementById('nc-ext').value.trim()||'',dob:document.getElementById('nc-dob').value,ins:document.getElementById('nc-ins').value,rec:+document.getElementById('nc-rec').value,sch:+document.getElementById('nc-sch').value,bcba:document.getElementById('nc-bcba').value,authEnd:document.getElementById('nc-auth').value,team,therapyType:document.getElementById('nc-ttype').value,hasOT:document.getElementById('nc-ttype').value!=='ABA',hasBus:document.getElementById('nc-bus').checked,centerBased:document.getElementById('nc-center')?.checked!==false,inHome:document.getElementById('nc-inhome')?.checked||false,homeAddress:document.getElementById('nc-addr')?.value.trim()||'',homePhone:document.getElementById('nc-phone')?.value.trim()||'',notes:''};
   S.clients.push(c);
   team.forEach(sid=>{const s=gs(sid);if(s){if(!s.clients)s.clients=[];if(!s.clients.includes(c.id))s.clients.push(c.id);}});
   save();closeM();rClients();rStaff();
@@ -3726,9 +3753,19 @@ function openClientDetail(id){
         <input type="hidden" id="cd-ttype" value="${c.therapyType||'OT'}">
       </div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-bus" ${c.hasBus?'checked':''}> Bus Rider</label>
+      <div style="margin-top:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Service Location — check all that apply</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-center" ${c.centerBased!==false?'checked':''}> Center-based</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-inhome" ${c.inHome?'checked':''} onchange="document.getElementById('cd-home-fields').style.display=this.checked?'block':'none'"> In-Home</label>
+        </div>
+        <div id="cd-home-fields" style="display:${c.inHome?'block':'none'};margin-top:8px;padding:10px;background:#F3E5F5;border-radius:8px;border:1px solid #CE93D8">
+          <div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Home Address</label><input id="cd-addr" value="${c.homeAddress||''}" placeholder="Street, City, Postal Code" style="font-size:12px"></div>
+          <div class="fg"><label style="font-size:11px">Parent / Contact Phone</label><input id="cd-phone" type="tel" value="${c.homePhone||''}" placeholder="+49 …" style="font-size:12px"></div>
+        </div>
+      </div>
     </div>
     <div class="fg"><label>Notes</label><textarea id="cd-notes" rows="2">${c.notes||''}</textarea></div>
-    <div class="fg"><label>External ID <span style="font-weight:400;color:var(--mt);font-size:10px">— HiRasmus / Cowork reference</span></label><input id="cd-ext" value="${c.extId||''}" placeholder="e.g. HR-10042" style="font-family:monospace;font-size:12px"></div>
     <div class="fg"><label>Primary Contact Email <span style="font-weight:400;color:var(--mt);font-size:10px">— for auth expiration reminders · separate multiple addresses with commas</span></label><input id="cd-pcemail" value="${c.primaryContactEmail||''}" placeholder="parent1@example.com, parent2@example.com" style="font-size:12px"></div>
     <div class="fg" style="margin-top:8px"><label style="display:flex;align-items:center;gap:6px;margin-bottom:8px"><span style="font-size:12px;font-weight:700;color:#B71C1C">⚠️ Medical Alerts</span></label>
       <div style="display:flex;flex-wrap:wrap;gap:6px">${MED_ALERTS.map(m=>`<label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;cursor:pointer;border:1.5px solid var(--bd);background:#fff;font-size:11px;font-weight:600" class="med-toggle" data-med="${m.id}"><input type="checkbox" id="med-${m.id}" ${(c.medAlerts||[]).includes(m.id)?'checked':''} style="accent-color:#B71C1C;width:13px;height:13px"> ${m.label}</label>`).join('')}</div>
@@ -3736,7 +3773,7 @@ function openClientDetail(id){
     <div class="tpl-wrap">
       <div class="tpl-title">🗓 Weekly Schedule Template</div>
       <div style="font-size:11px;color:var(--t2);margin-bottom:10px">Define recurring OT sessions. Click <strong>Generate Schedule</strong> to create all sessions through the auth end date.</div>
-      <div class="tpl-slot-hdr"><span>Day</span><span>Start – End</span><span>Therapist</span><span>Type</span><span></span></div>
+      <div class="tpl-slot-hdr"><span>Day</span><span>Start – End</span><span>Therapist</span><span>Type</span><span>Location</span><span></span></div>
       <div id="tpl-slots"></div>
       <button class="btn bsm" style="width:100%;border-style:dashed;margin-top:2px" onclick="addTplSlot()">+ Add Session Slot</button>
       <div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px;flex-wrap:wrap">
@@ -3801,11 +3838,19 @@ function openClientDetail(id){
       <input type="hidden" id="cd-ttype" value="${c.therapyType||(c.hasOT?'BOTH':'ABA')}">
     </div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-bus" ${c.hasBus?'checked':''}> Bus Rider</label>
+      <div style="margin-top:10px">
+        <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Service Location — check all that apply</div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-center" ${c.centerBased!==false?'checked':''}> Center-based</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-inhome" ${c.inHome?'checked':''} onchange="document.getElementById('cd-home-fields').style.display=this.checked?'block':'none'"> In-Home</label>
+        </div>
+        <div id="cd-home-fields" style="display:${c.inHome?'block':'none'};margin-top:8px;padding:10px;background:#F3E5F5;border-radius:8px;border:1px solid #CE93D8">
+          <div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Home Address</label><input id="cd-addr" value="${c.homeAddress||''}" placeholder="Street, City, Postal Code" style="font-size:12px"></div>
+          <div class="fg"><label style="font-size:11px">Parent / Contact Phone</label><input id="cd-phone" type="tel" value="${c.homePhone||''}" placeholder="+49 …" style="font-size:12px"></div>
+        </div>
+      </div>
     </div>
     <div class="fg"><label>Notes</label><textarea id="cd-notes" rows="2">${c.notes||''}</textarea></div>
-    <div class="fg"><label>External ID <span style="font-weight:400;color:var(--mt);font-size:10px">— HiRasmus / Cowork / billing system reference</span></label>
-      <input id="cd-ext" value="${c.extId||''}" placeholder="e.g. HR-10042" style="font-family:monospace;font-size:12px">
-    </div>
     <div class="fg"><label>Primary Contact Email <span style="font-weight:400;color:var(--mt);font-size:10px">— for auth expiration reminders · separate multiple addresses with commas</span></label>
       <input id="cd-pcemail" value="${c.primaryContactEmail||''}" placeholder="parent1@example.com, parent2@example.com" style="font-size:12px">
     </div>
@@ -3824,7 +3869,7 @@ function openClientDetail(id){
     <div class="tpl-wrap">
       <div class="tpl-title">🗓 Weekly Schedule Template</div>
       <div style="font-size:11px;color:var(--t2);margin-bottom:10px">Define recurring weekly sessions. Click <strong>Generate Schedule</strong> to create all sessions through the auth end date.</div>
-      <div class="tpl-slot-hdr"><span>Day</span><span>Start – End</span><span>Therapist</span><span>Type</span><span></span></div>
+      <div class="tpl-slot-hdr"><span>Day</span><span>Start – End</span><span>Therapist</span><span>Type</span><span>Location</span><span></span></div>
       <div id="tpl-slots"></div>
       <button class="btn bsm" style="width:100%;border-style:dashed;margin-top:2px" onclick="addTplSlot()">+ Add Session Slot</button>
       <div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px;flex-wrap:wrap">
@@ -3845,10 +3890,18 @@ function renderTplSlots(){
   const to=STYPES.filter(t=>t.id!=='ADMIN').map(t=>`<option value="${t.id}">${t.label}</option>`).join('');
   const wrap=document.getElementById('tpl-slots');
   if(!wrap)return;
+  // Check if current client supports in-home — find by open modal
+  const openCid=document.querySelector('.mact [onclick*="updClient"]')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1]||'';
+  const openClient=gc(openCid);
+  const clientHasInHome=openClient?.inHome||false;
   wrap.innerHTML=_tplSlots.length?_tplSlots.map((sl,i)=>{
     const dOpts=days.map((d,di)=>`<option value="${di+1}" ${sl.dow==di+1?'selected':''}>${d}</option>`).join('');
     const stOpts=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}" ${s.id===sl.stid?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
     const tyOpts=STYPES.map(t=>`<option value="${t.id}" ${t.id===sl.type?'selected':''}>${t.label}</option>`).join('');
+    const locOpts=clientHasInHome
+      ?`<option value="center" ${(sl.location||'center')==='center'?'selected':''}>🏢 Center</option><option value="home" ${sl.location==='home'?'selected':''}>🏠 In-Home</option>`
+      :`<option value="center" selected>🏢 Center</option>`;
+    const locStyle=sl.location==='home'?'background:#F3E5F5;color:#6A1B9A;border-color:#CE93D8':'';
     return `<div class="tpl-slot" id="tsl-${i}">
       <select onchange="_tplSlots[${i}].dow=+this.value">${dOpts}</select>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
@@ -3857,13 +3910,14 @@ function renderTplSlots(){
       </div>
       <select onchange="_tplSlots[${i}].stid=this.value">${stOpts}</select>
       <select onchange="_tplSlots[${i}].type=this.value">${tyOpts}</select>
+      <select style="${locStyle}" onchange="_tplSlots[${i}].location=this.value;this.style.background=this.value==='home'?'#F3E5F5':'';this.style.color=this.value==='home'?'#6A1B9A':'';">${locOpts}</select>
       <button class="tpl-rm" onclick="removeTplSlot(${i})">×</button>
     </div>`;
   }).join(''):'<div style="font-size:11px;color:var(--mt);text-align:center;padding:8px 0">No sessions defined yet. Click + Add Session Slot.</div>';
 }
 
 function addTplSlot(){
-  _tplSlots.push({dow:1,s:'09:00',e:'11:00',stid:S.staff[0]?.id||'',type:'ABA'});
+  _tplSlots.push({dow:1,s:'09:00',e:'11:00',stid:S.staff[0]?.id||'',type:'ABA',location:'center'});
   renderTplSlots();
 }
 function removeTplSlot(i){
@@ -3889,7 +3943,7 @@ function genSchedule(cid){
     _tplSlots.forEach(sl=>{
       const d=new Date(weekMon);d.setDate(d.getDate()+(sl.dow-1));
       if(d>=startFrom&&d<=authEnd){
-        S.sessions.push({id:'s'+uid(),cid,stid:sl.stid,date:fd(d),s:sl.s,e:sl.e,type:sl.type,status:'OK',cx:'',makeup:false,recurGroup:rg,notes:''});
+        S.sessions.push({id:'s'+uid(),cid,stid:sl.stid,date:fd(d),s:sl.s,e:sl.e,type:sl.type,status:'OK',cx:'',makeup:false,recurGroup:rg,notes:'',location:sl.location||'center'});
         count++;
       }
     });
@@ -3926,7 +3980,12 @@ function updClient(id){
   c.authEnd=document.getElementById('cd-auth').value;
   c.team=Array.from(document.getElementById('cd-team').selectedOptions).map(o=>o.value);
   const tt=document.getElementById('cd-ttype').value||'ABA';
-  c.therapyType=tt;c.hasOT=tt!=='ABA';c.hasBus=document.getElementById('cd-bus').checked;c.notes=document.getElementById('cd-notes').value;
+  c.therapyType=tt;c.hasOT=tt!=='ABA';c.hasBus=document.getElementById('cd-bus').checked;
+  c.centerBased=document.getElementById('cd-center')?.checked!==false;
+  c.inHome=document.getElementById('cd-inhome')?.checked||false;
+  c.homeAddress=document.getElementById('cd-addr')?.value.trim()||'';
+  c.homePhone=document.getElementById('cd-phone')?.value.trim()||'';
+  c.notes=document.getElementById('cd-notes').value;
   c.extId=document.getElementById('cd-ext')?.value.trim()||c.extId||'';
   // Primary contact email — comma-separated string; trimmed but not validated
   // here (CSV import normalizes it). May be blank if admin hasn't filled it.
@@ -4644,7 +4703,7 @@ function rMyS(){
       const dur=((eh*60+em)-(sh*60+sm));
       const durLbl=dur>=60?Math.floor(dur/60)+'h'+(dur%60?''+dur%60+'m':''):(dur+'m');
       const clName=cl?((item.status==='CX')?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):sessFullLabel(item);
-      return`<div class="mys-sess${item.status==='CX'?' cx':''}" style="--ins-clr:${insBg}">
+      return`<div class="mys-sess${item.status==='CX'?' cx':''}${item.location==='home'?' in-home':''}" style="--ins-clr:${insBg}">
         <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${insBg};border-radius:4px 0 0 4px"></div>
         <div class="mys-sess-time">${ftm(item.s)} – ${ftm(item.e)}<span class="mys-sess-dur">${durLbl}</span></div>
         <div class="mys-sess-client">${clName}</div>
@@ -6051,7 +6110,7 @@ function rTimeline(){
         : '';
       const muChip=s.makeup?'<span style="font-size:7px;background:#FFF9C4;color:#F57F17;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">MU</span>':'';
       const supChip2=s.supervised?'<span style="font-size:7px;background:#EDE7F6;color:#4A148C;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">SUP</span>':'';
-      return`<div class="tl-sess ins-${cl?.ins||''}" 
+      return`<div class="tl-sess ins-${cl?.ins||''}${s.location==='home'?' in-home':''}" 
         style="left:${left}%;right:${right}%;border-left-color:${insBg};background:${insBg}11"
         draggable="${isViewOnly?'false':'true'}"
         data-id="${s.id}"
