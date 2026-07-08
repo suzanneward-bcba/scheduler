@@ -1499,13 +1499,11 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
     <button class="btn bp bsm edit-only" onclick="openAddWL()">+ Add to Waitlist</button>
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-    <select id="wl-filter" class="btn bsm" onchange="rWaitlist()" style="font-family:'DM Sans',sans-serif">
-      <option value="">All</option>
-      <option value="WAITING">Waiting – No Therapy Yet</option>
-      <option value="PT">Parent Training Model</option>
-      <option value="AUTH">Auth Received – Scheduling Soon</option>
-      <option value="URGENT">Urgent – Auth Expiring</option>
-    </select>
+    <button class="fch on" onclick="wlFilter('',this)">All</button>
+    <button class="fch" onclick="wlFilter('ABA',this)">ABA</button>
+    <button class="fch" onclick="wlFilter('OT',this)">OT</button>
+    <button class="fch" onclick="wlFilter('BOTH',this)">ABA+OT</button>
+    <button class="fch" onclick="wlFilter('HOME',this)">In-Home</button>
   </div>
   <div id="wl-content"></div>
 </div>
@@ -6197,9 +6195,25 @@ function tlDrop(e){
 // Touch drag disabled on mobile — use click to edit sessions
 
 // ── WAITLIST ──
+let _wlFilter='';
+function wlFilter(val, el){
+  _wlFilter=val;
+  document.querySelectorAll('#tp-waitlist .fch').forEach(function(b){ b.classList.remove('on'); });
+  if(el) el.classList.add('on');
+  rWaitlist();
+}
+
 function rWaitlist(){
-  const filter=document.getElementById('wl-filter')?.value||'';
-  let wl=(S.waitlist||[]).filter(w=>!filter||w.status===filter);
+  let wl=(S.waitlist||[]).slice();
+  if(_wlFilter==='HOME'){
+    wl=wl.filter(function(w){ return w.inHome; });
+  } else if(_wlFilter==='ABA'){
+    wl=wl.filter(function(w){ return (w.therapyType||'ABA')==='ABA'; });
+  } else if(_wlFilter==='OT'){
+    wl=wl.filter(function(w){ return (w.therapyType||'ABA')==='OT'; });
+  } else if(_wlFilter==='BOTH'){
+    wl=wl.filter(function(w){ return (w.therapyType||'ABA')==='BOTH'; });
+  }
   const ct=document.getElementById('wl-count');
   if(ct) ct.textContent=`(${(S.waitlist||[]).length} total)`;
   const con=document.getElementById('wl-content');
@@ -6261,6 +6275,7 @@ function openAddWL(){
     </div>
     <div class="fg"><label>Scheduling Notes</label><textarea id="wl-sched" rows="2" placeholder="Preferred days/times, location, sibling groups…"></textarea></div>
     <div class="fg"><label>Priority Notes</label><textarea id="wl-nt" rows="2" placeholder="Diagnosis, urgency, what they're waiting for…"></textarea></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px"><input type="checkbox" id="wl-inhome"> In-Home services</label>
     <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="saveWL()">Add</button></div>`);
 }
 
@@ -6282,6 +6297,7 @@ function saveWL(){
     status:document.getElementById('wl-st').value,
     schedNotes:document.getElementById('wl-sched')?.value||'',
     notes:document.getElementById('wl-nt').value,
+    inHome:document.getElementById('wl-inhome')?.checked||false,
   };
   if(!w.name){alert('Name required.');return;}
   S.waitlist.push(w);save();closeM();rWaitlist();
@@ -6303,6 +6319,7 @@ function openEditWL(id){
     <div class="fg"><label>Status</label><select id="wl-st">${so}</select></div>
     <div class="fg"><label>Scheduling Notes</label><textarea id="wl-sched" rows="2">${w.schedNotes||''}</textarea></div>
     <div class="fg"><label>Priority Notes</label><textarea id="wl-nt" rows="2">${w.notes||''}</textarea></div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px"><input type="checkbox" id="wl-inhome" ${w.inHome?'checked':''}> In-Home services</label>
     <div class="mact"><button class="btn bd" onclick="deleteWL('${id}')">Remove</button><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updWL('${id}')">Save</button></div>`);
 }
 
@@ -6322,6 +6339,7 @@ function updWL(id){
   w.status=document.getElementById('wl-st').value;
   w.schedNotes=document.getElementById('wl-sched')?.value||'';
   w.notes=document.getElementById('wl-nt').value;
+  w.inHome=document.getElementById('wl-inhome')?.checked||false;
   save();closeM();rWaitlist();
 }
 
