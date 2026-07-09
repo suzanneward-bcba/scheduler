@@ -342,10 +342,15 @@ body.view-only .stf-row button{display:none!important}
 .mys-sess-wrap{display:flex;flex-direction:column;gap:8px}
 .mys-sess{background:#fff;border-radius:12px;border:1px solid var(--bd);padding:14px 16px;box-shadow:var(--sh);position:relative;overflow:hidden}
 .mys-sess::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px}
-.sbl.in-home{border-left-color:#7B1FA2!important;background:linear-gradient(135deg,rgba(243,229,245,.35) 0%,transparent 60%)!important}
-.blk-sess.in-home{border-left-color:#7B1FA2!important;background:linear-gradient(135deg,rgba(243,229,245,.4) 0%,transparent 60%)!important}
-.tl-sess.in-home{border-color:#CE93D8!important;background:rgba(243,229,245,.5)!important}
-.mys-sess.in-home{border-left-color:#7B1FA2!important;background:linear-gradient(135deg,rgba(243,229,245,.3) 0%,transparent 70%)!important}
+.tl-travel{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none;overflow:hidden;border-radius:3px}
+.tl-travel-inner{font-size:9px;font-weight:600;white-space:nowrap;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.85)}
+.tl-travel.ok{background:repeating-linear-gradient(45deg,#E8E8E4,#E8E8E4 3px,#F1EFE8 3px,#F1EFE8 6px)}
+.tl-travel.tight{background:repeating-linear-gradient(45deg,#FFEBEE,#FFEBEE 3px,#FFF8F8 3px,#FFF8F8 6px)}
+.tl-travel-inner.ok{color:#5F5E5A}
+.tl-travel-inner.tight{color:#C62828}
+.blk-sess.in-home .blk-bar{background:#7B1FA2!important}
+.tl-sess.in-home{border-left-color:#7B1FA2!important}
+.mys-sess.in-home{border-left-color:#7B1FA2!important}
 .mys-sess-time{font-size:11px;font-weight:700;color:var(--mt);margin-bottom:4px;display:flex;align-items:center;gap:8px}
 .mys-sess-dur{background:var(--bg);padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;color:var(--t2)}
 .mys-sess-client{font-size:16px;font-weight:700;color:var(--nv);margin-bottom:5px}
@@ -1426,6 +1431,18 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
           <button class="btn bp bsm" onclick="addCX()">Add</button>
         </div>
       </div>
+      <div class="scard">
+        <h3>🚗 Travel Zones</h3>
+        <p style="font-size:11px;color:var(--mt);margin-bottom:10px">Drive times from the Ramstein clinic in minutes. Used to calculate travel buffers on the schedule.</p>
+        <div id="tzlist"></div>
+        <div class="sep"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input type="text" id="ntz-id" placeholder="ID (e.g. vogelweh)" class="fi" style="flex:1;min-width:90px">
+          <input type="text" id="ntz-label" placeholder="Label (e.g. Vogelweh)" class="fi" style="flex:2;min-width:120px">
+          <input type="number" id="ntz-mins" placeholder="Min" class="fi" style="flex:1;min-width:60px" min="1">
+          <button class="btn bp bsm" onclick="addTZ()">Add</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1960,7 +1977,7 @@ async function loadFromFirestore(){
       const L = JSON.parse(doc.data().payload);
       S = Object.assign({},S,L);
       if(!S.cfg)S.cfg={};
-      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
+      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX(); if(!S.cfg.travelZones)S.cfg.travelZones=defTravelZones();
       // One-time seed of the admin tasks URL — set on first load only, then
       // never touched again. If admin clears the value later (to hide the
       // link), we don't re-seed because adminTasksUrlSeeded stays true.
@@ -1979,7 +1996,7 @@ async function loadFromFirestore(){
       window._lastSaveTs = snap.data().ts;
       S = Object.assign({},S,incoming);
       if(!S.cfg)S.cfg={};
-      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
+      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX(); if(!S.cfg.travelZones)S.cfg.travelZones=defTravelZones();
       renderAll();
       setSyncStatus('ok','Live update ↓');
     }
@@ -2064,7 +2081,7 @@ function useDemoMode(){
   let loaded = false;
   try{const d=localStorage.getItem('abl-local');if(d){S=Object.assign({},S,JSON.parse(d));loaded=true;}}catch(e){}
   if(!S.cfg)S.cfg={};
-  if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
+  if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX(); if(!S.cfg.travelZones)S.cfg.travelZones=defTravelZones();
   renderAll();
   setSyncStatus('ok','Local mode');
 }
@@ -2509,6 +2526,7 @@ function rWeekFull(){
       const tt_=cl?(cl.therapyType||(cl.hasOT?'BOTH':'ABA')):'ABA';const otfl=(tt_==='BOTH'&&s.type==='ABA')?'<div class="otch">+OT</div>':'';
       const much=s.makeup?'<div class="much">MU</div>':'';
       const supch=s.supervised?'<div style="position:absolute;top:2px;left:'+(s.makeup?'20':'2')+'px;font-size:7px;font-weight:800;background:#EDE7F6;color:#4A148C;padding:1px 3px;border-radius:2px">SUP</div>':'';
+      const locch=sessLocChip(s)?'<div style="position:absolute;bottom:2px;right:2px;font-size:10px;line-height:1" title="'+((SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'))||{}).label||'')+'">'+((SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'))||{}).icon||'')+'</div>':'';
       const tbdg=`<span class="bdg ${sessChipBdg(s)}">${sessChipLabel(s)}</span>`;
       const isCX=s.status==='CX';
       const clName=cl?(isCX?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):`<em style="color:var(--mt)">${gs(s.stid)?.initials||''} – ${sessChipLabel(s)}</em>`;
@@ -2523,7 +2541,7 @@ function rWeekFull(){
         ? `<div onclick="toggleGroup('${s.id}',event)" style="position:absolute;top:2px;left:2px;font-size:7px;background:#E8EAF6;color:#283593;padding:1px 4px;border-radius:2px;font-weight:800;cursor:pointer" title="Group session — click to remove">GRP</div>`
         : '';
       const cptChip=s.cptCode?(()=>{const noteOk=s.serviceNote&&s.serviceNote.trim();return `<div style="position:absolute;bottom:2px;right:2px;font-size:7px;background:#F3E5F5;color:#4A235A;padding:1px 4px;border-radius:2px;font-weight:800" title="Indirect: ${s.cptCode}${noteOk?'':' — note missing'}">${s.cptCode}${noteOk?'':' ⚠'}</div>`;})():'';
-      return`<div class="sbl ${tbCls(s)} ${insCls}${cxcl}${isUnassigned?' unassigned':''}${s.location==='home'?' in-home':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${supch}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
+      return`<div class="sbl ${tbCls(s)} ${insCls}${cxcl}${isUnassigned?' unassigned':''}${needsTravel(s)||s.location==='telehealth'?' in-home':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${supch}${locch}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
     }).join('');
     if(!sh)sh=hol?`<div style="text-align:center;padding:14px"><div style="font-size:20px">🎌</div><div style="font-size:10px;margin-top:3px">${hol.name}</div></div>`:'<div style="text-align:center;padding:12px;font-size:10px;color:var(--mt)">No sessions</div>';
     html+=`<div class="dc"><div class="${hcls}"><div><div class="ddn">${dn}</div><div class="ddv">${d.getDate()}</div></div><div style="text-align:right">${hol?`<span class="hch">${hol.name}</span>`:''}${isT?'<span style="font-size:9px;font-weight:700;opacity:.75;display:block;margin-top:2px">TODAY</span>':''}</div></div>${bdayBar}<div class="dbody">${sh}<button class="asb" onclick="openAddSess('${ds}')">+ Session</button></div>${busbar}</div>`;
@@ -2582,13 +2600,14 @@ function rWeekAgenda(){
       const insBdg=cl?'<span class="bdg '+iBdg(cl.ins)+'">'+iLabel(cl.ins)+'</span>':'';
       const muChip=s.makeup?'<span class="bdg" style="background:#FFF3E0;color:#E65100">MU</span>':'';
       const supChip=s.supervised?'<span class="bdg b-sup">SUP</span>':'';
+      const homeChip=sessLocChip(s);
       const medIcons=cl&&cl.medAlerts&&cl.medAlerts.length?medChips(cl,true):'';
       sessHtml+=`<div class="ag-sess${cxcl}" style="border-left-color:${insClr}" onclick="openSess('${s.id}')">
         <div class="ag-sess-time">${ftm(s.s)}<br><span style="font-size:9px;color:var(--mt)">– ${ftm(s.e)}</span></div>
         <div class="ag-sess-info">
           <div class="ag-sess-name">${clName}</div>
           ${s.status==='CX'&&s.cx?`<div style="margin-top:2px"><span class="cx-badge">&#x2715; ${s.cx}</span></div>`:''}
-          <div class="ag-sess-sub">${tbdg}${insBdg}${muChip}${supChip}${medIcons}</div>
+          <div class="ag-sess-sub">${tbdg}${insBdg}${muChip}${supChip}${homeChip}${medIcons}</div>
         </div>
         <div class="ag-thr"><span class="tdot" style="background:${bg};width:8px;height:8px;border-radius:50%;display:inline-block"></span><span style="font-size:10px;color:var(--mt);font-weight:600">${stName}</span></div>
       </div>`;
@@ -2702,12 +2721,12 @@ function rDay(){
         const stName=gs(s.stid)?.name||'—';
         const blkIsUnassigned=s.stid==='UNASSIGNED'&&!isViewOnly;
                 const supBdg=s.supervised?'<span class="bdg b-sup">SUP</span>':'';
-return`<div class="blk-sess ${s.status==='CX'?'cx':''}${s.location==='home'?' in-home':''}" data-sid="${s.id}" data-unassigned="${blkIsUnassigned}" onclick="openSess(this.dataset.sid)" style="${s.stid==='UNASSIGNED'?'border:1.5px dashed #9E9E9E;background:repeating-linear-gradient(45deg,#FAFAFA,#FAFAFA 5px,#fff 5px,#fff 10px);':''}">
+return`<div class="blk-sess ${s.status==='CX'?'cx':''}${needsTravel(s)||s.location==='telehealth'?' in-home':''}" data-sid="${s.id}" data-unassigned="${blkIsUnassigned}" onclick="openSess(this.dataset.sid)" style="${s.stid==='UNASSIGNED'?'border:1.5px dashed #9E9E9E;background:repeating-linear-gradient(45deg,#FAFAFA,#FAFAFA 5px,#fff 5px,#fff 10px);':''}">
           <div class="blk-ttime"><div class="blk-ts">${ftm(s.s)}</div><div class="blk-te">${ftm(s.e)}</div></div>
           <div class="blk-bar" style="background:${insBg}"></div>
           <div class="blk-body-inner">
             <div class="blk-cl">${clName}${s.stid==='UNASSIGNED'?'<span class="unassigned-badge" style="margin-left:6px">UNASSIGNED</span>':''}</div>
-            <div class="blk-meta">${tbdg}${insLbl}${muBdg}${supBdg}${grpBdg}${otFlag}${cxBdg}</div>
+            <div class="blk-meta">${tbdg}${insLbl}${muBdg}${supBdg}${sessLocChip(s)}${grpBdg}${otFlag}${cxBdg}</div>
             <div class="blk-thr"><span class="tchip" style="background:${bg};color:${tx};font-size:10px">${stName}</span>${s.notes?`<span style="font-size:10px;color:var(--mt);margin-left:6px;font-style:italic">${s.notes}</span>`:''}</div>
           </div>
         </div>`;
@@ -3089,9 +3108,9 @@ function quickAddAdmin(stid, date){
 
 // ── SETTINGS ──
 function rSettings(){
-
-
   document.getElementById('cxlist').innerHTML=S.cfg.cxCodes.map((c,i)=>`<div class="cdi"><div><div class="cda">${c.code}</div><div class="cdd">${c.label}</div></div><button class="btn bxs bd" onclick="rmCX(${i})">Remove</button></div>`).join('');
+  const tzEl=document.getElementById('tzlist');
+  if(tzEl) tzEl.innerHTML=getTravelZones().map((z,i)=>`<div class="cdi"><div><div class="cda">${z.label}</div><div class="cdd" style="display:flex;align-items:center;gap:8px"><input type="number" value="${z.mins}" min="1" style="width:56px;padding:3px 6px;border:1.5px solid var(--bd);border-radius:5px;font-size:11px;font-family:'DM Sans',sans-serif" onchange="updTZMins(${i},+this.value)"> min from clinic</div></div><button class="btn bxs bd" onclick="rmTZ(${i})">Remove</button></div>`).join('');
   document.getElementById('hollist').innerHTML=S.holidays.length?S.holidays.map((h,i)=>`<div class="holi"><div><div style="font-weight:600;font-size:11px">${h.name}</div><div style="font-size:10px;color:var(--mt)">${pd(h.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</div></div><button class="btn bxs bd" onclick="rmHol(${i})">×</button></div>`).join(''):'<div style="font-size:11px;color:var(--mt);margin-bottom:7px">None added.</div>';
   document.getElementById('ins-legend').innerHTML=INS.map(i=>`<div class="lrow"><div class="ldot" style="background:${i.color}"></div><span class="bdg ${i.badge}">${i.label}</span><span style="color:var(--mt);font-size:10px">${i.group}</span></div>`).join('');
   document.getElementById('thr-legend').innerHTML=S.staff.map(s=>{const bg=s.color||'#9E9E9E',tx=txtForBg(bg);return`<div class="lrow"><div class="ldot" style="background:${bg};border:1px solid #ccc"></div><strong style="font-size:11px">${s.initials}</strong><span style="font-size:11px">${s.name}</span><span class="bdg ${ROLE_BADGE[s.role]||'b-adm'}" style="font-size:9px">${s.role}</span></div>`;}).join('');
@@ -3164,6 +3183,18 @@ function checkHolidayReminders(){
 }
 function addCX(){const code=document.getElementById('ncc').value.trim().toUpperCase(),label=document.getElementById('ncl').value.trim();if(!code||!label)return;S.cfg.cxCodes.push({code,label});document.getElementById('ncc').value='';document.getElementById('ncl').value='';save();rSettings();}
 function rmCX(i){S.cfg.cxCodes.splice(i,1);save();rSettings();}
+function addTZ(){
+  const id=document.getElementById('ntz-id').value.trim().toLowerCase().replace(/\s+/g,'_');
+  const label=document.getElementById('ntz-label').value.trim();
+  const mins=+document.getElementById('ntz-mins').value;
+  if(!id||!label||!mins)return alert('Enter ID, label, and minutes.');
+  if(getTravelZones().find(z=>z.id===id))return alert('A zone with that ID already exists.');
+  S.cfg.travelZones.push({id,label,mins});
+  document.getElementById('ntz-id').value='';document.getElementById('ntz-label').value='';document.getElementById('ntz-mins').value='';
+  save();rSettings();
+}
+function rmTZ(i){if(!confirm('Remove this zone? Any clients assigned to it will need to be updated.'))return;S.cfg.travelZones.splice(i,1);save();rSettings();}
+function updTZMins(i,v){if(!v||v<1)return;S.cfg.travelZones[i].mins=v;save();}
 function expData(){const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='abl-'+todayBerlin()+'.json';a.click();}
 function confReset(){
   _openM(`<h3 style="color:var(--rd)">⚠️ Reset All Data</h3>
@@ -3180,7 +3211,7 @@ function confReset(){
     </div>`);
 }
 function doConfirmedReset(){
-  S={clients:[],staff:[],sessions:[],logs:{},holidays:[],waitlist:[],schedNotes:[],schedRequests:[],cfg:{cxCodes:defCX()}};
+  S={clients:[],staff:[],sessions:[],logs:{},holidays:[],waitlist:[],schedNotes:[],schedRequests:[],cfg:{cxCodes:defCX(),travelZones:defTravelZones()}};
   save();closeM();renderAll();
 }
 // Override doReset only for the reset confirmation flow
@@ -3511,22 +3542,11 @@ function openSess(id){
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-grp" ${s.isGroup?'checked':''}> Group session</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-note" ${s.noteWritten?'checked':''}> Session note written</label>
       ${(()=>{
-        const cl=gc(s.cid);
-        if(!cl||!cl.inHome) return '';
-        const isHome=(s.location||'center')==='home';
-        return '<div id="sd-loc-wrap" style="display:flex;align-items:center;gap:8px;background:'+(isHome?'#F3E5F5':'#F5F5F5')+';border-radius:7px;padding:5px 10px;border:1.5px solid '+(isHome?'#CE93D8':'var(--bd)')+';">'
-          +'<span style="font-size:11px;font-weight:700;color:var(--mt)">LOCATION</span>'
-          +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="radio" name="sd-loc" value="center" '+(isHome?'':'checked')+' onchange="var w=document.getElementById(\'sd-loc-wrap\');w.style.background=\'#F5F5F5\';w.style.borderColor=\'var(--bd)\'"> \uD83C\uDFE2 Center</label>'
-          +'<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer"><input type="radio" name="sd-loc" value="home" '+(isHome?'checked':'')+' onchange="var w=document.getElementById(\'sd-loc-wrap\');w.style.background=\'#F3E5F5\';w.style.borderColor=\'#CE93D8\'"> \uD83C\uDFE0 In-Home</label>'
-          +'</div>';
-      })()}
-      ${(()=>{
         const assignedRole=(gs(s.stid)?.role||'').toLowerCase();
         const isSupervisableSess = assignedRole==='rbt' || assignedRole==='abat';
         const viewerIsBCBA = !isViewOnly || (()=>{ const vst=gs(viewerStid); return (vst?.role||'').toLowerCase()==='bcba'; })();
         if(!isSupervisableSess) return '';
         if(viewerIsBCBA){
-          // BCBA can check supervision and enter minutes
           return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
             <input type="checkbox" id="sd-sup" ${s.supervised?'checked':''} onchange="document.getElementById('sd-sup-mins-wrap').style.display=this.checked?'flex':'none'">
             Supervision provided
@@ -3536,7 +3556,6 @@ function openSess(id){
             <span style="color:var(--mt)">minutes of supervision</span>
           </div>`;
         } else if(s.supervised){
-          // Supervisee sees read-only badge — cannot edit
           return `<div style="display:flex;align-items:center;gap:6px;background:#E3F2FD;border:1px solid #90CAF9;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:#1565C0">
             🔵 Supervised session${s.supMinutes?' ('+s.supMinutes+' min)':''}
           </div>`;
@@ -3544,6 +3563,7 @@ function openSess(id){
         return '';
       })()}
     </div>
+    <div class="fg"><label>Location</label><select id="sd-loc-select" style="font-size:12px">${locOpts(s.location)}</select></div>
     <div class="fg"><label>Cancellation Code</label><select id="sd-cx">${co}</select>${s.cxBy?`<div style="font-size:10px;color:var(--mt);margin-top:4px;font-style:italic" title="Audit trail — recorded automatically when CX was applied">Marked CX by <strong>${s.cxBy}</strong> at ${fmtCxAudit(s).replace(s.cxBy+' at ','')}</div>`:''}</div>
     <div class="fg"><label>Notes</label><textarea id="sd-nt" rows="2">${s.notes||''}</textarea></div>
     ${s.sessionLog?`<div style="background:#F1F8E9;border:1.5px solid #A5D6A7;border-radius:8px;padding:10px 13px;margin-top:6px">
@@ -3589,8 +3609,8 @@ function updSess(id){
     if(newSupervised){ s.supervised=true; s.supMinutes=newSupMins||null; s.supervisorStid=viewerStid||s.stid; }
     else { delete s.supervised; delete s.supMinutes; delete s.supervisorStid; }
     // Location
-    const locEl=document.querySelector('input[name="sd-loc"]:checked');
-    s.location=locEl?locEl.value:'center';
+    const locEl=document.getElementById('sd-loc-select');
+    s.location=locEl?locEl.value:'clinic';
     // Group flag: checkbox wins. If user explicitly checked "Group session" in
     // the modal, set true. If they unchecked it, set false (allows un-marking).
     // Conflict-modal "✓ Group Session" can also force true even if checkbox
@@ -3678,16 +3698,20 @@ function openAddClient(){
         </div>
         <div id="nc-home-fields" style="display:none;margin-top:8px;padding:10px;background:#F3E5F5;border-radius:8px;border:1px solid #CE93D8">
           <div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Home Address</label><input id="nc-addr" placeholder="Street, City, Postal Code" style="font-size:12px"></div>
-          <div class="fg"><label style="font-size:11px">Parent / Contact Phone</label><input id="nc-phone" type="tel" placeholder="+49 …" style="font-size:12px"></div>
+          <div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Parent / Contact Phone</label><input id="nc-phone" type="tel" placeholder="+49 …" style="font-size:12px"></div>
+          <div class="fg"><label style="font-size:11px">Travel Zone</label><select id="nc-zone" style="font-size:12px"></select></div>
         </div>
       </div>
     </div>
     <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="saveClient()">Add</button></div>`);
+  // Populate zone dropdown from S.cfg.travelZones (dynamic so new zones appear immediately)
+  const nz=document.getElementById('nc-zone');
+  if(nz) nz.innerHTML=getTravelZones().map(z=>`<option value="${z.id}">${z.label} (${z.mins} min)</option>`).join('');
 }
 function saveClient(){
   const name=document.getElementById('nc-n').value.trim();if(!name)return alert('Name required.');
   const team=Array.from(document.getElementById('nc-team').selectedOptions).map(o=>o.value);
-  const c={id:'c'+uid(),name,extId:document.getElementById('nc-ext').value.trim()||'',dob:document.getElementById('nc-dob').value,ins:document.getElementById('nc-ins').value,rec:+document.getElementById('nc-rec').value,sch:+document.getElementById('nc-sch').value,bcba:document.getElementById('nc-bcba').value,authEnd:document.getElementById('nc-auth').value,team,therapyType:document.getElementById('nc-ttype').value,hasOT:document.getElementById('nc-ttype').value!=='ABA',hasBus:document.getElementById('nc-bus').checked,centerBased:document.getElementById('nc-center')?.checked!==false,inHome:document.getElementById('nc-inhome')?.checked||false,homeAddress:document.getElementById('nc-addr')?.value.trim()||'',homePhone:document.getElementById('nc-phone')?.value.trim()||'',notes:''};
+  const c={id:'c'+uid(),name,extId:document.getElementById('nc-ext').value.trim()||'',dob:document.getElementById('nc-dob').value,ins:document.getElementById('nc-ins').value,rec:+document.getElementById('nc-rec').value,sch:+document.getElementById('nc-sch').value,bcba:document.getElementById('nc-bcba').value,authEnd:document.getElementById('nc-auth').value,team,therapyType:document.getElementById('nc-ttype').value,hasOT:document.getElementById('nc-ttype').value!=='ABA',hasBus:document.getElementById('nc-bus').checked,centerBased:document.getElementById('nc-center')?.checked!==false,inHome:document.getElementById('nc-inhome')?.checked||false,homeAddress:document.getElementById('nc-addr')?.value.trim()||'',homePhone:document.getElementById('nc-phone')?.value.trim()||'',zone:document.getElementById('nc-zone')?.value||'ramstein',notes:''};
   S.clients.push(c);
   team.forEach(sid=>{const s=gs(sid);if(s){if(!s.clients)s.clients=[];if(!s.clients.includes(c.id))s.clients.push(c.id);}});
   save();closeM();rClients();rStaff();
@@ -3762,6 +3786,7 @@ function openClientDetail(id){
         <div id="cd-home-fields" style="display:${c.inHome?'block':'none'};margin-top:8px;padding:10px;background:#F3E5F5;border-radius:8px;border:1px solid #CE93D8">
           <div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Home Address</label><input id="cd-addr" value="${c.homeAddress||''}" placeholder="Street, City, Postal Code" style="font-size:12px"></div>
           <div class="fg"><label style="font-size:11px">Parent / Contact Phone</label><input id="cd-phone" type="tel" value="${c.homePhone||''}" placeholder="+49 …" style="font-size:12px"></div>
+          <div class="fg"><label style="font-size:11px">Travel Zone</label><select id="cd-zone" style="font-size:12px">${getTravelZones().map(z=>`<option value="${z.id}" ${c.zone===z.id?'selected':''}>${z.label} (${z.mins} min)</option>`).join('')}</select></div>
         </div>
       </div>
     </div>
@@ -3785,7 +3810,7 @@ function openClientDetail(id){
       <div class="gen-preview" id="gen-preview"></div>
     </div>
     <div class="mact"><button class="btn bd" onclick="delClient('${c.id}')" title="Permanently delete all data">Delete</button><button class="btn" style="border-color:#546E7A;color:#546E7A" onclick="closeM();openDischarge('${c.id}')">📁 Discharge</button><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updClient('${c.id}')">Save Info</button></div>`);
-    renderTplSlots();
+    renderTplSlots(c.id);
     return;
   }
 
@@ -3847,6 +3872,7 @@ function openClientDetail(id){
         <div id="cd-home-fields" style="display:${c.inHome?'block':'none'};margin-top:8px;padding:10px;background:#F3E5F5;border-radius:8px;border:1px solid #CE93D8">
           <div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Home Address</label><input id="cd-addr" value="${c.homeAddress||''}" placeholder="Street, City, Postal Code" style="font-size:12px"></div>
           <div class="fg"><label style="font-size:11px">Parent / Contact Phone</label><input id="cd-phone" type="tel" value="${c.homePhone||''}" placeholder="+49 …" style="font-size:12px"></div>
+          <div class="fg"><label style="font-size:11px">Travel Zone</label><select id="cd-zone" style="font-size:12px">${getTravelZones().map(z=>`<option value="${z.id}" ${c.zone===z.id?'selected':''}>${z.label} (${z.mins} min)</option>`).join('')}</select></div>
         </div>
       </div>
     </div>
@@ -3881,27 +3907,22 @@ function openClientDetail(id){
       <div class="gen-preview" id="gen-preview"></div>
     </div>
     <div class="mact"><button class="btn bd" onclick="delClient('${c.id}')" title="Permanently delete all data">Delete</button><button class="btn" style="border-color:#546E7A;color:#546E7A" onclick="closeM();openDischarge('${c.id}')">📁 Discharge</button><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updClient('${c.id}')">Save Info</button></div>`);
-  renderTplSlots();
+  renderTplSlots(c.id);
 }
 
-function renderTplSlots(){
-  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
+let _tplClientId = '';
+
+function renderTplSlots(clientId){
+  if(clientId !== undefined) _tplClientId = clientId;
   const days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
-  const to=STYPES.filter(t=>t.id!=='ADMIN').map(t=>`<option value="${t.id}">${t.label}</option>`).join('');
   const wrap=document.getElementById('tpl-slots');
   if(!wrap)return;
-  // Check if current client supports in-home — find by open modal
-  const openCid=document.querySelector('.mact [onclick*="updClient"]')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1]||'';
-  const openClient=gc(openCid);
-  const clientHasInHome=openClient?.inHome||false;
   wrap.innerHTML=_tplSlots.length?_tplSlots.map((sl,i)=>{
     const dOpts=days.map((d,di)=>`<option value="${di+1}" ${sl.dow==di+1?'selected':''}>${d}</option>`).join('');
     const stOpts=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}" ${s.id===sl.stid?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
     const tyOpts=STYPES.map(t=>`<option value="${t.id}" ${t.id===sl.type?'selected':''}>${t.label}</option>`).join('');
-    const locOpts=clientHasInHome
-      ?`<option value="center" ${(sl.location||'center')==='center'?'selected':''}>🏢 Center</option><option value="home" ${sl.location==='home'?'selected':''}>🏠 In-Home</option>`
-      :`<option value="center" selected>🏢 Center</option>`;
-    const locStyle=sl.location==='home'?'background:#F3E5F5;color:#6A1B9A;border-color:#CE93D8':'';
+    const locOpts_=SESSION_LOCATIONS.map(l=>'<option value="'+l.id+'"'+(l.id===(sl.location||'clinic')?' selected':'')+'>'+(l.icon?l.icon+' ':'')+l.label+'</option>').join('');
+    const locStyle=(sl.location&&sl.location!=='clinic')?'background:#F3E5F5;color:#6A1B9A;border-color:#CE93D8':'';
     return `<div class="tpl-slot" id="tsl-${i}">
       <select onchange="_tplSlots[${i}].dow=+this.value">${dOpts}</select>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
@@ -3910,7 +3931,7 @@ function renderTplSlots(){
       </div>
       <select onchange="_tplSlots[${i}].stid=this.value">${stOpts}</select>
       <select onchange="_tplSlots[${i}].type=this.value">${tyOpts}</select>
-      <select style="${locStyle}" onchange="_tplSlots[${i}].location=this.value;this.style.background=this.value==='home'?'#F3E5F5':'';this.style.color=this.value==='home'?'#6A1B9A':'';">${locOpts}</select>
+      <select style="${locStyle}" onchange="_tplSlots[${i}].location=this.value;this.style.background=this.value==='clinic'?'':'#F3E5F5';this.style.color=this.value==='clinic'?'':'#6A1B9A';">${locOpts_}</select>
       <button class="tpl-rm" onclick="removeTplSlot(${i})">×</button>
     </div>`;
   }).join(''):'<div style="font-size:11px;color:var(--mt);text-align:center;padding:8px 0">No sessions defined yet. Click + Add Session Slot.</div>';
@@ -3985,6 +4006,7 @@ function updClient(id){
   c.inHome=document.getElementById('cd-inhome')?.checked||false;
   c.homeAddress=document.getElementById('cd-addr')?.value.trim()||'';
   c.homePhone=document.getElementById('cd-phone')?.value.trim()||'';
+  c.zone=document.getElementById('cd-zone')?.value||'ramstein';
   c.notes=document.getElementById('cd-notes').value;
   c.extId=document.getElementById('cd-ext')?.value.trim()||c.extId||'';
   // Primary contact email — comma-separated string; trimmed but not validated
@@ -4703,11 +4725,11 @@ function rMyS(){
       const dur=((eh*60+em)-(sh*60+sm));
       const durLbl=dur>=60?Math.floor(dur/60)+'h'+(dur%60?''+dur%60+'m':''):(dur+'m');
       const clName=cl?((item.status==='CX')?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):sessFullLabel(item);
-      return`<div class="mys-sess${item.status==='CX'?' cx':''}${item.location==='home'?' in-home':''}" style="--ins-clr:${insBg}">
+      return`<div class="mys-sess${item.status==='CX'?' cx':''}${needsTravel(item)||item.location==='telehealth'?' in-home':''}" style="--ins-clr:${insBg}">
         <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${insBg};border-radius:4px 0 0 4px"></div>
         <div class="mys-sess-time">${ftm(item.s)} – ${ftm(item.e)}<span class="mys-sess-dur">${durLbl}</span></div>
         <div class="mys-sess-client">${clName}</div>
-        <div class="mys-sess-meta">${tbdg}${insBdg}${muBdg}${supBdg2}</div>
+        <div class="mys-sess-meta">${tbdg}${insBdg}${muBdg}${supBdg2}${sessLocChip(item)}</div>
         ${cl?.medAlerts?.length?`<div class="med-alerts" style="margin-top:5px">${medChips(cl)}</div>`:''}
         ${item.status==='CX'&&item.cx?'<div style="margin-top:4px"><span class="cx-badge">✕ '+item.cx+'</span></div>':''}
         ${cxBdg}
@@ -6026,6 +6048,69 @@ function tlSlots(){
   return slots;
 }
 
+// ── SESSION LOCATION TYPES ───────────────────────────────────────────────────
+const SESSION_LOCATIONS = [
+  {id:'clinic',     label:'Clinic',     icon:'',   travel:false},
+  {id:'home',       label:'Home',       icon:'🏠', travel:true},
+  {id:'school',     label:'School',     icon:'🏫', travel:true},
+  {id:'telehealth', label:'Telehealth', icon:'📱', travel:false},
+  {id:'community',  label:'Community',  icon:'🌳', travel:true},
+];
+
+// Returns true if this session requires travel from the clinic
+function needsTravel(s){
+  const loc=SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'));
+  return loc?loc.travel:false;
+}
+
+// Returns badge HTML for non-clinic locations — empty string for clinic (default)
+function sessLocChip(s){
+  const loc=SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'));
+  if(!loc||!loc.icon) return '';
+  return '<span style="font-size:11px;margin-right:2px" title="'+loc.label+'">'+loc.icon+'</span>';
+}
+
+// Location select options HTML
+function locOpts(current){
+  return SESSION_LOCATIONS.map(l=>'<option value="'+l.id+'"'+(l.id===(current||'clinic')?' selected':'')+'>'+
+    (l.icon?l.icon+' ':'')+l.label+'</option>').join('');
+}
+
+// ── TRAVEL ZONE MATRIX ──────────────────────────────────────────────────────
+// Default seed values — stored in S.cfg.travelZones so they're editable in Settings.
+function defTravelZones(){ return [
+  {id:'ramstein',   label:'Ramstein',          mins:10},
+  {id:'landstuhl',  label:'Landstuhl',         mins:15},
+  {id:'ktown',      label:'K-Town / Vogelweh', mins:20},
+  {id:'sembach',    label:'Sembach',            mins:25},
+  {id:'baumholder', label:'Baumholder',        mins:35},
+];}
+
+function getTravelZones(){ return S.cfg.travelZones || defTravelZones(); }
+function travelZoneMins(id){ const z=getTravelZones().find(z=>z.id===id); return z?z.mins:0; }
+
+// Returns the zone id for a session — 'clinic' if no travel needed
+function sessZone(s) {
+  if (!needsTravel(s)) return 'clinic';
+  return gc(s.cid)?.zone || getTravelZones()[0]?.id || 'ramstein';
+}
+
+// Returns drive time in minutes between two zones
+function travelMins(fromZone, toZone) {
+  if (fromZone === toZone) return fromZone === 'clinic' ? 0 : 5;
+  if (fromZone === 'clinic') return travelZoneMins(toZone);
+  if (toZone   === 'clinic') return travelZoneMins(fromZone);
+  return Math.max(travelZoneMins(fromZone), travelZoneMins(toZone));
+}
+
+function zoneLabel(id){ const z=getTravelZones().find(z=>z.id===id); return z?z.label:id; }
+
+function addMins(timeStr, mins) {
+  const [h, m] = timeStr.split(':').map(Number);
+  const total = h * 60 + m + mins;
+  return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
+}
+
 function tlPct(timeStr){
   const[h,m]=timeStr.split(':').map(Number);
   const t=h+m/60;
@@ -6098,7 +6183,35 @@ function rTimeline(){
     }).join('');
 
     // Session blocks — positioned absolutely by %
-    const sessBlocks=stSess.map(s=>{
+    const sortedSess = stSess.slice().sort((a,b)=>a.s.localeCompare(b.s));
+
+    // Build travel buffers between adjacent sessions
+    let travelBuffers = '';
+    for (let i = 0; i < sortedSess.length - 1; i++) {
+      const cur = sortedSess[i];
+      const nxt = sortedSess[i+1];
+      if (cur.status === 'CX' || nxt.status === 'CX') continue;
+      const fromZone = sessZone(cur);
+      const toZone   = sessZone(nxt);
+      const mins     = travelMins(fromZone, toZone);
+      if (!mins) continue; // no travel needed
+      const gapStart = tlPct(cur.e);
+      const gapEnd   = tlPct(nxt.s);
+      if (gapEnd <= gapStart) continue; // sessions overlap or back-to-back, skip
+      // Determine if gap is sufficient
+      const gapMins = (()=>{
+        const [h1,m1]=cur.e.split(':').map(Number);
+        const [h2,m2]=nxt.s.split(':').map(Number);
+        return (h2*60+m2)-(h1*60+m1);
+      })();
+      const isTight = gapMins < mins;
+      const toLabel = toZone !== 'clinic' ? zoneLabel(toZone) : 'Clinic';
+      const icon = isTight ? '⚠ ' : '🚗 ';
+      const bufLabel = icon + mins + ' min · ' + toLabel;
+      travelBuffers += `<div class="tl-travel ${isTight?'tight':'ok'}" style="left:${gapStart}%;right:${100-gapEnd}%;"><div class="tl-travel-inner ${isTight?'tight':'ok'}">${bufLabel}</div></div>`;
+    }
+
+    const sessBlocks=sortedSess.map(s=>{
       const cl=gc(s.cid);
       const left=tlPct(s.s);
       const right=100-tlPct(s.e);
@@ -6110,7 +6223,7 @@ function rTimeline(){
         : '';
       const muChip=s.makeup?'<span style="font-size:7px;background:#FFF9C4;color:#F57F17;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">MU</span>':'';
       const supChip2=s.supervised?'<span style="font-size:7px;background:#EDE7F6;color:#4A148C;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">SUP</span>':'';
-      return`<div class="tl-sess ins-${cl?.ins||''}${s.location==='home'?' in-home':''}" 
+      return`<div class="tl-sess ins-${cl?.ins||''}${needsTravel(s)||s.location==='telehealth'?' in-home':''}" 
         style="left:${left}%;right:${right}%;border-left-color:${insBg};background:${insBg}11"
         draggable="${isViewOnly?'false':'true'}"
         data-id="${s.id}"
@@ -6118,7 +6231,7 @@ function rTimeline(){
         ondragend="if(!isViewOnly)tlDragEnd(event)"
         onclick="openSess('${s.id}')"
         title="${cl?cDisplayName(cl):sessFullLabel(s)}: ${ftm(s.s)}–${ftm(s.e)}">
-        <div class="tl-sess-cl">${grpChip}${muChip}${supChip2}${cl?cDisplayName(cl):sessFullLabel(s)}</div>
+        <div class="tl-sess-cl">${grpChip}${muChip}${supChip2}${sessLocChip(s)}${cl?cDisplayName(cl):sessFullLabel(s)}</div>
         <div class="tl-sess-meta">${ftm(s.s)}–${ftm(s.e)} · <span class="bdg ${sessChipBdg(s)}" style="font-size:7px">${sessChipLabel(s)}</span></div>
       </div>`;
     }).join('');
@@ -6128,7 +6241,7 @@ function rTimeline(){
         <div class="tl-av2" style="background:${bg};color:${tx}">${st.initials}</div>
         <div><div class="tl-name">${st.name}</div><div class="tl-role">${st.role}</div><div style="margin-top:2px">${renderBlocks(st.id,dayDate)}</div></div>
       </div>
-      <div class="tl-cells" style="position:relative">${cells}${sessBlocks}</div>
+      <div class="tl-cells" style="position:relative">${cells}${travelBuffers}${sessBlocks}</div>
     </div>`;
   }).join('');
 
@@ -7549,14 +7662,14 @@ function rClientSched(){
         </div>`;
       }
       return`<div class="cs-sess"
-        style="left:${left}%;right:${right}%;${_vstyle};background:${bg}22;border-left-color:${bg}"
+        style="left:${left}%;right:${right}%;${_vstyle};background:${bg}22;border-left-color:${needsTravel(s)?'#7B1FA2':bg}"
         draggable="${isViewOnly?'false':'true'}"
         data-id="${s.id}"
         ondragstart="if(!isViewOnly)csDragStart(event,'${s.id}')"
         ondragend="if(!isViewOnly)csDragEnd(event)"
         onclick="openSess('${s.id}')"
         title="${st?.name||'—'}: ${ftm(s.s)}–${ftm(s.e)} · ${sTypeLabel(s.type)}">
-        <div class="cs-thr">${grpChip}${muChip}${supChip2}${noteChip}${logChip}<span class="tchip" style="background:${bg};color:${tx};font-size:9px;padding:1px 6px;border-radius:3px">${st?.initials||'?'}</span> ${st?.name||'—'}</div>
+        <div class="cs-thr">${grpChip}${muChip}${supChip2}${noteChip}${logChip}${sessLocChip(s)}<span class="tchip" style="background:${bg};color:${tx};font-size:9px;padding:1px 6px;border-radius:3px">${st?.initials||'?'}</span> ${st?.name||'—'}</div>
         <div class="cs-time">${ftm(s.s)}–${ftm(s.e)} · <span class="bdg ${tbdg}" style="font-size:7px">${sessChipLabel(s)}</span></div>
       </div>`;
     }).join('');
