@@ -225,10 +225,10 @@ input[type="color"]{border:none;padding:0;cursor:pointer;border-radius:4px;heigh
 /* SCHEDULE TEMPLATE */
 .tpl-wrap{background:#F8F9FF;border:1.5px solid #C5CAE9;border-radius:9px;padding:14px;margin-top:10px}
 .tpl-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#3949AB;margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.tpl-slot{display:grid;grid-template-columns:80px 1fr 1fr 1fr 90px 28px;gap:6px;align-items:center;margin-bottom:7px}
+.tpl-slot{display:grid;grid-template-columns:80px 1fr 1fr 1fr 28px;gap:6px;align-items:center;margin-bottom:7px}
 .tpl-slot select,.tpl-slot input{padding:5px 7px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--nv);background:#fff;width:100%}
 .tpl-slot select:focus,.tpl-slot input:focus{outline:none;border-color:#3949AB}
-.tpl-slot-hdr{display:grid;grid-template-columns:80px 1fr 1fr 1fr 90px 28px;gap:6px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt);margin-bottom:5px}
+.tpl-slot-hdr{display:grid;grid-template-columns:80px 1fr 1fr 1fr 28px;gap:6px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt);margin-bottom:5px}
 .tpl-rm{background:none;border:none;cursor:pointer;color:var(--rd);font-size:16px;line-height:1;padding:0;font-weight:700}
 .tpl-rm:hover{color:#8B0000}
 .gen-btn{background:linear-gradient(135deg,#3949AB,#5C6BC0);color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;width:100%;margin-top:10px;transition:opacity .15s;display:flex;align-items:center;justify-content:center;gap:6px}
@@ -342,15 +342,7 @@ body.view-only .stf-row button{display:none!important}
 .mys-sess-wrap{display:flex;flex-direction:column;gap:8px}
 .mys-sess{background:#fff;border-radius:12px;border:1px solid var(--bd);padding:14px 16px;box-shadow:var(--sh);position:relative;overflow:hidden}
 .mys-sess::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px}
-.tl-travel{position:absolute;top:0;bottom:0;display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none;overflow:hidden;border-radius:3px}
-.tl-travel-inner{font-size:9px;font-weight:600;white-space:nowrap;padding:1px 5px;border-radius:3px;background:rgba(255,255,255,.85)}
-.tl-travel.ok{background:repeating-linear-gradient(45deg,#E8E8E4,#E8E8E4 3px,#F1EFE8 3px,#F1EFE8 6px)}
-.tl-travel.tight{background:repeating-linear-gradient(45deg,#FFEBEE,#FFEBEE 3px,#FFF8F8 3px,#FFF8F8 6px)}
-.tl-travel-inner.ok{color:#5F5E5A}
-.tl-travel-inner.tight{color:#C62828}
-.blk-sess.in-home .blk-bar{background:#7B1FA2!important}
-.tl-sess.in-home{border-left-color:#7B1FA2!important}
-.mys-sess.in-home{border-left-color:#7B1FA2!important}
+.mys-sess.cx{opacity:1;background:repeating-linear-gradient(45deg,#F8F8F8,#F8F8F8 5px,#EEEEEE 5px,#EEEEEE 10px)!important;border-left-color:#9E9E9E!important}
 .mys-sess-time{font-size:11px;font-weight:700;color:var(--mt);margin-bottom:4px;display:flex;align-items:center;gap:8px}
 .mys-sess-dur{background:var(--bg);padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600;color:var(--t2)}
 .mys-sess-client{font-size:16px;font-weight:700;color:var(--nv);margin-bottom:5px}
@@ -383,64 +375,6 @@ body.view-only .stf-row button{display:none!important}
 /* App version indicator — fixed bottom-right, subtle */
 #app-version{position:fixed;bottom:6px;right:10px;font-size:9px;color:var(--mt);opacity:.5;font-family:monospace;letter-spacing:.3px;pointer-events:auto;user-select:text;z-index:50;background:rgba(255,255,255,.7);padding:2px 6px;border-radius:4px;transition:opacity .15s}
 #app-version:hover{opacity:1}
-/* ── KIOSK / DISPLAY MODE ───────────────────────── */
-body.kiosk-mode .nv,body.kiosk-mode .ah,body.kiosk-mode .mob-nav,
-body.kiosk-mode .fab,body.kiosk-mode .fab-main,body.kiosk-mode .fab-secondary,
-body.kiosk-mode .vo-banner,body.kiosk-mode #sync-status,
-body.kiosk-mode #lockBtn,body.kiosk-mode .edit-only,
-body.kiosk-mode .ot-tog,body.kiosk-mode .vtog,
-body.kiosk-mode #inactivity-warn,body.kiosk-mode .sched-notes-wrap,
-body.kiosk-mode .leave-queue-wrap,
-body.kiosk-mode #vbtn-week,body.kiosk-mode #vbtn-day,body.kiosk-mode #vbtn-client,
-body.kiosk-mode #sfbtn-aba,body.kiosk-mode #sfbtn-ot,body.kiosk-mode #sfbtn-all,
-body.kiosk-mode .nav-pill-arr,body.kiosk-mode .nav-pill-center,
-body.kiosk-mode .copy-wk{display:none!important}
-body.kiosk-mode{background:#0D0D1A}
-body.kiosk-mode .sbl,body.kiosk-mode .blk-sess,
-body.kiosk-mode .tl-sess,body.kiosk-mode .cs-sess{cursor:default!important}
-#kiosk-bar{display:none;position:fixed;top:0;left:0;right:0;height:52px;background:#0D0D1A;color:#fff;font-size:15px;font-weight:700;padding:0 20px;z-index:300;align-items:center;justify-content:space-between;border-bottom:1px solid #1E1E3A}
-body.kiosk-mode #kiosk-bar{display:flex}
-body.kiosk-mode .kiosk-hide{display:none!important}
-body.kiosk-mode .nav-pill-sep{display:none!important}
-@media screen and (min-height:900px){
-  body.kiosk-mode{font-size:15px}
-  body.kiosk-mode #app{padding-top:60px}
-  body.kiosk-mode #kiosk-bar{height:60px;font-size:17px}
-  body.kiosk-mode #kiosk-time{font-size:26px}
-  body.kiosk-mode #kiosk-date{font-size:15px}
-
-  /* Stack side panel below main — full width portrait layout */
-  body.kiosk-mode .dv-wrap{flex-direction:column;gap:10px}
-  body.kiosk-mode .dv-side{width:100%;position:static;max-height:none;order:2}
-  body.kiosk-mode .dv-main{order:1}
-
-  /* Bigger stats bar */
-  body.kiosk-mode .sb{padding:14px 18px}
-  body.kiosk-mode .sn{font-size:32px}
-  body.kiosk-mode .sl{font-size:12px}
-
-  /* Taller session blocks — easier to read at distance */
-  body.kiosk-mode .blk-sess{padding:14px 18px;gap:14px}
-  body.kiosk-mode .blk-cl{font-size:16px;margin-bottom:5px}
-  body.kiosk-mode .blk-meta{font-size:12px;gap:6px;margin-bottom:5px}
-  body.kiosk-mode .blk-thr{font-size:12px;gap:6px}
-  body.kiosk-mode .blk-ts{font-size:15px}
-  body.kiosk-mode .blk-te{font-size:12px}
-  body.kiosk-mode .blk-ttime{width:68px}
-  body.kiosk-mode .blk-bar{width:6px}
-
-  /* Therapist chip bigger */
-  body.kiosk-mode .tchip{font-size:12px!important;padding:3px 9px!important}
-
-  /* Now line more prominent */
-  body.kiosk-mode .now-line{height:3px!important}
-  body.kiosk-mode .now-lbl-live{font-size:12px!important;padding:3px 8px!important}
-
-  /* Staff panel horizontal in portrait */
-  body.kiosk-mode .stf-pnl{padding:12px 16px}
-  body.kiosk-mode .stf-row{padding:7px 0;font-size:13px}
-  body.kiosk-mode .stf-pnl h4{font-size:12px}
-}
 @media print{#app-version{display:none}}
 /* Inactivity warning */
 #inactivity-warn{display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--am);color:#fff;padding:10px 18px;border-radius:10px;font-size:12px;font-weight:600;z-index:500;box-shadow:var(--shm);text-align:center}
@@ -1151,14 +1085,6 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
   </div>
 </div>
 <div id="inactivity-warn">⏱ You'll be signed out in 60 seconds due to inactivity. <span style="text-decoration:underline;cursor:pointer" onclick="resetInactivity()">Stay signed in</span></div>
-<div id="kiosk-bar">
-  <div id="kiosk-date" style="font-size:14px;opacity:.8"></div>
-  <div style="font-size:13px;letter-spacing:.5px;opacity:.6">adaptABILITY Therapie</div>
-  <div style="display:flex;align-items:center;gap:12px">
-    <div id="kiosk-time" style="font-size:20px;font-variant-numeric:tabular-nums"></div>
-    <button onclick="firebase.auth().signOut()" style="background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.4);font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif">Exit</button>
-  </div>
-</div>
 <!-- Firebase setup overlay -->
 <div id="fb-setup">
   <div class="fb-box">
@@ -1264,7 +1190,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
         <button class="nav-pill-arr" onclick="navNext()" title="Next">▶</button>
       </div>
     </div>
-    <div style="display:flex;gap:6px;align-items:center" class="kiosk-hide">
+    <div style="display:flex;gap:6px;align-items:center">
       <button class="copy-wk edit-only desk-only" onclick="copyWeek()">⧉ Copy Week</button>
       <button class="btn bsm edit-only desk-only" onclick="openPostNote()" title="Post a note to a therapist's schedule" style="border-color:#F9A825;color:#795548;background:#FFFDE7;font-weight:700">📌 Post Note</button>
       <div style="width:1px;height:22px;background:var(--bd);margin:0 2px" class="desk-only"></div>
@@ -1497,18 +1423,6 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
           <button class="btn bp bsm" onclick="addCX()">Add</button>
         </div>
       </div>
-      <div class="scard">
-        <h3>🚗 Travel Zones</h3>
-        <p style="font-size:11px;color:var(--mt);margin-bottom:10px">Drive times from the Ramstein clinic in minutes. Used to calculate travel buffers on the schedule.</p>
-        <div id="tzlist"></div>
-        <div class="sep"></div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <input type="text" id="ntz-id" placeholder="ID (e.g. vogelweh)" class="fi" style="flex:1;min-width:90px">
-          <input type="text" id="ntz-label" placeholder="Label (e.g. Vogelweh)" class="fi" style="flex:2;min-width:120px">
-          <input type="number" id="ntz-mins" placeholder="Min" class="fi" style="flex:1;min-width:60px" min="1">
-          <button class="btn bp bsm" onclick="addTZ()">Add</button>
-        </div>
-      </div>
     </div>
   </div>
 </div>
@@ -1585,11 +1499,13 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
     <button class="btn bp bsm edit-only" onclick="openAddWL()">+ Add to Waitlist</button>
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
-    <button class="fch on" onclick="wlFilter('',this)">All</button>
-    <button class="fch" onclick="wlFilter('ABA',this)">ABA</button>
-    <button class="fch" onclick="wlFilter('OT',this)">OT</button>
-    <button class="fch" onclick="wlFilter('BOTH',this)">ABA+OT</button>
-    <button class="fch" onclick="wlFilter('HOME',this)">In-Home</button>
+    <select id="wl-filter" class="btn bsm" onchange="rWaitlist()" style="font-family:'DM Sans',sans-serif">
+      <option value="">All</option>
+      <option value="WAITING">Waiting – No Therapy Yet</option>
+      <option value="PT">Parent Training Model</option>
+      <option value="AUTH">Auth Received – Scheduling Soon</option>
+      <option value="URGENT">Urgent – Auth Expiring</option>
+    </select>
   </div>
   <div id="wl-content"></div>
 </div>
@@ -1666,8 +1582,8 @@ function insOpts(sel=''){
 }
 
 // ── ROLES ──
-const ROLES=['BCBA','RBT','ABAT','OT','Billing','display'];
-const ROLE_BADGE={BCBA:'b-echo',RBT:'b-sup',ABAT:'b-pt',OT:'b-ot',Billing:'b-adm',display:'b-adm'};
+const ROLES=['BCBA','RBT','ABAT','OT','Billing'];
+const ROLE_BADGE={BCBA:'b-echo',RBT:'b-sup',ABAT:'b-pt',OT:'b-ot',Billing:'b-adm'};
 
 
 // ── MEDICAL ALERTS ──
@@ -2043,7 +1959,7 @@ async function loadFromFirestore(){
       const L = JSON.parse(doc.data().payload);
       S = Object.assign({},S,L);
       if(!S.cfg)S.cfg={};
-      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX(); if(!S.cfg.travelZones)S.cfg.travelZones=defTravelZones();
+      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
       // One-time seed of the admin tasks URL — set on first load only, then
       // never touched again. If admin clears the value later (to hide the
       // link), we don't re-seed because adminTasksUrlSeeded stays true.
@@ -2062,7 +1978,7 @@ async function loadFromFirestore(){
       window._lastSaveTs = snap.data().ts;
       S = Object.assign({},S,incoming);
       if(!S.cfg)S.cfg={};
-      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX(); if(!S.cfg.travelZones)S.cfg.travelZones=defTravelZones();
+      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
       renderAll();
       setSyncStatus('ok','Live update ↓');
     }
@@ -2147,7 +2063,7 @@ function useDemoMode(){
   let loaded = false;
   try{const d=localStorage.getItem('abl-local');if(d){S=Object.assign({},S,JSON.parse(d));loaded=true;}}catch(e){}
   if(!S.cfg)S.cfg={};
-  if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX(); if(!S.cfg.travelZones)S.cfg.travelZones=defTravelZones();
+  if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
   renderAll();
   setSyncStatus('ok','Local mode');
 }
@@ -2166,9 +2082,6 @@ function disconnectFirebase(){
 // Returns short display name: first 2 chars of first name + first 2 of last name
 // e.g. "Mary Jane Evans" → "MaEv", "Sarah Evans" → "SaEv", "Noah" → "Noah"
 // Works with full names — enter full first and last name for best results
-// Staff eligible for scheduling — excludes admin-only roles
-function schedStaff(){ return S.staff.filter(s=>s.role!=='Billing'&&(s.role||'').toLowerCase()!=='display'); }
-
 function cDisplayName(c){
   if(!c) return '—';
   // Scheduler-assigned shortName takes priority
@@ -2183,71 +2096,6 @@ function cDisplayName(c){
 }
 // Full name — only shown in detail modals (scheduler only)
 function cFullName(c){ return c?.name||'—'; }
-
-// Kiosk display name: Em. Ko. format (first 2 of first name + first 2 of last name with periods)
-function kioskClientName(c){
-  if(!c) return '—';
-  const parts = c.name.trim().split(/\s+/).map(p=>p.replace(/[^a-zA-Z]/g,''));
-  const clean = parts.filter(p=>p.length>0);
-  if(clean.length === 1) return clean[0].slice(0,2)+'.';
-  const first = clean[0].slice(0,2);
-  const last  = clean[clean.length-1].slice(0,2);
-  return first+'. '+last+'.';
-}
-
-// ── KIOSK / DISPLAY MODE ─────────────────────────────────────────────────────
-function activateKioskMode(){
-  window._kioskMode = true;
-  isViewOnly = true;
-  document.body.classList.add('kiosk-mode');
-  // Stop inactivity timer — kiosk stays logged in indefinitely
-  clearInactivityTimer();
-  // Default to all programs (ABA + OT) so all clients show
-  schedSvcFilter = 'ALL';
-  // Lock to day view
-  sw('sched');
-  if(curView !== 'day') setView('day');
-  // Start live clock
-  startKioskClock();
-  // Auto-refresh data every 5 minutes
-  if(!window._kioskRefreshInterval){
-    window._kioskRefreshInterval = setInterval(function(){
-      if(typeof loadFromFirestore==='function') loadFromFirestore();
-    }, 5 * 60 * 1000);
-  }
-  // Auto-advance to next day at midnight Berlin time
-  scheduleKioskMidnightAdvance();
-}
-
-function startKioskClock(){
-  function tick(){
-    const now = new Date();
-    const berlin = new Date(now.toLocaleString('en-US',{timeZone:'Europe/Berlin'}));
-    const timeStr = berlin.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
-    const dateStr = berlin.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
-    const tEl = document.getElementById('kiosk-time');
-    const dEl = document.getElementById('kiosk-date');
-    if(tEl) tEl.textContent = timeStr;
-    if(dEl) dEl.textContent = dateStr;
-  }
-  tick();
-  if(!window._kioskClockInterval) window._kioskClockInterval = setInterval(tick, 1000);
-}
-
-function scheduleKioskMidnightAdvance(){
-  const now = new Date();
-  const berlin = new Date(now.toLocaleString('en-US',{timeZone:'Europe/Berlin'}));
-  const msUntilMidnight = new Date(berlin.getFullYear(),berlin.getMonth(),berlin.getDate()+1).getTime()
-    - berlin.getTime() + 60000; // 1 min past midnight to be safe
-  setTimeout(function(){
-    dayDate = fd(new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Berlin'})));
-    rSched();
-    scheduleKioskMidnightAdvance(); // reschedule for next night
-  }, msUntilMidnight);
-}
-
-// In a private staff-only location — show full display name in kiosk mode
-function clName4Display(c){ return cDisplayName(c); }
 // ── UTILS ──
 function fd(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
 function p2(n){return String(n).padStart(2,'0');}
@@ -2659,11 +2507,9 @@ function rWeekFull(){
       const cxch=s.status==='CX'&&s.cx?`<div class="cxch">${s.cx}</div>`:'';
       const tt_=cl?(cl.therapyType||(cl.hasOT?'BOTH':'ABA')):'ABA';const otfl=(tt_==='BOTH'&&s.type==='ABA')?'<div class="otch">+OT</div>':'';
       const much=s.makeup?'<div class="much">MU</div>':'';
-      const supch=s.supervised?'<div style="position:absolute;top:2px;left:'+(s.makeup?'20':'2')+'px;font-size:7px;font-weight:800;background:#EDE7F6;color:#4A148C;padding:1px 3px;border-radius:2px">SUP</div>':'';
-      const locch=sessLocChip(s)?'<div style="position:absolute;bottom:2px;right:2px;font-size:10px;line-height:1" title="'+((SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'))||{}).label||'')+'">'+((SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'))||{}).icon||'')+'</div>':'';
       const tbdg=`<span class="bdg ${sessChipBdg(s)}">${sessChipLabel(s)}</span>`;
       const isCX=s.status==='CX';
-      const clName=cl?(isCX?'<span class="cx-name">'+clName4Display(cl)+'</span>':clName4Display(cl)):`<em style="color:var(--mt)">${gs(s.stid)?.initials||''} – ${sessChipLabel(s)}</em>`;
+      const clName=cl?(isCX?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):`<em style="color:var(--mt)">${gs(s.stid)?.initials||''} – ${sessChipLabel(s)}</em>`;
       const insCls=cl?`ins-${cl.ins}`:'';
       const autoStyle=isAuto?'border-left-color:#9E9E9E;background:#FAFAFA;border:1px dashed #B0BEC5;':'';
       // GRP chip: solid badge shown only when the session IS a group, for
@@ -2675,7 +2521,7 @@ function rWeekFull(){
         ? `<div onclick="toggleGroup('${s.id}',event)" style="position:absolute;top:2px;left:2px;font-size:7px;background:#E8EAF6;color:#283593;padding:1px 4px;border-radius:2px;font-weight:800;cursor:pointer" title="Group session — click to remove">GRP</div>`
         : '';
       const cptChip=s.cptCode?(()=>{const noteOk=s.serviceNote&&s.serviceNote.trim();return `<div style="position:absolute;bottom:2px;right:2px;font-size:7px;background:#F3E5F5;color:#4A235A;padding:1px 4px;border-radius:2px;font-weight:800" title="Indirect: ${s.cptCode}${noteOk?'':' — note missing'}">${s.cptCode}${noteOk?'':' ⚠'}</div>`;})():'';
-      return`<div class="sbl ${tbCls(s)} ${insCls}${cxcl}${isUnassigned?' unassigned':''}${needsTravel(s)||s.location==='telehealth'?' in-home':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${supch}${locch}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
+      return`<div class="sbl ${tbCls(s)} ${insCls}${cxcl}${isUnassigned?' unassigned':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
     }).join('');
     if(!sh)sh=hol?`<div style="text-align:center;padding:14px"><div style="font-size:20px">🎌</div><div style="font-size:10px;margin-top:3px">${hol.name}</div></div>`:'<div style="text-align:center;padding:12px;font-size:10px;color:var(--mt)">No sessions</div>';
     html+=`<div class="dc"><div class="${hcls}"><div><div class="ddn">${dn}</div><div class="ddv">${d.getDate()}</div></div><div style="text-align:right">${hol?`<span class="hch">${hol.name}</span>`:''}${isT?'<span style="font-size:9px;font-weight:700;opacity:.75;display:block;margin-top:2px">TODAY</span>':''}</div></div>${bdayBar}<div class="dbody">${sh}<button class="asb" onclick="openAddSess('${ds}')">+ Session</button></div>${busbar}</div>`;
@@ -2728,20 +2574,18 @@ function rWeekAgenda(){
       const bg=tClr(s.stid),tx=tTxt(s.stid);
       const insClr=cl?iColor(cl.ins):'var(--pu)';
       const cxcl=s.status==='CX'?' cx':'';
-      const clName=cl?(s.status==='CX'?'<span class="cx-name">'+clName4Display(cl)+'</span>':clName4Display(cl)):(st?.initials||'—');
+      const clName=cl?(s.status==='CX'?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):(st?.initials||'—');
       const stName=st?st.initials:'?';
       const tbdg='<span class="bdg '+sessChipBdg(s)+'">'+sessChipLabel(s)+'</span>';
       const insBdg=cl?'<span class="bdg '+iBdg(cl.ins)+'">'+iLabel(cl.ins)+'</span>':'';
       const muChip=s.makeup?'<span class="bdg" style="background:#FFF3E0;color:#E65100">MU</span>':'';
-      const supChip=s.supervised?'<span class="bdg b-sup">SUP</span>':'';
-      const homeChip=sessLocChip(s);
       const medIcons=cl&&cl.medAlerts&&cl.medAlerts.length?medChips(cl,true):'';
       sessHtml+=`<div class="ag-sess${cxcl}" style="border-left-color:${insClr}" onclick="openSess('${s.id}')">
         <div class="ag-sess-time">${ftm(s.s)}<br><span style="font-size:9px;color:var(--mt)">– ${ftm(s.e)}</span></div>
         <div class="ag-sess-info">
           <div class="ag-sess-name">${clName}</div>
           ${s.status==='CX'&&s.cx?`<div style="margin-top:2px"><span class="cx-badge">&#x2715; ${s.cx}</span></div>`:''}
-          <div class="ag-sess-sub">${tbdg}${insBdg}${muChip}${supChip}${homeChip}${medIcons}</div>
+          <div class="ag-sess-sub">${tbdg}${insBdg}${muChip}${medIcons}</div>
         </div>
         <div class="ag-thr"><span class="tdot" style="background:${bg};width:8px;height:8px;border-radius:50%;display:inline-block"></span><span style="font-size:10px;color:var(--mt);font-weight:600">${stName}</span></div>
       </div>`;
@@ -2851,16 +2695,15 @@ function rDay(){
           : '';
         const otFlag=(cl?.hasOT&&s.type==='ABA')?'<span class="bdg b-ot">+OT</span>':'';
         const cxBdg=s.status==='CX'?`<span class="sr-cx">${s.cx||'CX'}</span>`:'';
-        const clName=cl?clName4Display(cl):`${gs(s.stid)?.initials||'—'} – ${sessChipLabel(s)}`;
+        const clName=cl?cDisplayName(cl):`${gs(s.stid)?.initials||'—'} – ${sessChipLabel(s)}`;
         const stName=gs(s.stid)?.name||'—';
         const blkIsUnassigned=s.stid==='UNASSIGNED'&&!isViewOnly;
-                const supBdg=s.supervised?'<span class="bdg b-sup">SUP</span>':'';
-return`<div class="blk-sess ${s.status==='CX'?'cx':''}${needsTravel(s)||s.location==='telehealth'?' in-home':''}" data-sid="${s.id}" data-unassigned="${blkIsUnassigned}" onclick="openSess(this.dataset.sid)" style="${s.stid==='UNASSIGNED'?'border:1.5px dashed #9E9E9E;background:repeating-linear-gradient(45deg,#FAFAFA,#FAFAFA 5px,#fff 5px,#fff 10px);':''}">
+        return`<div class="blk-sess ${s.status==='CX'?'cx':''}" data-sid="${s.id}" data-unassigned="${blkIsUnassigned}" onclick="openSess(this.dataset.sid)" style="${s.stid==='UNASSIGNED'?'border:1.5px dashed #9E9E9E;background:repeating-linear-gradient(45deg,#FAFAFA,#FAFAFA 5px,#fff 5px,#fff 10px);':''}">
           <div class="blk-ttime"><div class="blk-ts">${ftm(s.s)}</div><div class="blk-te">${ftm(s.e)}</div></div>
           <div class="blk-bar" style="background:${insBg}"></div>
           <div class="blk-body-inner">
             <div class="blk-cl">${clName}${s.stid==='UNASSIGNED'?'<span class="unassigned-badge" style="margin-left:6px">UNASSIGNED</span>':''}</div>
-            <div class="blk-meta">${tbdg}${insLbl}${muBdg}${supBdg}${sessLocChip(s)}${grpBdg}${otFlag}${cxBdg}</div>
+            <div class="blk-meta">${tbdg}${insLbl}${muBdg}${grpBdg}${otFlag}${cxBdg}</div>
             <div class="blk-thr"><span class="tchip" style="background:${bg};color:${tx};font-size:10px">${stName}</span>${s.notes?`<span style="font-size:10px;color:var(--mt);margin-left:6px;font-style:italic">${s.notes}</span>`:''}</div>
           </div>
         </div>`;
@@ -3056,7 +2899,7 @@ function cCard(c){
   const authLeft=c.authEnd?Math.ceil((pd(c.authEnd)-new Date())/864e5):null;
   return`<div class="ccard" onclick="openClientDetail('${c.id}')"><div class="cctop"><div><div class="ccname">${c.name}</div>${!isViewOnly?`<div style="font-size:10px;font-family:monospace;font-weight:700;color:${c.shortName?'var(--pu)':'#BDBDBD'};margin-top:1px" title="Schedule display name">${c.shortName||'auto: '+cDisplayName(c)}</div>`:''} ${c.extId&&!isViewOnly?`<div style="font-size:9px;font-family:monospace;color:var(--mt);margin-top:1px">${c.extId}</div>`:''}<div class="ccage">${age!==null?age+' yrs':''}</div></div><span class="bdg ${iBdg(c.ins)}">${iLabel(c.ins)}</span></div><div class="dwrap"><div class="dlbls"><span>Dosage</span><span style="font-weight:700;color:${dc}">${c.sch}/${c.rec}h/wk (${pct}%)</span></div><div class="dtrk"><div class="dbar" style="width:${pct}%;background:${dc}"></div></div></div>${c.authEnd&&authLeft!==null?`<div style="font-size:10px;color:${authLeft<30?'var(--rd)':'var(--mt)'};margin-top:3px">Auth ends: ${pd(c.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${authLeft<30?` (${authLeft}d)`:''}  </div>`:''}
 <div class="cteam">${team.map(s=>{const bg=tClr(s.id),tx=tTxt(s.id);const isOT=s.role==='OT';const otBorder=isOT?'border:1.5px solid #009688;box-shadow:0 0 0 1px #B2DFDB inset;':`border:1px solid ${bg}55;`;return`<span class="ctag" style="background:${bg}22;${otBorder}color:${bg==='#E0E0E0'||bg==='#C8C8C8'||bg==='#F5F0DC'?'#333':bg}" title="${s.name}${isOT?' (OT provider)':''}">${isOT?'<span style="background:#009688;color:#fff;font-size:8px;font-weight:800;padding:1px 4px;border-radius:3px;margin-right:3px;letter-spacing:.3px">OT</span>':''}${s.initials} ${isOT?'':`<span style="opacity:.7">${s.role}</span>`}</span>`;}).join('')}${(()=>{const bk=(c.backupTeam||[]).map(id=>gs(id)).filter(Boolean);return bk.length?'<span style="font-size:9px;color:#BA7517;margin:0 3px">·</span>'+bk.map(s=>`<span class="ctag" style="background:#FAEEDA;border:1px solid #EF9F27;color:#633806" title="Backup">★${s.initials}</span>`).join(''):'';})()}${!isViewOnly?`<button class="edit-team-btn" onclick="event.stopPropagation();openEditTeam('${c.id}')">Edit team</button>`:''}
-</div><div class="cflags">${(()=>{const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');const styles={ABA:'background:#E3F2FD;color:#0D47A1',OT:'background:#E0F2F1;color:#004D40',BOTH:'background:linear-gradient(90deg,#E3F2FD,#E0F2F1);color:#004D40'};return`<span class="flg" style="${styles[tt]||styles.ABA}">${tt==='BOTH'?'ABA+OT':tt}</span>`})()}${c.hasBus?'<span class="flg flg-bus">\u{1F68C} Bus</span>':''}${c.inHome?'<span class="flg" style="background:#F3E5F5;color:#6A1B9A">\u{1F3E0} In-Home</span>':''}${(()=>{const isBoth=(c.therapyType||(c.hasOT?'BOTH':'ABA'))==='BOTH';let chips='';if(c.authEnd){const pclr={APPROVED:'#E8F5E9',SUBMITTED:'#E3F2FD',PENDING:'#FFF3E0'}[c.authPipeline]||'var(--pl)';const ptxt={APPROVED:'#1B5E20',SUBMITTED:'#0D47A1',PENDING:'#E65100'}[c.authPipeline]||'#4527A0';const plbl={APPROVED:'Approved',SUBMITTED:'Submitted',PENDING:'Pending',NONE:'Auth'}[c.authPipeline||'NONE']||'Auth';chips+=`<span class="flg" style="background:${pclr};color:${ptxt}">${isBoth?'ABA: ':''}${plbl}</span>`;}if(isBoth&&c.otAuth?.end){const otLeft=Math.ceil((pd(c.otAuth.end)-new Date())/864e5);let otClr='#E8F5E9',otTxt='#1B5E20',otLbl='Active';if(otLeft<0){otClr='#FFEBEE';otTxt='#B71C1C';otLbl='Expired';}else if(otLeft<30){otClr='#FFF3E0';otTxt='#E65100';otLbl=otLeft+'d left';}chips+=`<span class="flg" style="background:${otClr};color:${otTxt}">OT: ${otLbl}</span>`;}return chips;})()}${(()=>{/* OT visit utilization chip: shown for OT-only clients (c.authVisits + c.visitsUsed) and BOTH clients (c.otAuth.visitsAuthorized + .visitsUsed) */const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');let auth,used,thresh;if(tt==='OT'){auth=c.authVisits;used=c.visitsUsed;thresh=c.visitAlertThreshold??20;}else if(tt==='BOTH'&&c.otAuth){auth=c.otAuth.visitsAuthorized;used=c.otAuth.visitsUsed;thresh=c.otAuth.visitAlertThreshold??20;}else return '';if(auth==null||used==null)return tt==='OT'||(tt==='BOTH'&&c.otAuth)?'<span class="flg" style="background:#FFF3E0;color:#E65100">📝 Enter visits</span>':'';const rem=auth-used;const pctUsed=(used/auth)*100;const pctRem=100-pctUsed;let clr='#E8F5E9',tx='#1B5E20';if(rem<=0){clr='#FFEBEE';tx='#B71C1C';}else if(pctRem<=thresh){clr='#FFF3E0';tx='#E65100';}return `<span class="flg" style="background:${clr};color:${tx}" title="${used}/${auth} used, ${Math.max(0,rem)} remaining">🎟 ${used}/${auth}${rem<=0?' (OVER)':''}</span>`;})()}${(c.scheduleTpl&&c.scheduleTpl.length)?`<span class='flg' style='background:#E8EAF6;color:#283593'>🗓 ${c.scheduleTpl.length}slot${c.scheduleTpl.length!==1?'s':''}</span>`:''}${medChips(c)}${(()=>{if(!c.reassessDue)return'';const d=Math.ceil((pd(c.reassessDue)-new Date())/864e5);return`<span class="reassess-chip ${d<0?'rc-over':d<30?'rc-due':'rc-ok'}">${d<0?'Reassess overdue':d<30?'Reassess '+d+'d':'Reassess ✓'}</span>`;})()}</div></div>`;
+</div><div class="cflags">${(()=>{const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');const styles={ABA:'background:#E3F2FD;color:#0D47A1',OT:'background:#E0F2F1;color:#004D40',BOTH:'background:linear-gradient(90deg,#E3F2FD,#E0F2F1);color:#004D40'};return`<span class="flg" style="${styles[tt]||styles.ABA}">${tt==='BOTH'?'ABA+OT':tt}</span>`})()}${c.hasBus?'<span class="flg flg-bus">🚌 Bus</span>':''}${(()=>{const isBoth=(c.therapyType||(c.hasOT?'BOTH':'ABA'))==='BOTH';let chips='';if(c.authEnd){const pclr={APPROVED:'#E8F5E9',SUBMITTED:'#E3F2FD',PENDING:'#FFF3E0'}[c.authPipeline]||'var(--pl)';const ptxt={APPROVED:'#1B5E20',SUBMITTED:'#0D47A1',PENDING:'#E65100'}[c.authPipeline]||'#4527A0';const plbl={APPROVED:'Approved',SUBMITTED:'Submitted',PENDING:'Pending',NONE:'Auth'}[c.authPipeline||'NONE']||'Auth';chips+=`<span class="flg" style="background:${pclr};color:${ptxt}">${isBoth?'ABA: ':''}${plbl}</span>`;}if(isBoth&&c.otAuth?.end){const otLeft=Math.ceil((pd(c.otAuth.end)-new Date())/864e5);let otClr='#E8F5E9',otTxt='#1B5E20',otLbl='Active';if(otLeft<0){otClr='#FFEBEE';otTxt='#B71C1C';otLbl='Expired';}else if(otLeft<30){otClr='#FFF3E0';otTxt='#E65100';otLbl=otLeft+'d left';}chips+=`<span class="flg" style="background:${otClr};color:${otTxt}">OT: ${otLbl}</span>`;}return chips;})()}${(()=>{/* OT visit utilization chip: shown for OT-only clients (c.authVisits + c.visitsUsed) and BOTH clients (c.otAuth.visitsAuthorized + .visitsUsed) */const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');let auth,used,thresh;if(tt==='OT'){auth=c.authVisits;used=c.visitsUsed;thresh=c.visitAlertThreshold??20;}else if(tt==='BOTH'&&c.otAuth){auth=c.otAuth.visitsAuthorized;used=c.otAuth.visitsUsed;thresh=c.otAuth.visitAlertThreshold??20;}else return '';if(auth==null||used==null)return tt==='OT'||(tt==='BOTH'&&c.otAuth)?'<span class="flg" style="background:#FFF3E0;color:#E65100">📝 Enter visits</span>':'';const rem=auth-used;const pctUsed=(used/auth)*100;const pctRem=100-pctUsed;let clr='#E8F5E9',tx='#1B5E20';if(rem<=0){clr='#FFEBEE';tx='#B71C1C';}else if(pctRem<=thresh){clr='#FFF3E0';tx='#E65100';}return `<span class="flg" style="background:${clr};color:${tx}" title="${used}/${auth} used, ${Math.max(0,rem)} remaining">🎟 ${used}/${auth}${rem<=0?' (OVER)':''}</span>`;})()}${(c.scheduleTpl&&c.scheduleTpl.length)?`<span class='flg' style='background:#E8EAF6;color:#283593'>🗓 ${c.scheduleTpl.length}slot${c.scheduleTpl.length!==1?'s':''}</span>`:''}${medChips(c)}${(()=>{if(!c.reassessDue)return'';const d=Math.ceil((pd(c.reassessDue)-new Date())/864e5);return`<span class="reassess-chip ${d<0?'rc-over':d<30?'rc-due':'rc-ok'}">${d<0?'Reassess overdue':d<30?'Reassess '+d+'d':'Reassess ✓'}</span>`;})()}</div></div>`;
 }
 function fc(f,el){document.querySelectorAll('.fch').forEach(c=>c.classList.remove('on'));el.classList.add('on');rClients(f);}
 
@@ -3079,7 +2922,7 @@ function rStaff(){
     const lastName=n=>(n||'').trim().split(/\s+/).pop()||'';
     return ri!==0?ri:lastName(a.name).localeCompare(lastName(b.name), undefined, {sensitivity:'base'});
   });
-  document.getElementById('stgrid').innerHTML=sortedStaff.filter(s=>(s.role||'').toLowerCase()!=='display').map(s=>{
+  document.getElementById('stgrid').innerHTML=sortedStaff.map(s=>{
     const bd=dbu(s.birthday);
     const bdt=s.birthday?new Date(s.birthday+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
     const bds=bd!==null&&bd<=30;
@@ -3242,9 +3085,9 @@ function quickAddAdmin(stid, date){
 
 // ── SETTINGS ──
 function rSettings(){
+
+
   document.getElementById('cxlist').innerHTML=S.cfg.cxCodes.map((c,i)=>`<div class="cdi"><div><div class="cda">${c.code}</div><div class="cdd">${c.label}</div></div><button class="btn bxs bd" onclick="rmCX(${i})">Remove</button></div>`).join('');
-  const tzEl=document.getElementById('tzlist');
-  if(tzEl) tzEl.innerHTML=getTravelZones().map((z,i)=>`<div class="cdi"><div><div class="cda">${z.label}</div><div class="cdd" style="display:flex;align-items:center;gap:8px"><input type="number" value="${z.mins}" min="1" style="width:56px;padding:3px 6px;border:1.5px solid var(--bd);border-radius:5px;font-size:11px;font-family:'DM Sans',sans-serif" onchange="updTZMins(${i},+this.value)"> min from clinic</div></div><button class="btn bxs bd" onclick="rmTZ(${i})">Remove</button></div>`).join('');
   document.getElementById('hollist').innerHTML=S.holidays.length?S.holidays.map((h,i)=>`<div class="holi"><div><div style="font-weight:600;font-size:11px">${h.name}</div><div style="font-size:10px;color:var(--mt)">${pd(h.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</div></div><button class="btn bxs bd" onclick="rmHol(${i})">×</button></div>`).join(''):'<div style="font-size:11px;color:var(--mt);margin-bottom:7px">None added.</div>';
   document.getElementById('ins-legend').innerHTML=INS.map(i=>`<div class="lrow"><div class="ldot" style="background:${i.color}"></div><span class="bdg ${i.badge}">${i.label}</span><span style="color:var(--mt);font-size:10px">${i.group}</span></div>`).join('');
   document.getElementById('thr-legend').innerHTML=S.staff.map(s=>{const bg=s.color||'#9E9E9E',tx=txtForBg(bg);return`<div class="lrow"><div class="ldot" style="background:${bg};border:1px solid #ccc"></div><strong style="font-size:11px">${s.initials}</strong><span style="font-size:11px">${s.name}</span><span class="bdg ${ROLE_BADGE[s.role]||'b-adm'}" style="font-size:9px">${s.role}</span></div>`;}).join('');
@@ -3317,18 +3160,6 @@ function checkHolidayReminders(){
 }
 function addCX(){const code=document.getElementById('ncc').value.trim().toUpperCase(),label=document.getElementById('ncl').value.trim();if(!code||!label)return;S.cfg.cxCodes.push({code,label});document.getElementById('ncc').value='';document.getElementById('ncl').value='';save();rSettings();}
 function rmCX(i){S.cfg.cxCodes.splice(i,1);save();rSettings();}
-function addTZ(){
-  const id=document.getElementById('ntz-id').value.trim().toLowerCase().replace(/\s+/g,'_');
-  const label=document.getElementById('ntz-label').value.trim();
-  const mins=+document.getElementById('ntz-mins').value;
-  if(!id||!label||!mins)return alert('Enter ID, label, and minutes.');
-  if(getTravelZones().find(z=>z.id===id))return alert('A zone with that ID already exists.');
-  S.cfg.travelZones.push({id,label,mins});
-  document.getElementById('ntz-id').value='';document.getElementById('ntz-label').value='';document.getElementById('ntz-mins').value='';
-  save();rSettings();
-}
-function rmTZ(i){if(!confirm('Remove this zone? Any clients assigned to it will need to be updated.'))return;S.cfg.travelZones.splice(i,1);save();rSettings();}
-function updTZMins(i,v){if(!v||v<1)return;S.cfg.travelZones[i].mins=v;save();}
 function expData(){const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='abl-'+todayBerlin()+'.json';a.click();}
 function confReset(){
   _openM(`<h3 style="color:var(--rd)">⚠️ Reset All Data</h3>
@@ -3345,7 +3176,7 @@ function confReset(){
     </div>`);
 }
 function doConfirmedReset(){
-  S={clients:[],staff:[],sessions:[],logs:{},holidays:[],waitlist:[],schedNotes:[],schedRequests:[],cfg:{cxCodes:defCX(),travelZones:defTravelZones()}};
+  S={clients:[],staff:[],sessions:[],logs:{},holidays:[],waitlist:[],schedNotes:[],schedRequests:[],cfg:{cxCodes:defCX()}};
   save();closeM();renderAll();
 }
 // Override doReset only for the reset confirmation flow
@@ -3381,14 +3212,14 @@ function openFillDay(date){
   const wds=[0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
   const dowIdx=wds.indexOf(date);
 
-  // Find staff who are available today — include those with partial schedules
+  // Find staff who are available today but have no real sessions
   const unscheduled=S.staff.filter(st=>{
     if(st.role==='Billing') return false;
     const av=st.av[dowIdx>=0?dowIdx:0];
     const pto=!!ptoOnDate(st,date);
     if(!av||pto) return false;
-    // Include all available staff (even those with some sessions — they may have open blocks)
-    return true;
+    const realSess=S.sessions.filter(s=>s.stid===st.id&&s.date===date&&!s._autoAdmin&&!s._virtual&&s.status!=='CX');
+    return realSess.length===0;
   });
 
   if(!unscheduled.length){
@@ -3467,7 +3298,7 @@ function doFillDay(date){
     const av=st.av[dowIdx>=0?dowIdx:0];
     const pto=!!ptoOnDate(st,date);
     if(!av||pto) return false;
-    return true;
+    return S.sessions.filter(s=>s.stid===st.id&&s.date===date&&!s._autoAdmin&&!s._virtual&&s.status!=='CX').length===0;
   });
 
   pushUndo('Fill day');
@@ -3659,7 +3490,7 @@ function openSess(id){
   const ownBlock = (s.stid===viewerStid) && (s.type==='ADMIN'||s.type==='INDIRECT'||s.type==='SUP');
   const bypassLock = isAdminViewer() || (isClinicianViewer() && ownBlock);
   const cl=gc(s.cid);
-  const so='<option value="UNASSIGNED" '+(s.stid==='UNASSIGNED'?'selected':'')+'>— Unassigned (placeholder) —</option>'+_byLastName(schedStaff()).map(x=>`<option value="${x.id}" ${x.id===s.stid?'selected':''}>${x.initials} – ${x.name}</option>`).join('');
+  const so='<option value="UNASSIGNED" '+(s.stid==='UNASSIGNED'?'selected':'')+'>— Unassigned (placeholder) —</option>'+_byLastName(S.staff.filter(x=>x.role!=='Billing')).map(x=>`<option value="${x.id}" ${x.id===s.stid?'selected':''}>${x.initials} – ${x.name}</option>`).join('');
   const co='<option value="" '+(s.cx?'':'selected')+'>✅ Scheduled</option>'+S.cfg.cxCodes.map(c=>`<option value="${c.code}" ${s.cx===c.code?'selected':''}>${c.code} – ${c.label}</option>`).join('');
   const to=STYPES.map(t=>`<option value="${t.id}" ${t.id===s.type?'selected':''}>${t.label}</option>`).join('');
   const isRec=!!s.recurGroup;
@@ -3675,29 +3506,7 @@ function openSess(id){
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-mu" ${s.makeup?'checked':''}> Make-up</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-grp" ${s.isGroup?'checked':''}> Group session</label>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-note" ${s.noteWritten?'checked':''}> Session note written</label>
-      ${(()=>{
-        const assignedRole=(gs(s.stid)?.role||'').toLowerCase();
-        const isSupervisableSess = assignedRole==='rbt' || assignedRole==='abat';
-        const viewerIsBCBA = !isViewOnly || (()=>{ const vst=gs(viewerStid); return (vst?.role||'').toLowerCase()==='bcba'; })();
-        if(!isSupervisableSess) return '';
-        if(viewerIsBCBA){
-          return `<label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-            <input type="checkbox" id="sd-sup" ${s.supervised?'checked':''} onchange="document.getElementById('sd-sup-mins-wrap').style.display=this.checked?'flex':'none'">
-            Supervision provided
-          </label>
-          <div id="sd-sup-mins-wrap" style="display:${s.supervised?'flex':'none'};align-items:center;gap:6px;font-size:12px">
-            <input type="number" id="sd-sup-mins" value="${s.supMinutes||''}" min="5" max="480" step="5" placeholder="min" style="width:64px;padding:3px 7px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:12px">
-            <span style="color:var(--mt)">minutes of supervision</span>
-          </div>`;
-        } else if(s.supervised){
-          return `<div style="display:flex;align-items:center;gap:6px;background:#E3F2FD;border:1px solid #90CAF9;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:#1565C0">
-            🔵 Supervised session${s.supMinutes?' ('+s.supMinutes+' min)':''}
-          </div>`;
-        }
-        return '';
-      })()}
     </div>
-    <div class="fg"><label>Location</label><select id="sd-loc-select" style="font-size:12px">${locOpts(s.location)}</select></div>
     <div class="fg"><label>Cancellation Code</label><select id="sd-cx">${co}</select>${s.cxBy?`<div style="font-size:10px;color:var(--mt);margin-top:4px;font-style:italic" title="Audit trail — recorded automatically when CX was applied">Marked CX by <strong>${s.cxBy}</strong> at ${fmtCxAudit(s).replace(s.cxBy+' at ','')}</div>`:''}</div>
     <div class="fg"><label>Notes</label><textarea id="sd-nt" rows="2">${s.notes||''}</textarea></div>
     ${s.sessionLog?`<div style="background:#F1F8E9;border:1.5px solid #A5D6A7;border-radius:8px;padding:10px 13px;margin-top:6px">
@@ -3730,8 +3539,6 @@ function updSess(id){
   pushUndo('Edit session');
   const newMakeup=document.getElementById('sd-mu').checked;
   const newGroupChk=document.getElementById('sd-grp')?.checked||false;
-  const newSupervised=document.getElementById('sd-sup')?.checked||false;
-  const newSupMins=newSupervised?(parseInt(document.getElementById('sd-sup-mins')?.value)||0):0;
   const cx=document.getElementById('sd-cx').value;
   const newNotes=document.getElementById('sd-nt').value;
 
@@ -3739,12 +3546,6 @@ function updSess(id){
     s.stid=newStid;s.cid=newCid;s.type=newType;s.date=newDate;s.s=newS;s.e=newE;
     s.makeup=newMakeup;s.noteWritten=document.getElementById('sd-note')?.checked||false;// preserve sessionLog
     s.notes=newNotes;
-    // Supervision tracking
-    if(newSupervised){ s.supervised=true; s.supMinutes=newSupMins||null; s.supervisorStid=viewerStid||s.stid; }
-    else { delete s.supervised; delete s.supMinutes; delete s.supervisorStid; }
-    // Location
-    const locEl=document.getElementById('sd-loc-select');
-    s.location=locEl?locEl.value:'clinic';
     // Group flag: checkbox wins. If user explicitly checked "Group session" in
     // the modal, set true. If they unchecked it, set false (allows un-marking).
     // Conflict-modal "✓ Group Session" can also force true even if checkbox
@@ -3804,7 +3605,7 @@ function cancelFuture(rg, fromDate){if(!confirm('Cancel all future sessions in t
 // ── ADD CLIENT ──
 function openAddClient(){
   if(isViewOnly && !isClientManagerViewer() && !isBillingViewer()){promptUnlock();return;}
-  const so=_byLastName(schedStaff()).map(s=>`<option value="${s.id}">${s.initials} – ${s.name} (${s.role})</option>`).join('');
+  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}">${s.initials} – ${s.name} (${s.role})</option>`).join('');
   const bo=_byLastName(S.staff.filter(s=>s.role==='BCBA')).map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   openM(`<h3>Add Client</h3>
     <div class="fg"><label>Name</label><input id="nc-n" placeholder="Client name"></div>
@@ -3824,28 +3625,13 @@ function openAddClient(){
       <input type="hidden" id="nc-ttype" value="ABA">
     </div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="nc-bus"> Bus Rider</label>
-      <div style="margin-top:10px">
-        <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Service Location — check all that apply</div>
-        <div style="display:flex;gap:14px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="nc-center" checked> Center-based</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="nc-inhome" onchange="document.getElementById('nc-home-fields').style.display=this.checked?'block':'none'"> In-Home</label>
-        </div>
-        <div id="nc-home-fields" style="display:none;margin-top:8px;padding:10px;background:#F3E5F5;border-radius:8px;border:1px solid #CE93D8">
-          <div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Home Address</label><input id="nc-addr" placeholder="Street, City, Postal Code" style="font-size:12px"></div>
-          <div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Parent / Contact Phone</label><input id="nc-phone" type="tel" placeholder="+49 …" style="font-size:12px"></div>
-          <div class="fg"><label style="font-size:11px">Travel Zone</label><select id="nc-zone" style="font-size:12px"></select></div>
-        </div>
-      </div>
     </div>
     <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="saveClient()">Add</button></div>`);
-  // Populate zone dropdown from S.cfg.travelZones (dynamic so new zones appear immediately)
-  const nz=document.getElementById('nc-zone');
-  if(nz) nz.innerHTML=getTravelZones().map(z=>`<option value="${z.id}">${z.label} (${z.mins} min)</option>`).join('');
 }
 function saveClient(){
   const name=document.getElementById('nc-n').value.trim();if(!name)return alert('Name required.');
   const team=Array.from(document.getElementById('nc-team').selectedOptions).map(o=>o.value);
-  const c={id:'c'+uid(),name,extId:document.getElementById('nc-ext').value.trim()||'',dob:document.getElementById('nc-dob').value,ins:document.getElementById('nc-ins').value,rec:+document.getElementById('nc-rec').value,sch:+document.getElementById('nc-sch').value,bcba:document.getElementById('nc-bcba').value,authEnd:document.getElementById('nc-auth').value,team,therapyType:document.getElementById('nc-ttype').value,hasOT:document.getElementById('nc-ttype').value!=='ABA',hasBus:document.getElementById('nc-bus').checked,centerBased:document.getElementById('nc-center')?.checked!==false,inHome:document.getElementById('nc-inhome')?.checked||false,homeAddress:document.getElementById('nc-addr')?.value.trim()||'',homePhone:document.getElementById('nc-phone')?.value.trim()||'',zone:document.getElementById('nc-zone')?.value||'ramstein',notes:''};
+  const c={id:'c'+uid(),name,extId:document.getElementById('nc-ext').value.trim()||'',dob:document.getElementById('nc-dob').value,ins:document.getElementById('nc-ins').value,rec:+document.getElementById('nc-rec').value,sch:+document.getElementById('nc-sch').value,bcba:document.getElementById('nc-bcba').value,authEnd:document.getElementById('nc-auth').value,team,therapyType:document.getElementById('nc-ttype').value,hasOT:document.getElementById('nc-ttype').value!=='ABA',hasBus:document.getElementById('nc-bus').checked,notes:''};
   S.clients.push(c);
   team.forEach(sid=>{const s=gs(sid);if(s){if(!s.clients)s.clients=[];if(!s.clients.includes(c.id))s.clients.push(c.id);}});
   save();closeM();rClients();rStaff();
@@ -3866,7 +3652,7 @@ function openClientDetail(id){
       <div style="background:var(--bg);border-radius:8px;padding:12px;margin-bottom:12px;display:flex;gap:10px;flex-wrap:wrap">
         <div><div style="font-size:10px;font-weight:700;color:var(--mt)">AGE</div><div style="font-size:13px;font-weight:700">${age!==null?age+' yrs':'—'}</div></div>
         <div><div style="font-size:10px;font-weight:700;color:var(--mt)">INSURANCE</div><div><span class="bdg ${iBdg(c.ins)}">${iLabel(c.ins)}</span></div></div>
-        ${(c.therapyType||(c.hasOT?'BOTH':'ABA'))!=='OT'?`<div><div style="font-size:10px;font-weight:700;color:var(--mt)">DOSAGE</div><div style="font-size:13px;font-weight:700">${c.sch}/${c.rec}h/wk</div></div>`:''}
+        <div><div style="font-size:10px;font-weight:700;color:var(--mt)">DOSAGE</div><div style="font-size:13px;font-weight:700">${c.sch}/${c.rec}h/wk</div></div>
         ${c.authEnd?`<div><div style="font-size:10px;font-weight:700;color:var(--mt)">AUTH ENDS</div><div style="font-size:12px;font-weight:600">${pd(c.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div></div>`:''}
       </div>
       <div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--mt);margin-bottom:6px">THERAPY TEAM</div>
@@ -3878,7 +3664,7 @@ function openClientDetail(id){
     return;
   }
   _tplSlots=(c.scheduleTpl||[]).map(s=>Object.assign({},s));
-  const so=_byLastName(schedStaff()).map(s=>`<option value="${s.id}" ${(c.team||[]).includes(s.id)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}" ${(c.team||[]).includes(s.id)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
   const _isOTcl=((c.therapyType||(c.hasOT?'BOTH':'ABA'))==='OT');
   const _cmPool=_isOTcl?S.staff.filter(s=>s.role==='OT'):S.staff.filter(s=>s.role==='BCBA');
   const bo=_cmPool.map(s=>`<option value="${s.id}" ${c.bcba===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
@@ -3911,20 +3697,9 @@ function openClientDetail(id){
         <input type="hidden" id="cd-ttype" value="${c.therapyType||'OT'}">
       </div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-bus" ${c.hasBus?'checked':''}> Bus Rider</label>
-      <div style="margin-top:10px">
-        <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Service Location — check all that apply</div>
-        <div style="display:flex;gap:14px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-center" ${c.centerBased!==false?'checked':''}> Center-based</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-inhome" ${c.inHome?'checked':''} onchange="document.getElementById('cd-home-fields').style.display=this.checked?'block':'none'"> In-Home</label>
-        </div>
-        <div id="cd-home-fields" style="display:${c.inHome?'block':'none'};margin-top:8px;padding:10px;background:#F3E5F5;border-radius:8px;border:1px solid #CE93D8">
-          <div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Home Address</label><input id="cd-addr" value="${c.homeAddress||''}" placeholder="Street, City, Postal Code" style="font-size:12px"></div>
-          <div class="fg"><label style="font-size:11px">Parent / Contact Phone</label><input id="cd-phone" type="tel" value="${c.homePhone||''}" placeholder="+49 …" style="font-size:12px"></div>
-          <div class="fg"><label style="font-size:11px">Travel Zone</label><select id="cd-zone" style="font-size:12px">${getTravelZones().map(z=>`<option value="${z.id}" ${c.zone===z.id?'selected':''}>${z.label} (${z.mins} min)</option>`).join('')}</select></div>
-        </div>
-      </div>
     </div>
     <div class="fg"><label>Notes</label><textarea id="cd-notes" rows="2">${c.notes||''}</textarea></div>
+    <div class="fg"><label>External ID <span style="font-weight:400;color:var(--mt);font-size:10px">— HiRasmus / Cowork reference</span></label><input id="cd-ext" value="${c.extId||''}" placeholder="e.g. HR-10042" style="font-family:monospace;font-size:12px"></div>
     <div class="fg"><label>Primary Contact Email <span style="font-weight:400;color:var(--mt);font-size:10px">— for auth expiration reminders · separate multiple addresses with commas</span></label><input id="cd-pcemail" value="${c.primaryContactEmail||''}" placeholder="parent1@example.com, parent2@example.com" style="font-size:12px"></div>
     <div class="fg" style="margin-top:8px"><label style="display:flex;align-items:center;gap:6px;margin-bottom:8px"><span style="font-size:12px;font-weight:700;color:#B71C1C">⚠️ Medical Alerts</span></label>
       <div style="display:flex;flex-wrap:wrap;gap:6px">${MED_ALERTS.map(m=>`<label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;cursor:pointer;border:1.5px solid var(--bd);background:#fff;font-size:11px;font-weight:600" class="med-toggle" data-med="${m.id}"><input type="checkbox" id="med-${m.id}" ${(c.medAlerts||[]).includes(m.id)?'checked':''} style="accent-color:#B71C1C;width:13px;height:13px"> ${m.label}</label>`).join('')}</div>
@@ -3932,19 +3707,14 @@ function openClientDetail(id){
     <div class="tpl-wrap">
       <div class="tpl-title">🗓 Weekly Schedule Template</div>
       <div style="font-size:11px;color:var(--t2);margin-bottom:10px">Define recurring OT sessions. Click <strong>Generate Schedule</strong> to create all sessions through the auth end date.</div>
-      <div class="tpl-slot-hdr"><span>Day</span><span>Start – End</span><span>Therapist</span><span>Type</span><span>Location</span><span></span></div>
+      <div class="tpl-slot-hdr"><span>Day</span><span>Start – End</span><span>Therapist</span><span>Type</span><span></span></div>
       <div id="tpl-slots"></div>
       <button class="btn bsm" style="width:100%;border-style:dashed;margin-top:2px" onclick="addTplSlot()">+ Add Session Slot</button>
-      <div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px;flex-wrap:wrap">
-        <label style="font-size:11px;font-weight:700;color:var(--mt);white-space:nowrap">Start from:</label>
-        <input type="date" id="gen-start-date" value="${todayBerlin()}" style="padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif">
-        <span style="font-size:10px;color:var(--mt)">Leave as today for a new schedule · set a future date for seasonal transitions</span>
-      </div>
       <button class="gen-btn" onclick="genSchedule('${c.id}')">${tplBtnLbl}</button>
       <div class="gen-preview" id="gen-preview"></div>
     </div>
     <div class="mact"><button class="btn bd" onclick="delClient('${c.id}')" title="Permanently delete all data">Delete</button><button class="btn" style="border-color:#546E7A;color:#546E7A" onclick="closeM();openDischarge('${c.id}')">📁 Discharge</button><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updClient('${c.id}')">Save Info</button></div>`);
-    renderTplSlots(c.id);
+    renderTplSlots();
     return;
   }
 
@@ -3958,6 +3728,10 @@ function openClientDetail(id){
       <div class="pipe-steps" id="pipe-steps">${pipeHtml}</div>
       <div class="auth-pipeline-card">
         <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Authorization Dates</div>
+        <div class="fr2" style="margin-bottom:8px">
+          <div class="fg" style="margin:0"><label>Submitted</label><input type="date" id="cd-pipe-sub" class="fi" value="${c.authSubmittedDate||''}"></div>
+          <div class="fg" style="margin:0"><label>Approved</label><input type="date" id="cd-pipe-app" class="fi" value="${c.authApprovedDate||''}"></div>
+        </div>
         <div class="fg" style="margin-bottom:8px"><label>Next Auth Start</label><input type="date" id="cd-pipe-next" class="fi" value="${c.nextAuthStart||''}"></div>
         <div class="sep"></div>
         <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;margin-top:8px">Reassessment</div>
@@ -3997,20 +3771,11 @@ function openClientDetail(id){
       <input type="hidden" id="cd-ttype" value="${c.therapyType||(c.hasOT?'BOTH':'ABA')}">
     </div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-bus" ${c.hasBus?'checked':''}> Bus Rider</label>
-      <div style="margin-top:10px">
-        <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Service Location — check all that apply</div>
-        <div style="display:flex;gap:14px;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-center" ${c.centerBased!==false?'checked':''}> Center-based</label>
-          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-inhome" ${c.inHome?'checked':''} onchange="document.getElementById('cd-home-fields').style.display=this.checked?'block':'none'"> In-Home</label>
-        </div>
-        <div id="cd-home-fields" style="display:${c.inHome?'block':'none'};margin-top:8px;padding:10px;background:#F3E5F5;border-radius:8px;border:1px solid #CE93D8">
-          <div class="fg" style="margin-bottom:6px"><label style="font-size:11px">Home Address</label><input id="cd-addr" value="${c.homeAddress||''}" placeholder="Street, City, Postal Code" style="font-size:12px"></div>
-          <div class="fg"><label style="font-size:11px">Parent / Contact Phone</label><input id="cd-phone" type="tel" value="${c.homePhone||''}" placeholder="+49 …" style="font-size:12px"></div>
-          <div class="fg"><label style="font-size:11px">Travel Zone</label><select id="cd-zone" style="font-size:12px">${getTravelZones().map(z=>`<option value="${z.id}" ${c.zone===z.id?'selected':''}>${z.label} (${z.mins} min)</option>`).join('')}</select></div>
-        </div>
-      </div>
     </div>
     <div class="fg"><label>Notes</label><textarea id="cd-notes" rows="2">${c.notes||''}</textarea></div>
+    <div class="fg"><label>External ID <span style="font-weight:400;color:var(--mt);font-size:10px">— HiRasmus / Cowork / billing system reference</span></label>
+      <input id="cd-ext" value="${c.extId||''}" placeholder="e.g. HR-10042" style="font-family:monospace;font-size:12px">
+    </div>
     <div class="fg"><label>Primary Contact Email <span style="font-weight:400;color:var(--mt);font-size:10px">— for auth expiration reminders · separate multiple addresses with commas</span></label>
       <input id="cd-pcemail" value="${c.primaryContactEmail||''}" placeholder="parent1@example.com, parent2@example.com" style="font-size:12px">
     </div>
@@ -4029,34 +3794,26 @@ function openClientDetail(id){
     <div class="tpl-wrap">
       <div class="tpl-title">🗓 Weekly Schedule Template</div>
       <div style="font-size:11px;color:var(--t2);margin-bottom:10px">Define recurring weekly sessions. Click <strong>Generate Schedule</strong> to create all sessions through the auth end date.</div>
-      <div class="tpl-slot-hdr"><span>Day</span><span>Start – End</span><span>Therapist</span><span>Type</span><span>Location</span><span></span></div>
+      <div class="tpl-slot-hdr"><span>Day</span><span>Start – End</span><span>Therapist</span><span>Type</span><span></span></div>
       <div id="tpl-slots"></div>
       <button class="btn bsm" style="width:100%;border-style:dashed;margin-top:2px" onclick="addTplSlot()">+ Add Session Slot</button>
-      <div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px;flex-wrap:wrap">
-        <label style="font-size:11px;font-weight:700;color:var(--mt);white-space:nowrap">Start from:</label>
-        <input type="date" id="gen-start-date" value="${todayBerlin()}" style="padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif">
-        <span style="font-size:10px;color:var(--mt)">Leave as today for a new schedule · set a future date for seasonal transitions</span>
-      </div>
       <button class="gen-btn" onclick="genSchedule('${c.id}')">${tplBtnLbl}</button>
       <div class="gen-preview" id="gen-preview"></div>
     </div>
     <div class="mact"><button class="btn bd" onclick="delClient('${c.id}')" title="Permanently delete all data">Delete</button><button class="btn" style="border-color:#546E7A;color:#546E7A" onclick="closeM();openDischarge('${c.id}')">📁 Discharge</button><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updClient('${c.id}')">Save Info</button></div>`);
-  renderTplSlots(c.id);
+  renderTplSlots();
 }
 
-let _tplClientId = '';
-
-function renderTplSlots(clientId){
-  if(clientId !== undefined) _tplClientId = clientId;
+function renderTplSlots(){
+  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}">${s.initials} – ${s.name}</option>`).join('');
   const days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
+  const to=STYPES.filter(t=>t.id!=='ADMIN').map(t=>`<option value="${t.id}">${t.label}</option>`).join('');
   const wrap=document.getElementById('tpl-slots');
   if(!wrap)return;
   wrap.innerHTML=_tplSlots.length?_tplSlots.map((sl,i)=>{
     const dOpts=days.map((d,di)=>`<option value="${di+1}" ${sl.dow==di+1?'selected':''}>${d}</option>`).join('');
-    const stOpts=_byLastName(schedStaff()).map(s=>`<option value="${s.id}" ${s.id===sl.stid?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+    const stOpts=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}" ${s.id===sl.stid?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
     const tyOpts=STYPES.map(t=>`<option value="${t.id}" ${t.id===sl.type?'selected':''}>${t.label}</option>`).join('');
-    const locOpts_=SESSION_LOCATIONS.map(l=>'<option value="'+l.id+'"'+(l.id===(sl.location||'clinic')?' selected':'')+'>'+(l.icon?l.icon+' ':'')+l.label+'</option>').join('');
-    const locStyle=(sl.location&&sl.location!=='clinic')?'background:#F3E5F5;color:#6A1B9A;border-color:#CE93D8':'';
     return `<div class="tpl-slot" id="tsl-${i}">
       <select onchange="_tplSlots[${i}].dow=+this.value">${dOpts}</select>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
@@ -4065,14 +3822,13 @@ function renderTplSlots(clientId){
       </div>
       <select onchange="_tplSlots[${i}].stid=this.value">${stOpts}</select>
       <select onchange="_tplSlots[${i}].type=this.value">${tyOpts}</select>
-      <select style="${locStyle}" onchange="_tplSlots[${i}].location=this.value;this.style.background=this.value==='clinic'?'':'#F3E5F5';this.style.color=this.value==='clinic'?'':'#6A1B9A';">${locOpts_}</select>
       <button class="tpl-rm" onclick="removeTplSlot(${i})">×</button>
     </div>`;
   }).join(''):'<div style="font-size:11px;color:var(--mt);text-align:center;padding:8px 0">No sessions defined yet. Click + Add Session Slot.</div>';
 }
 
 function addTplSlot(){
-  _tplSlots.push({dow:1,s:'09:00',e:'11:00',stid:S.staff[0]?.id||'',type:'ABA',location:'center'});
+  _tplSlots.push({dow:1,s:'09:00',e:'11:00',stid:S.staff[0]?.id||'',type:'ABA'});
   renderTplSlots();
 }
 function removeTplSlot(i){
@@ -4085,20 +3841,18 @@ function genSchedule(cid){
   if(!_tplSlots.length){alert('Add at least one session slot to the template first.');return;}
   const authEnd=pd(c.authEnd);
   const today=pd(todayBerlin());
-  // Use Start From date if set, otherwise default to today
-  const startEl=document.getElementById('gen-start-date');
-  const startFrom=startEl&&startEl.value?pd(startEl.value):today;
-  // Remove existing future recurring sessions from the start date forward
-  S.sessions=S.sessions.filter(s=>!(s.cid===cid&&s.recurGroup&&pd(s.date)>=startFrom));
-  // Generate from startFrom through auth end
+  // Remove existing future recurring sessions for this client
+  S.sessions=S.sessions.filter(s=>!(s.cid===cid&&s.recurGroup&&pd(s.date)>=today));
+  // Generate from today through auth end
   const rg=uid();
   let count=0;
-  let weekMon=wkOf(startFrom);
+  // Start from the current week's Monday
+  let weekMon=wkOf(today);
   while(weekMon<=authEnd){
     _tplSlots.forEach(sl=>{
       const d=new Date(weekMon);d.setDate(d.getDate()+(sl.dow-1));
-      if(d>=startFrom&&d<=authEnd){
-        S.sessions.push({id:'s'+uid(),cid,stid:sl.stid,date:fd(d),s:sl.s,e:sl.e,type:sl.type,status:'OK',cx:'',makeup:false,recurGroup:rg,notes:'',location:sl.location||'center'});
+      if(d>=today&&d<=authEnd){
+        S.sessions.push({id:'s'+uid(),cid,stid:sl.stid,date:fd(d),s:sl.s,e:sl.e,type:sl.type,status:'OK',cx:'',makeup:false,recurGroup:rg,notes:''});
         count++;
       }
     });
@@ -4110,7 +3864,7 @@ function genSchedule(cid){
   const prev=document.getElementById('gen-preview');
   if(prev){
     prev.style.display='block';
-    const wks=Math.round((authEnd-startFrom)/864e5/7);
+    const wks=Math.round((authEnd-today)/864e5/7);
     prev.innerHTML=`✅ Generated <strong>${count} sessions</strong> across ~${wks} weeks (${_tplSlots.length} slot${_tplSlots.length!==1?'s':''}/week) through <strong>${authEnd.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</strong>`;
   }
   rSched();rClients();
@@ -4135,19 +3889,15 @@ function updClient(id){
   c.authEnd=document.getElementById('cd-auth').value;
   c.team=Array.from(document.getElementById('cd-team').selectedOptions).map(o=>o.value);
   const tt=document.getElementById('cd-ttype').value||'ABA';
-  c.therapyType=tt;c.hasOT=tt!=='ABA';c.hasBus=document.getElementById('cd-bus').checked;
-  c.centerBased=document.getElementById('cd-center')?.checked!==false;
-  c.inHome=document.getElementById('cd-inhome')?.checked||false;
-  c.homeAddress=document.getElementById('cd-addr')?.value.trim()||'';
-  c.homePhone=document.getElementById('cd-phone')?.value.trim()||'';
-  c.zone=document.getElementById('cd-zone')?.value||'ramstein';
-  c.notes=document.getElementById('cd-notes').value;
+  c.therapyType=tt;c.hasOT=tt!=='ABA';c.hasBus=document.getElementById('cd-bus').checked;c.notes=document.getElementById('cd-notes').value;
   c.extId=document.getElementById('cd-ext')?.value.trim()||c.extId||'';
   // Primary contact email — comma-separated string; trimmed but not validated
   // here (CSV import normalizes it). May be blank if admin hasn't filled it.
   c.primaryContactEmail=document.getElementById('cd-pcemail')?.value.trim()||'';
   c.medAlerts=MED_ALERTS.map(m=>m.id).filter(id=>document.getElementById('med-'+id)?.checked);
   c.authPipeline=window._pipeStatus||c.authPipeline||'NONE';
+  c.authSubmittedDate=document.getElementById('cd-pipe-sub')?.value||'';
+  c.authApprovedDate=document.getElementById('cd-pipe-app')?.value||'';
   c.nextAuthStart=document.getElementById('cd-pipe-next')?.value||'';
   c.authNotes=document.getElementById('cd-pipe-notes')?.value||'';
   c.lastReassess=document.getElementById('cd-reassess')?.value||'';
@@ -4558,16 +4308,7 @@ function applyRoleAccess(){
   const lockEl = document.getElementById('lockBtn');
   const showSettings = isAdminViewer();
   const showReports  = isAdminViewer() || isBillingViewer() || isClinicianViewer();
-  const showLock     = isAdminViewer();
-
-  // ── KIOSK MODE ──────────────────────────────────────────────────────────────
-  // Activated when the logged-in staff record has role === 'display'
-  const viewerSt = gs(viewerStid);
-  if((viewerSt?.role||'').toLowerCase()==='display'){
-    activateKioskMode();
-    return; // skip all other role checks
-  }
-  window._kioskMode = false;
+  const showLock     = isAdminViewer(); // only admins toggle the lock
 
   // Apply client-editor body class so CSS shows client mgmt controls for Billing/ClientManager
   if(isBillingViewer() || isClientManagerViewer()){ document.body.classList.add('client-editor'); }
@@ -4860,19 +4601,18 @@ function rMyS(){
       const tbdg=`<span class="bdg ${sessChipBdg(item)}">${sessChipLabel(item)}</span>`;
       const insBdg=cl?`<span class="bdg ${iBdg(cl.ins)}">${iLabel(cl.ins)}</span>`:'';
       const muBdg=item.makeup?'<span class="bdg b-mu">Make-up</span>':'';
-      const supBdg2=item.supervised?'<span class="bdg b-sup">SUP</span>':'';
       const cxBdg=item.status==='CX'?`<div class="mys-sess-cx">❌ ${item.cx||'Cancelled'}</div>`:'';
       // Duration
       const[sh,sm]=item.s.split(':').map(Number);
       const[eh,em]=item.e.split(':').map(Number);
       const dur=((eh*60+em)-(sh*60+sm));
       const durLbl=dur>=60?Math.floor(dur/60)+'h'+(dur%60?''+dur%60+'m':''):(dur+'m');
-      const clName=cl?((item.status==='CX')?'<span class="cx-name">'+clName4Display(cl)+'</span>':clName4Display(cl)):sessFullLabel(item);
-      return`<div class="mys-sess${item.status==='CX'?' cx':''}${needsTravel(item)||item.location==='telehealth'?' in-home':''}" style="--ins-clr:${insBg}">
+      const clName=cl?((item.status==='CX')?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):sessFullLabel(item);
+      return`<div class="mys-sess${item.status==='CX'?' cx':''}" style="--ins-clr:${insBg}">
         <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${insBg};border-radius:4px 0 0 4px"></div>
         <div class="mys-sess-time">${ftm(item.s)} – ${ftm(item.e)}<span class="mys-sess-dur">${durLbl}</span></div>
         <div class="mys-sess-client">${clName}</div>
-        <div class="mys-sess-meta">${tbdg}${insBdg}${muBdg}${supBdg2}${sessLocChip(item)}</div>
+        <div class="mys-sess-meta">${tbdg}${insBdg}${muBdg}</div>
         ${cl?.medAlerts?.length?`<div class="med-alerts" style="margin-top:5px">${medChips(cl)}</div>`:''}
         ${item.status==='CX'&&item.cx?'<div style="margin-top:4px"><span class="cx-badge">✕ '+item.cx+'</span></div>':''}
         ${cxBdg}
@@ -6191,69 +5931,6 @@ function tlSlots(){
   return slots;
 }
 
-// ── SESSION LOCATION TYPES ───────────────────────────────────────────────────
-const SESSION_LOCATIONS = [
-  {id:'clinic',     label:'Clinic',     icon:'',   travel:false},
-  {id:'home',       label:'Home',       icon:'🏠', travel:true},
-  {id:'school',     label:'School',     icon:'🏫', travel:true},
-  {id:'telehealth', label:'Telehealth', icon:'📱', travel:false},
-  {id:'community',  label:'Community',  icon:'🌳', travel:true},
-];
-
-// Returns true if this session requires travel from the clinic
-function needsTravel(s){
-  const loc=SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'));
-  return loc?loc.travel:false;
-}
-
-// Returns badge HTML for non-clinic locations — empty string for clinic (default)
-function sessLocChip(s){
-  const loc=SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'));
-  if(!loc||!loc.icon) return '';
-  return '<span style="font-size:11px;margin-right:2px" title="'+loc.label+'">'+loc.icon+'</span>';
-}
-
-// Location select options HTML
-function locOpts(current){
-  return SESSION_LOCATIONS.map(l=>'<option value="'+l.id+'"'+(l.id===(current||'clinic')?' selected':'')+'>'+
-    (l.icon?l.icon+' ':'')+l.label+'</option>').join('');
-}
-
-// ── TRAVEL ZONE MATRIX ──────────────────────────────────────────────────────
-// Default seed values — stored in S.cfg.travelZones so they're editable in Settings.
-function defTravelZones(){ return [
-  {id:'ramstein',   label:'Ramstein',          mins:10},
-  {id:'landstuhl',  label:'Landstuhl',         mins:15},
-  {id:'ktown',      label:'K-Town / Vogelweh', mins:20},
-  {id:'sembach',    label:'Sembach',            mins:25},
-  {id:'baumholder', label:'Baumholder',        mins:35},
-];}
-
-function getTravelZones(){ return S.cfg.travelZones || defTravelZones(); }
-function travelZoneMins(id){ const z=getTravelZones().find(z=>z.id===id); return z?z.mins:0; }
-
-// Returns the zone id for a session — 'clinic' if no travel needed
-function sessZone(s) {
-  if (!needsTravel(s)) return 'clinic';
-  return gc(s.cid)?.zone || getTravelZones()[0]?.id || 'ramstein';
-}
-
-// Returns drive time in minutes between two zones
-function travelMins(fromZone, toZone) {
-  if (fromZone === toZone) return fromZone === 'clinic' ? 0 : 5;
-  if (fromZone === 'clinic') return travelZoneMins(toZone);
-  if (toZone   === 'clinic') return travelZoneMins(fromZone);
-  return Math.max(travelZoneMins(fromZone), travelZoneMins(toZone));
-}
-
-function zoneLabel(id){ const z=getTravelZones().find(z=>z.id===id); return z?z.label:id; }
-
-function addMins(timeStr, mins) {
-  const [h, m] = timeStr.split(':').map(Number);
-  const total = h * 60 + m + mins;
-  return String(Math.floor(total / 60)).padStart(2, '0') + ':' + String(total % 60).padStart(2, '0');
-}
-
 function tlPct(timeStr){
   const[h,m]=timeStr.split(':').map(Number);
   const t=h+m/60;
@@ -6326,35 +6003,7 @@ function rTimeline(){
     }).join('');
 
     // Session blocks — positioned absolutely by %
-    const sortedSess = stSess.slice().sort((a,b)=>a.s.localeCompare(b.s));
-
-    // Build travel buffers between adjacent sessions
-    let travelBuffers = '';
-    for (let i = 0; i < sortedSess.length - 1; i++) {
-      const cur = sortedSess[i];
-      const nxt = sortedSess[i+1];
-      if (cur.status === 'CX' || nxt.status === 'CX') continue;
-      const fromZone = sessZone(cur);
-      const toZone   = sessZone(nxt);
-      const mins     = travelMins(fromZone, toZone);
-      if (!mins) continue; // no travel needed
-      const gapStart = tlPct(cur.e);
-      const gapEnd   = tlPct(nxt.s);
-      if (gapEnd <= gapStart) continue; // sessions overlap or back-to-back, skip
-      // Determine if gap is sufficient
-      const gapMins = (()=>{
-        const [h1,m1]=cur.e.split(':').map(Number);
-        const [h2,m2]=nxt.s.split(':').map(Number);
-        return (h2*60+m2)-(h1*60+m1);
-      })();
-      const isTight = gapMins < mins;
-      const toLabel = toZone !== 'clinic' ? zoneLabel(toZone) : 'Clinic';
-      const icon = isTight ? '⚠ ' : '🚗 ';
-      const bufLabel = icon + mins + ' min · ' + toLabel;
-      travelBuffers += `<div class="tl-travel ${isTight?'tight':'ok'}" style="left:${gapStart}%;right:${100-gapEnd}%;"><div class="tl-travel-inner ${isTight?'tight':'ok'}">${bufLabel}</div></div>`;
-    }
-
-    const sessBlocks=sortedSess.map(s=>{
+    const sessBlocks=stSess.map(s=>{
       const cl=gc(s.cid);
       const left=tlPct(s.s);
       const right=100-tlPct(s.e);
@@ -6365,8 +6014,7 @@ function rTimeline(){
         ? `<span onclick="toggleGroup('${s.id}',event)" style="font-size:7px;background:#E8EAF6;color:#283593;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px;cursor:pointer" title="Group session — click to remove">GRP</span>`
         : '';
       const muChip=s.makeup?'<span style="font-size:7px;background:#FFF9C4;color:#F57F17;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">MU</span>':'';
-      const supChip2=s.supervised?'<span style="font-size:7px;background:#EDE7F6;color:#4A148C;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">SUP</span>':'';
-      return`<div class="tl-sess ins-${cl?.ins||''}${needsTravel(s)||s.location==='telehealth'?' in-home':''}" 
+      return`<div class="tl-sess ins-${cl?.ins||''}" 
         style="left:${left}%;right:${right}%;border-left-color:${insBg};background:${insBg}11"
         draggable="${isViewOnly?'false':'true'}"
         data-id="${s.id}"
@@ -6374,7 +6022,7 @@ function rTimeline(){
         ondragend="if(!isViewOnly)tlDragEnd(event)"
         onclick="openSess('${s.id}')"
         title="${cl?cDisplayName(cl):sessFullLabel(s)}: ${ftm(s.s)}–${ftm(s.e)}">
-        <div class="tl-sess-cl">${grpChip}${muChip}${supChip2}${sessLocChip(s)}${cl?clName4Display(cl):sessFullLabel(s)}</div>
+        <div class="tl-sess-cl">${grpChip}${muChip}${cl?cDisplayName(cl):sessFullLabel(s)}</div>
         <div class="tl-sess-meta">${ftm(s.s)}–${ftm(s.e)} · <span class="bdg ${sessChipBdg(s)}" style="font-size:7px">${sessChipLabel(s)}</span></div>
       </div>`;
     }).join('');
@@ -6384,7 +6032,7 @@ function rTimeline(){
         <div class="tl-av2" style="background:${bg};color:${tx}">${st.initials}</div>
         <div><div class="tl-name">${st.name}</div><div class="tl-role">${st.role}</div><div style="margin-top:2px">${renderBlocks(st.id,dayDate)}</div></div>
       </div>
-      <div class="tl-cells" style="position:relative">${cells}${travelBuffers}${sessBlocks}</div>
+      <div class="tl-cells" style="position:relative">${cells}${sessBlocks}</div>
     </div>`;
   }).join('');
 
@@ -6510,25 +6158,9 @@ function tlDrop(e){
 // Touch drag disabled on mobile — use click to edit sessions
 
 // ── WAITLIST ──
-let _wlFilter='';
-function wlFilter(val, el){
-  _wlFilter=val;
-  document.querySelectorAll('#tp-waitlist .fch').forEach(function(b){ b.classList.remove('on'); });
-  if(el) el.classList.add('on');
-  rWaitlist();
-}
-
 function rWaitlist(){
-  let wl=(S.waitlist||[]).slice();
-  if(_wlFilter==='HOME'){
-    wl=wl.filter(function(w){ return w.inHome; });
-  } else if(_wlFilter==='ABA'){
-    wl=wl.filter(function(w){ return (w.therapyType||'ABA')==='ABA'; });
-  } else if(_wlFilter==='OT'){
-    wl=wl.filter(function(w){ return (w.therapyType||'ABA')==='OT'; });
-  } else if(_wlFilter==='BOTH'){
-    wl=wl.filter(function(w){ return (w.therapyType||'ABA')==='BOTH'; });
-  }
+  const filter=document.getElementById('wl-filter')?.value||'';
+  let wl=(S.waitlist||[]).filter(w=>!filter||w.status===filter);
   const ct=document.getElementById('wl-count');
   if(ct) ct.textContent=`(${(S.waitlist||[]).length} total)`;
   const con=document.getElementById('wl-content');
@@ -6590,7 +6222,6 @@ function openAddWL(){
     </div>
     <div class="fg"><label>Scheduling Notes</label><textarea id="wl-sched" rows="2" placeholder="Preferred days/times, location, sibling groups…"></textarea></div>
     <div class="fg"><label>Priority Notes</label><textarea id="wl-nt" rows="2" placeholder="Diagnosis, urgency, what they're waiting for…"></textarea></div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px"><input type="checkbox" id="wl-inhome"> In-Home services</label>
     <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="saveWL()">Add</button></div>`);
 }
 
@@ -6612,7 +6243,6 @@ function saveWL(){
     status:document.getElementById('wl-st').value,
     schedNotes:document.getElementById('wl-sched')?.value||'',
     notes:document.getElementById('wl-nt').value,
-    inHome:document.getElementById('wl-inhome')?.checked||false,
   };
   if(!w.name){alert('Name required.');return;}
   S.waitlist.push(w);save();closeM();rWaitlist();
@@ -6634,7 +6264,6 @@ function openEditWL(id){
     <div class="fg"><label>Status</label><select id="wl-st">${so}</select></div>
     <div class="fg"><label>Scheduling Notes</label><textarea id="wl-sched" rows="2">${w.schedNotes||''}</textarea></div>
     <div class="fg"><label>Priority Notes</label><textarea id="wl-nt" rows="2">${w.notes||''}</textarea></div>
-    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px"><input type="checkbox" id="wl-inhome" ${w.inHome?'checked':''}> In-Home services</label>
     <div class="mact"><button class="btn bd" onclick="deleteWL('${id}')">Remove</button><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updWL('${id}')">Save</button></div>`);
 }
 
@@ -6654,7 +6283,6 @@ function updWL(id){
   w.status=document.getElementById('wl-st').value;
   w.schedNotes=document.getElementById('wl-sched')?.value||'';
   w.notes=document.getElementById('wl-nt').value;
-  w.inHome=document.getElementById('wl-inhome')?.checked||false;
   save();closeM();rWaitlist();
 }
 
@@ -6899,7 +6527,7 @@ function toggleCaseload(){
 function renderCaseload(){
   const el=document.getElementById('cl-cards');if(!el)return;
   const wds=[0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
-  el.innerHTML=schedStaff().map(st=>{
+  el.innerHTML=S.staff.filter(s=>s.role!=='Billing').map(st=>{
     const bg=tClr(st.id),tx=tTxt(st.id);
     const wkSess=S.sessions.filter(s=>wds.includes(s.date)&&s.stid===st.id&&s.status!=='CX'&&!s._autoAdmin&&s.cid);
     const directHrs=wkSess.filter(s=>DIRECT_TYPES.includes(s.type)).reduce((sum,s)=>sum+sessMins(s),0)/60;
@@ -7010,7 +6638,7 @@ function setTherapyType(prefix, val){
     const curSelected=Array.from(teamEl.selectedOptions||[]).map(o=>o.value);
     const pool=isOT
       ? S.staff.filter(s=>s.role==='OT')
-      : schedStaff();
+      : S.staff.filter(s=>s.role!=='Billing');
     teamEl.innerHTML=pool.map(s=>
       `<option value="${s.id}" ${curSelected.includes(s.id)?'selected':''}>${s.initials} – ${s.name}${isOT?' ('+s.role+')':''}</option>`
     ).join('');
@@ -7231,7 +6859,7 @@ function dismissNote(id){
 }
 
 function openPostNote(){
-  const so=_byLastName(schedStaff()).map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   // If a therapist is viewing My Schedule, pre-select the current viewer as author
   const myId=mySchedStid||'';
   const myName=myId?(gs(myId)?.name||'Scheduler'):'Scheduler';
@@ -7791,7 +7419,6 @@ function rClientSched(){
         ? `<span onclick="toggleGroup('${s.id}',event)" style="font-size:7px;background:#E8EAF6;color:#283593;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px;cursor:pointer" title="Group session — click to remove">GRP</span>`
         : '';
       const muChip=s.makeup?'<span style="font-size:7px;background:#FFF9C4;color:#F57F17;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">MU</span>':'';
-      const supChip2=s.supervised?'<span style="font-size:7px;background:#EDE7F6;color:#4A148C;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">SUP</span>':'';
       const noteChip=s.cid&&!s.noteWritten?'<span style="font-size:7px;background:#FFEBEE;color:#C62828;padding:1px 3px;border-radius:2px;font-weight:800;margin-right:2px">!N</span>':'';
       const logChip=s.sessionLog?'<span style="font-size:7px;background:#E8F5E9;color:#1B5E20;padding:1px 3px;border-radius:2px;font-weight:800">LOG</span>':'';
 
@@ -7805,14 +7432,14 @@ function rClientSched(){
         </div>`;
       }
       return`<div class="cs-sess"
-        style="left:${left}%;right:${right}%;${_vstyle};background:${bg}22;border-left-color:${needsTravel(s)?'#7B1FA2':bg}"
+        style="left:${left}%;right:${right}%;${_vstyle};background:${bg}22;border-left-color:${bg}"
         draggable="${isViewOnly?'false':'true'}"
         data-id="${s.id}"
         ondragstart="if(!isViewOnly)csDragStart(event,'${s.id}')"
         ondragend="if(!isViewOnly)csDragEnd(event)"
         onclick="openSess('${s.id}')"
         title="${st?.name||'—'}: ${ftm(s.s)}–${ftm(s.e)} · ${sTypeLabel(s.type)}">
-        <div class="cs-thr">${grpChip}${muChip}${supChip2}${noteChip}${logChip}${sessLocChip(s)}<span class="tchip" style="background:${bg};color:${tx};font-size:9px;padding:1px 6px;border-radius:3px">${st?.initials||'?'}</span> ${st?.name||'—'}</div>
+        <div class="cs-thr">${grpChip}${muChip}${noteChip}${logChip}<span class="tchip" style="background:${bg};color:${tx};font-size:9px;padding:1px 6px;border-radius:3px">${st?.initials||'?'}</span> ${st?.name||'—'}</div>
         <div class="cs-time">${ftm(s.s)}–${ftm(s.e)} · <span class="bdg ${tbdg}" style="font-size:7px">${sessChipLabel(s)}</span></div>
       </div>`;
     }).join('');
@@ -8209,7 +7836,7 @@ function editApproveRequest(id){
   if(!r) return;
   const cl=gc(r.cid);
   const co=_byLastName(S.clients).map(c=>`<option value="${c.id}" ${c.id===r.cid?'selected':''}>${c.name}</option>`).join('');
-  const so='<option value="UNASSIGNED">— Unassigned —</option>'+_byLastName(schedStaff()).map(s=>`<option value="${s.id}" ${s.id===(r.prefStid||r.from)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+  const so='<option value="UNASSIGNED">— Unassigned —</option>'+_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}" ${s.id===(r.prefStid||r.from)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
   openM(`<h3>Approve Request</h3>
     <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:#92400E">
       Requested by <strong>${r.fromName}</strong> · ${REQ_TYPES.find(t=>t.id===r.type)?.label||r.type}
@@ -8803,7 +8430,7 @@ function staffOptionsForClient(cid, date){
   const backup=(c&&c.backupTeam)||[];
 
   // Score all non-billing staff
-  const all=schedStaff();
+  const all=S.staff.filter(s=>s.role!=='Billing');
   const score=s=>{
     const statuses=getBlockStatus(s.id,date);
     const free=statuses.filter(x=>x==='free').length;
