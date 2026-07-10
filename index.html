@@ -402,6 +402,45 @@ body.kiosk-mode .tl-sess,body.kiosk-mode .cs-sess{cursor:default!important}
 body.kiosk-mode #kiosk-bar{display:flex}
 body.kiosk-mode .kiosk-hide{display:none!important}
 body.kiosk-mode .nav-pill-sep{display:none!important}
+@media screen and (min-height:900px){
+  body.kiosk-mode{font-size:15px}
+  body.kiosk-mode #app{padding-top:60px}
+  body.kiosk-mode #kiosk-bar{height:60px;font-size:17px}
+  body.kiosk-mode #kiosk-time{font-size:26px}
+  body.kiosk-mode #kiosk-date{font-size:15px}
+
+  /* Stack side panel below main — full width portrait layout */
+  body.kiosk-mode .dv-wrap{flex-direction:column;gap:10px}
+  body.kiosk-mode .dv-side{width:100%;position:static;max-height:none;order:2}
+  body.kiosk-mode .dv-main{order:1}
+
+  /* Bigger stats bar */
+  body.kiosk-mode .sb{padding:14px 18px}
+  body.kiosk-mode .sn{font-size:32px}
+  body.kiosk-mode .sl{font-size:12px}
+
+  /* Taller session blocks — easier to read at distance */
+  body.kiosk-mode .blk-sess{padding:14px 18px;gap:14px}
+  body.kiosk-mode .blk-cl{font-size:16px;margin-bottom:5px}
+  body.kiosk-mode .blk-meta{font-size:12px;gap:6px;margin-bottom:5px}
+  body.kiosk-mode .blk-thr{font-size:12px;gap:6px}
+  body.kiosk-mode .blk-ts{font-size:15px}
+  body.kiosk-mode .blk-te{font-size:12px}
+  body.kiosk-mode .blk-ttime{width:68px}
+  body.kiosk-mode .blk-bar{width:6px}
+
+  /* Therapist chip bigger */
+  body.kiosk-mode .tchip{font-size:12px!important;padding:3px 9px!important}
+
+  /* Now line more prominent */
+  body.kiosk-mode .now-line{height:3px!important}
+  body.kiosk-mode .now-lbl-live{font-size:12px!important;padding:3px 8px!important}
+
+  /* Staff panel horizontal in portrait */
+  body.kiosk-mode .stf-pnl{padding:12px 16px}
+  body.kiosk-mode .stf-row{padding:7px 0;font-size:13px}
+  body.kiosk-mode .stf-pnl h4{font-size:12px}
+}
 @media print{#app-version{display:none}}
 /* Inactivity warning */
 #inactivity-warn{display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--am);color:#fff;padding:10px 18px;border-radius:10px;font-size:12px;font-weight:600;z-index:500;box-shadow:var(--shm);text-align:center}
