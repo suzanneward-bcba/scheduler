@@ -1154,7 +1154,10 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
 <div id="kiosk-bar">
   <div id="kiosk-date" style="font-size:14px;opacity:.8"></div>
   <div style="font-size:13px;letter-spacing:.5px;opacity:.6">adaptABILITY Therapie</div>
-  <div id="kiosk-time" style="font-size:20px;font-variant-numeric:tabular-nums"></div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div id="kiosk-time" style="font-size:20px;font-variant-numeric:tabular-nums"></div>
+    <button onclick="firebase.auth().signOut()" style="background:none;border:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.4);font-size:10px;padding:3px 8px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif">Exit</button>
+  </div>
 </div>
 <!-- Firebase setup overlay -->
 <div id="fb-setup">
