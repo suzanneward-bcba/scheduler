@@ -383,6 +383,24 @@ body.view-only .stf-row button{display:none!important}
 /* App version indicator — fixed bottom-right, subtle */
 #app-version{position:fixed;bottom:6px;right:10px;font-size:9px;color:var(--mt);opacity:.5;font-family:monospace;letter-spacing:.3px;pointer-events:auto;user-select:text;z-index:50;background:rgba(255,255,255,.7);padding:2px 6px;border-radius:4px;transition:opacity .15s}
 #app-version:hover{opacity:1}
+/* ── KIOSK / DISPLAY MODE ───────────────────────── */
+body.kiosk-mode .nv,body.kiosk-mode .ah,body.kiosk-mode .mob-nav,
+body.kiosk-mode .fab,body.kiosk-mode .fab-main,body.kiosk-mode .fab-secondary,
+body.kiosk-mode .vo-banner,body.kiosk-mode #sync-status,
+body.kiosk-mode #lockBtn,body.kiosk-mode .edit-only,
+body.kiosk-mode .ot-tog,body.kiosk-mode .vtog,
+body.kiosk-mode #inactivity-warn,body.kiosk-mode .sched-notes-wrap,
+body.kiosk-mode .leave-queue-wrap,
+body.kiosk-mode #vbtn-week,body.kiosk-mode #vbtn-day,body.kiosk-mode #vbtn-client,
+body.kiosk-mode #sfbtn-aba,body.kiosk-mode #sfbtn-ot,body.kiosk-mode #sfbtn-all,
+body.kiosk-mode .nav-pill-arr,body.kiosk-mode .nav-pill-center,
+body.kiosk-mode .copy-wk{display:none!important}
+body.kiosk-mode{background:#0D0D1A}
+body.kiosk-mode .sbl,body.kiosk-mode .blk-sess,
+body.kiosk-mode .tl-sess,body.kiosk-mode .cs-sess{cursor:default!important}
+#kiosk-bar{display:none;position:fixed;top:0;left:0;right:0;height:52px;background:#0D0D1A;color:#fff;font-size:15px;font-weight:700;padding:0 20px;z-index:300;align-items:center;justify-content:space-between;border-bottom:1px solid #1E1E3A}
+body.kiosk-mode #kiosk-bar{display:flex}
+body.kiosk-mode #app{padding-top:52px}
 @media print{#app-version{display:none}}
 /* Inactivity warning */
 #inactivity-warn{display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--am);color:#fff;padding:10px 18px;border-radius:10px;font-size:12px;font-weight:600;z-index:500;box-shadow:var(--shm);text-align:center}
@@ -1093,6 +1111,11 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
   </div>
 </div>
 <div id="inactivity-warn">⏱ You'll be signed out in 60 seconds due to inactivity. <span style="text-decoration:underline;cursor:pointer" onclick="resetInactivity()">Stay signed in</span></div>
+<div id="kiosk-bar">
+  <div id="kiosk-date" style="font-size:14px;opacity:.8"></div>
+  <div style="font-size:13px;letter-spacing:.5px;opacity:.6">adaptABILITY Therapie</div>
+  <div id="kiosk-time" style="font-size:20px;font-variant-numeric:tabular-nums"></div>
+</div>
 <!-- Firebase setup overlay -->
 <div id="fb-setup">
   <div class="fb-box">
@@ -2114,6 +2137,71 @@ function cDisplayName(c){
 }
 // Full name — only shown in detail modals (scheduler only)
 function cFullName(c){ return c?.name||'—'; }
+
+// Kiosk display name: Em. Ko. format (first 2 of first name + first 2 of last name with periods)
+function kioskClientName(c){
+  if(!c) return '—';
+  const parts = c.name.trim().split(/\s+/).map(p=>p.replace(/[^a-zA-Z]/g,''));
+  const clean = parts.filter(p=>p.length>0);
+  if(clean.length === 1) return clean[0].slice(0,2)+'.';
+  const first = clean[0].slice(0,2);
+  const last  = clean[clean.length-1].slice(0,2);
+  return first+'. '+last+'.';
+}
+
+// ── KIOSK / DISPLAY MODE ─────────────────────────────────────────────────────
+function activateKioskMode(){
+  window._kioskMode = true;
+  isViewOnly = true;
+  document.body.classList.add('kiosk-mode');
+  // Stop inactivity timer — kiosk stays logged in indefinitely
+  clearInactivityTimer();
+  // Default to all programs (ABA + OT) so all clients show
+  schedSvcFilter = 'ALL';
+  // Lock to day view
+  sw('sched');
+  if(curView !== 'day') setView('day');
+  // Start live clock
+  startKioskClock();
+  // Auto-refresh data every 5 minutes
+  if(!window._kioskRefreshInterval){
+    window._kioskRefreshInterval = setInterval(function(){
+      if(typeof loadFromFirestore==='function') loadFromFirestore();
+    }, 5 * 60 * 1000);
+  }
+  // Auto-advance to next day at midnight Berlin time
+  scheduleKioskMidnightAdvance();
+}
+
+function startKioskClock(){
+  function tick(){
+    const now = new Date();
+    const berlin = new Date(now.toLocaleString('en-US',{timeZone:'Europe/Berlin'}));
+    const timeStr = berlin.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
+    const dateStr = berlin.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+    const tEl = document.getElementById('kiosk-time');
+    const dEl = document.getElementById('kiosk-date');
+    if(tEl) tEl.textContent = timeStr;
+    if(dEl) dEl.textContent = dateStr;
+  }
+  tick();
+  if(!window._kioskClockInterval) window._kioskClockInterval = setInterval(tick, 1000);
+}
+
+function scheduleKioskMidnightAdvance(){
+  const now = new Date();
+  const berlin = new Date(now.toLocaleString('en-US',{timeZone:'Europe/Berlin'}));
+  const msUntilMidnight = new Date(berlin.getFullYear(),berlin.getMonth(),berlin.getDate()+1).getTime()
+    - berlin.getTime() + 60000; // 1 min past midnight to be safe
+  setTimeout(function(){
+    dayDate = fd(new Date(new Date().toLocaleString('en-US',{timeZone:'Europe/Berlin'})));
+    rSched();
+    scheduleKioskMidnightAdvance(); // reschedule for next night
+  }, msUntilMidnight);
+}
+
+// In a private staff-only location — show full display name in kiosk mode
+function clName4Display(c){ return cDisplayName(c); }
 // ── UTILS ──
 function fd(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
 function p2(n){return String(n).padStart(2,'0');}
@@ -2529,7 +2617,7 @@ function rWeekFull(){
       const locch=sessLocChip(s)?'<div style="position:absolute;bottom:2px;right:2px;font-size:10px;line-height:1" title="'+((SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'))||{}).label||'')+'">'+((SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'))||{}).icon||'')+'</div>':'';
       const tbdg=`<span class="bdg ${sessChipBdg(s)}">${sessChipLabel(s)}</span>`;
       const isCX=s.status==='CX';
-      const clName=cl?(isCX?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):`<em style="color:var(--mt)">${gs(s.stid)?.initials||''} – ${sessChipLabel(s)}</em>`;
+      const clName=cl?(isCX?'<span class="cx-name">'+clName4Display(cl)+'</span>':clName4Display(cl)):`<em style="color:var(--mt)">${gs(s.stid)?.initials||''} – ${sessChipLabel(s)}</em>`;
       const insCls=cl?`ins-${cl.ins}`:'';
       const autoStyle=isAuto?'border-left-color:#9E9E9E;background:#FAFAFA;border:1px dashed #B0BEC5;':'';
       // GRP chip: solid badge shown only when the session IS a group, for
@@ -2594,7 +2682,7 @@ function rWeekAgenda(){
       const bg=tClr(s.stid),tx=tTxt(s.stid);
       const insClr=cl?iColor(cl.ins):'var(--pu)';
       const cxcl=s.status==='CX'?' cx':'';
-      const clName=cl?(s.status==='CX'?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):(st?.initials||'—');
+      const clName=cl?(s.status==='CX'?'<span class="cx-name">'+clName4Display(cl)+'</span>':clName4Display(cl)):(st?.initials||'—');
       const stName=st?st.initials:'?';
       const tbdg='<span class="bdg '+sessChipBdg(s)+'">'+sessChipLabel(s)+'</span>';
       const insBdg=cl?'<span class="bdg '+iBdg(cl.ins)+'">'+iLabel(cl.ins)+'</span>':'';
@@ -2717,7 +2805,7 @@ function rDay(){
           : '';
         const otFlag=(cl?.hasOT&&s.type==='ABA')?'<span class="bdg b-ot">+OT</span>':'';
         const cxBdg=s.status==='CX'?`<span class="sr-cx">${s.cx||'CX'}</span>`:'';
-        const clName=cl?cDisplayName(cl):`${gs(s.stid)?.initials||'—'} – ${sessChipLabel(s)}`;
+        const clName=cl?clName4Display(cl):`${gs(s.stid)?.initials||'—'} – ${sessChipLabel(s)}`;
         const stName=gs(s.stid)?.name||'—';
         const blkIsUnassigned=s.stid==='UNASSIGNED'&&!isViewOnly;
                 const supBdg=s.supervised?'<span class="bdg b-sup">SUP</span>':'';
@@ -4424,7 +4512,16 @@ function applyRoleAccess(){
   const lockEl = document.getElementById('lockBtn');
   const showSettings = isAdminViewer();
   const showReports  = isAdminViewer() || isBillingViewer() || isClinicianViewer();
-  const showLock     = isAdminViewer(); // only admins toggle the lock
+  const showLock     = isAdminViewer();
+
+  // ── KIOSK MODE ──────────────────────────────────────────────────────────────
+  // Activated when the logged-in staff record has role === 'display'
+  const viewerSt = gs(viewerStid);
+  if((viewerSt?.role||'').toLowerCase()==='display'){
+    activateKioskMode();
+    return; // skip all other role checks
+  }
+  window._kioskMode = false;
 
   // Apply client-editor body class so CSS shows client mgmt controls for Billing/ClientManager
   if(isBillingViewer() || isClientManagerViewer()){ document.body.classList.add('client-editor'); }
@@ -4724,7 +4821,7 @@ function rMyS(){
       const[eh,em]=item.e.split(':').map(Number);
       const dur=((eh*60+em)-(sh*60+sm));
       const durLbl=dur>=60?Math.floor(dur/60)+'h'+(dur%60?''+dur%60+'m':''):(dur+'m');
-      const clName=cl?((item.status==='CX')?'<span class="cx-name">'+cDisplayName(cl)+'</span>':cDisplayName(cl)):sessFullLabel(item);
+      const clName=cl?((item.status==='CX')?'<span class="cx-name">'+clName4Display(cl)+'</span>':clName4Display(cl)):sessFullLabel(item);
       return`<div class="mys-sess${item.status==='CX'?' cx':''}${needsTravel(item)||item.location==='telehealth'?' in-home':''}" style="--ins-clr:${insBg}">
         <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:${insBg};border-radius:4px 0 0 4px"></div>
         <div class="mys-sess-time">${ftm(item.s)} – ${ftm(item.e)}<span class="mys-sess-dur">${durLbl}</span></div>
@@ -6231,7 +6328,7 @@ function rTimeline(){
         ondragend="if(!isViewOnly)tlDragEnd(event)"
         onclick="openSess('${s.id}')"
         title="${cl?cDisplayName(cl):sessFullLabel(s)}: ${ftm(s.s)}–${ftm(s.e)}">
-        <div class="tl-sess-cl">${grpChip}${muChip}${supChip2}${sessLocChip(s)}${cl?cDisplayName(cl):sessFullLabel(s)}</div>
+        <div class="tl-sess-cl">${grpChip}${muChip}${supChip2}${sessLocChip(s)}${cl?clName4Display(cl):sessFullLabel(s)}</div>
         <div class="tl-sess-meta">${ftm(s.s)}–${ftm(s.e)} · <span class="bdg ${sessChipBdg(s)}" style="font-size:7px">${sessChipLabel(s)}</span></div>
       </div>`;
     }).join('');
