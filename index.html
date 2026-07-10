@@ -400,7 +400,8 @@ body.kiosk-mode .sbl,body.kiosk-mode .blk-sess,
 body.kiosk-mode .tl-sess,body.kiosk-mode .cs-sess{cursor:default!important}
 #kiosk-bar{display:none;position:fixed;top:0;left:0;right:0;height:52px;background:#0D0D1A;color:#fff;font-size:15px;font-weight:700;padding:0 20px;z-index:300;align-items:center;justify-content:space-between;border-bottom:1px solid #1E1E3A}
 body.kiosk-mode #kiosk-bar{display:flex}
-body.kiosk-mode #app{padding-top:52px}
+body.kiosk-mode .kiosk-hide{display:none!important}
+body.kiosk-mode .nav-pill-sep{display:none!important}
 @media print{#app-version{display:none}}
 /* Inactivity warning */
 #inactivity-warn{display:none;position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:var(--am);color:#fff;padding:10px 18px;border-radius:10px;font-size:12px;font-weight:600;z-index:500;box-shadow:var(--shm);text-align:center}
@@ -1221,7 +1222,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
         <button class="nav-pill-arr" onclick="navNext()" title="Next">▶</button>
       </div>
     </div>
-    <div style="display:flex;gap:6px;align-items:center">
+    <div style="display:flex;gap:6px;align-items:center" class="kiosk-hide">
       <button class="copy-wk edit-only desk-only" onclick="copyWeek()">⧉ Copy Week</button>
       <button class="btn bsm edit-only desk-only" onclick="openPostNote()" title="Post a note to a therapist's schedule" style="border-color:#F9A825;color:#795548;background:#FFFDE7;font-weight:700">📌 Post Note</button>
       <div style="width:1px;height:22px;background:var(--bd);margin:0 2px" class="desk-only"></div>
