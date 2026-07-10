@@ -1624,8 +1624,8 @@ function insOpts(sel=''){
 }
 
 // ── ROLES ──
-const ROLES=['BCBA','RBT','ABAT','OT','Billing'];
-const ROLE_BADGE={BCBA:'b-echo',RBT:'b-sup',ABAT:'b-pt',OT:'b-ot',Billing:'b-adm'};
+const ROLES=['BCBA','RBT','ABAT','OT','Billing','display'];
+const ROLE_BADGE={BCBA:'b-echo',RBT:'b-sup',ABAT:'b-pt',OT:'b-ot',Billing:'b-adm',display:'b-adm'};
 
 
 // ── MEDICAL ALERTS ──
@@ -2124,6 +2124,9 @@ function disconnectFirebase(){
 // Returns short display name: first 2 chars of first name + first 2 of last name
 // e.g. "Mary Jane Evans" → "MaEv", "Sarah Evans" → "SaEv", "Noah" → "Noah"
 // Works with full names — enter full first and last name for best results
+// Staff eligible for scheduling — excludes admin-only roles
+function schedStaff(){ return S.staff.filter(s=>s.role!=='Billing'&&(s.role||'').toLowerCase()!=='display'); }
+
 function cDisplayName(c){
   if(!c) return '—';
   // Scheduler-assigned shortName takes priority
@@ -3034,7 +3037,7 @@ function rStaff(){
     const lastName=n=>(n||'').trim().split(/\s+/).pop()||'';
     return ri!==0?ri:lastName(a.name).localeCompare(lastName(b.name), undefined, {sensitivity:'base'});
   });
-  document.getElementById('stgrid').innerHTML=sortedStaff.map(s=>{
+  document.getElementById('stgrid').innerHTML=sortedStaff.filter(s=>(s.role||'').toLowerCase()!=='display').map(s=>{
     const bd=dbu(s.birthday);
     const bdt=s.birthday?new Date(s.birthday+'T12:00').toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';
     const bds=bd!==null&&bd<=30;
@@ -3614,7 +3617,7 @@ function openSess(id){
   const ownBlock = (s.stid===viewerStid) && (s.type==='ADMIN'||s.type==='INDIRECT'||s.type==='SUP');
   const bypassLock = isAdminViewer() || (isClinicianViewer() && ownBlock);
   const cl=gc(s.cid);
-  const so='<option value="UNASSIGNED" '+(s.stid==='UNASSIGNED'?'selected':'')+'>— Unassigned (placeholder) —</option>'+_byLastName(S.staff.filter(x=>x.role!=='Billing')).map(x=>`<option value="${x.id}" ${x.id===s.stid?'selected':''}>${x.initials} – ${x.name}</option>`).join('');
+  const so='<option value="UNASSIGNED" '+(s.stid==='UNASSIGNED'?'selected':'')+'>— Unassigned (placeholder) —</option>'+_byLastName(schedStaff()).map(x=>`<option value="${x.id}" ${x.id===s.stid?'selected':''}>${x.initials} – ${x.name}</option>`).join('');
   const co='<option value="" '+(s.cx?'':'selected')+'>✅ Scheduled</option>'+S.cfg.cxCodes.map(c=>`<option value="${c.code}" ${s.cx===c.code?'selected':''}>${c.code} – ${c.label}</option>`).join('');
   const to=STYPES.map(t=>`<option value="${t.id}" ${t.id===s.type?'selected':''}>${t.label}</option>`).join('');
   const isRec=!!s.recurGroup;
@@ -3759,7 +3762,7 @@ function cancelFuture(rg, fromDate){if(!confirm('Cancel all future sessions in t
 // ── ADD CLIENT ──
 function openAddClient(){
   if(isViewOnly && !isClientManagerViewer() && !isBillingViewer()){promptUnlock();return;}
-  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}">${s.initials} – ${s.name} (${s.role})</option>`).join('');
+  const so=_byLastName(schedStaff()).map(s=>`<option value="${s.id}">${s.initials} – ${s.name} (${s.role})</option>`).join('');
   const bo=_byLastName(S.staff.filter(s=>s.role==='BCBA')).map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   openM(`<h3>Add Client</h3>
     <div class="fg"><label>Name</label><input id="nc-n" placeholder="Client name"></div>
@@ -3833,7 +3836,7 @@ function openClientDetail(id){
     return;
   }
   _tplSlots=(c.scheduleTpl||[]).map(s=>Object.assign({},s));
-  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}" ${(c.team||[]).includes(s.id)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+  const so=_byLastName(schedStaff()).map(s=>`<option value="${s.id}" ${(c.team||[]).includes(s.id)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
   const _isOTcl=((c.therapyType||(c.hasOT?'BOTH':'ABA'))==='OT');
   const _cmPool=_isOTcl?S.staff.filter(s=>s.role==='OT'):S.staff.filter(s=>s.role==='BCBA');
   const bo=_cmPool.map(s=>`<option value="${s.id}" ${c.bcba===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
@@ -4008,7 +4011,7 @@ function renderTplSlots(clientId){
   if(!wrap)return;
   wrap.innerHTML=_tplSlots.length?_tplSlots.map((sl,i)=>{
     const dOpts=days.map((d,di)=>`<option value="${di+1}" ${sl.dow==di+1?'selected':''}>${d}</option>`).join('');
-    const stOpts=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}" ${s.id===sl.stid?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+    const stOpts=_byLastName(schedStaff()).map(s=>`<option value="${s.id}" ${s.id===sl.stid?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
     const tyOpts=STYPES.map(t=>`<option value="${t.id}" ${t.id===sl.type?'selected':''}>${t.label}</option>`).join('');
     const locOpts_=SESSION_LOCATIONS.map(l=>'<option value="'+l.id+'"'+(l.id===(sl.location||'clinic')?' selected':'')+'>'+(l.icon?l.icon+' ':'')+l.label+'</option>').join('');
     const locStyle=(sl.location&&sl.location!=='clinic')?'background:#F3E5F5;color:#6A1B9A;border-color:#CE93D8':'';
@@ -6854,7 +6857,7 @@ function toggleCaseload(){
 function renderCaseload(){
   const el=document.getElementById('cl-cards');if(!el)return;
   const wds=[0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
-  el.innerHTML=S.staff.filter(s=>s.role!=='Billing').map(st=>{
+  el.innerHTML=schedStaff().map(st=>{
     const bg=tClr(st.id),tx=tTxt(st.id);
     const wkSess=S.sessions.filter(s=>wds.includes(s.date)&&s.stid===st.id&&s.status!=='CX'&&!s._autoAdmin&&s.cid);
     const directHrs=wkSess.filter(s=>DIRECT_TYPES.includes(s.type)).reduce((sum,s)=>sum+sessMins(s),0)/60;
@@ -6965,7 +6968,7 @@ function setTherapyType(prefix, val){
     const curSelected=Array.from(teamEl.selectedOptions||[]).map(o=>o.value);
     const pool=isOT
       ? S.staff.filter(s=>s.role==='OT')
-      : S.staff.filter(s=>s.role!=='Billing');
+      : schedStaff();
     teamEl.innerHTML=pool.map(s=>
       `<option value="${s.id}" ${curSelected.includes(s.id)?'selected':''}>${s.initials} – ${s.name}${isOT?' ('+s.role+')':''}</option>`
     ).join('');
@@ -7186,7 +7189,7 @@ function dismissNote(id){
 }
 
 function openPostNote(){
-  const so=_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  const so=_byLastName(schedStaff()).map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   // If a therapist is viewing My Schedule, pre-select the current viewer as author
   const myId=mySchedStid||'';
   const myName=myId?(gs(myId)?.name||'Scheduler'):'Scheduler';
@@ -8164,7 +8167,7 @@ function editApproveRequest(id){
   if(!r) return;
   const cl=gc(r.cid);
   const co=_byLastName(S.clients).map(c=>`<option value="${c.id}" ${c.id===r.cid?'selected':''}>${c.name}</option>`).join('');
-  const so='<option value="UNASSIGNED">— Unassigned —</option>'+_byLastName(S.staff.filter(s=>s.role!=='Billing')).map(s=>`<option value="${s.id}" ${s.id===(r.prefStid||r.from)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+  const so='<option value="UNASSIGNED">— Unassigned —</option>'+_byLastName(schedStaff()).map(s=>`<option value="${s.id}" ${s.id===(r.prefStid||r.from)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
   openM(`<h3>Approve Request</h3>
     <div style="background:#FFFBEB;border:1px solid #FCD34D;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11px;color:#92400E">
       Requested by <strong>${r.fromName}</strong> · ${REQ_TYPES.find(t=>t.id===r.type)?.label||r.type}
@@ -8758,7 +8761,7 @@ function staffOptionsForClient(cid, date){
   const backup=(c&&c.backupTeam)||[];
 
   // Score all non-billing staff
-  const all=S.staff.filter(s=>s.role!=='Billing');
+  const all=schedStaff();
   const score=s=>{
     const statuses=getBlockStatus(s.id,date);
     const free=statuses.filter(x=>x==='free').length;
