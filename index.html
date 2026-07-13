@@ -3950,9 +3950,9 @@ function openClientDetail(id){
       <div class="auth-pipeline-card">
         <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Authorized Units by CPT <span style="font-weight:400;text-transform:none;letter-spacing:0">— from the TRICARE auth letter · leave blank if not authorized</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          ${['97151','97153','97155','97156','97158'].map(cp=>`<div class="fg" style="margin:0;flex:1;min-width:72px"><label style="font-family:monospace;font-size:10px">${cp}</label><input type="number" id="cd-units-${cp}" class="fi" value="${(c.authUnits||{})[cp]??''}" min="0" placeholder="—"></div>`).join('')}
+          ${['97151','97153','97155','97156','97157','97158','99366','99368'].map(cp=>{const r=(c.authUnitRates||{})[cp];const rateLbl=r?` <span style="color:var(--mt);font-weight:400">· ${r.rate}/${r.every>1?r.every:''}${(r.unit||'wk').slice(0,2)}</span>`:'';return`<div class="fg" style="margin:0;flex:1;min-width:72px"><label style="font-family:monospace;font-size:10px">${cp}${rateLbl}</label><input type="number" id="cd-units-${cp}" class="fi" value="${(c.authUnits||{})[cp]??''}" min="0" placeholder="—"></div>`;}).join('')}
         </div>
-        <div style="font-size:10px;color:var(--mt);margin-bottom:8px">97151 Assessment · 97153 Direct · 97155 Prog Mod · 97156 Parent Training · 97158 Group</div>
+        <div style="font-size:10px;color:var(--mt);margin-bottom:8px">Units are 15-min · 97151 Assessment · 97153 Direct · 97155 Prog Mod · 97156 Parent Training · 97157 Multi-Family · 97158 Group · 99366/68 Team Conference. Rate caps (e.g. 80/wk) auto-fill from the auth pipeline.</div>
         <div class="sep"></div>
         <div style="margin-top:8px"><label style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Pipeline Notes</label><textarea id="cd-pipe-notes" rows="2" style="width:100%;padding:7px 9px;font-size:12px;border:1.5px solid var(--bd);border-radius:6px;resize:none;font-family:'DM Sans',sans-serif">${c.authNotes||''}</textarea></div>
       </div>
@@ -4116,7 +4116,7 @@ function updClient(id){
   // dashboard's exhaustion projection works without per-CPT awareness.
   if(document.getElementById('cd-units-97153')){
     const u={};let tot=0;
-    ['97151','97153','97155','97156','97158'].forEach(cp=>{
+    ['97151','97153','97155','97156','97157','97158','99366','99368'].forEach(cp=>{
       const el=document.getElementById('cd-units-'+cp);
       if(el&&el.value!==''){const v=+el.value;if(v>=0){u[cp]=v;tot+=v;}}
     });
@@ -6717,20 +6717,33 @@ function rDash(){
   const cxStamped=cxSess.filter(s=>s.cxAt).length;
 
   // ── Auth units: usage + projected exhaustion ──
+  // Unit-based ABA clients (authUnits from the TRICARE letter): units are
+  // 15-min increments, so used = delivered session minutes ÷ 15. OT clients
+  // stay on visit counting (visitsUsed or delivered-session count).
+  // authPaceWk = authorized units/week (rate caps converted to weekly equiv).
+  const _rateWk=r=>{if(!r||!r.rate)return 0;const e=r.every||1;return (r.unit||'').startsWith('month')?r.rate/(e*4.345):r.rate/e;};
   const unitRows=S.clients.filter(c=>c.active!==false&&(c.authVisits||c.visitsAuth)>0).map(c=>{
     const total=c.authVisits||c.visitsAuth||0;
-    let used=(typeof c.visitsUsed==='number')?c.visitsUsed:null;
-    let usedSrc='tracked';
-    if(used===null){
-      used=S.sessions.filter(s=>s.cid===c.id&&s.status!=='CX'&&s.date<=today&&(!c.authStart||s.date>=c.authStart)).length;
-      usedSrc='counted';
-    }
-    const rem=Math.max(0,total-used);
+    const unitBased=!!(c.authUnits&&Object.keys(c.authUnits).length);
     const from=fd(new Date(pd(today).getTime()-27*864e5));
-    const perWeek=S.sessions.filter(s=>s.cid===c.id&&s.status!=='CX'&&s.date>=from&&s.date<=today).length/4;
+    const _mySess=range=>S.sessions.filter(s=>s.cid===c.id&&s.status!=='CX'&&!s._autoAdmin&&s.date<=today&&s.date>=range);
+    let used,usedSrc,perWeek;
+    if(unitBased){
+      used=Math.round(_mySess(c.authStart||'0000').reduce((n,s)=>n+_dMins(s)/15,0));
+      usedSrc='counted';
+      perWeek=Math.round(_mySess(from).reduce((n,s)=>n+_dMins(s)/15,0)/4*10)/10;
+    }else if(typeof c.visitsUsed==='number'){
+      used=c.visitsUsed;usedSrc='tracked';
+      perWeek=_mySess(from).length/4;
+    }else{
+      used=_mySess(c.authStart||'0000').length;usedSrc='counted';
+      perWeek=_mySess(from).length/4;
+    }
+    const authPaceWk=unitBased?Math.round(Object.keys(c.authUnits).reduce((n,cp)=>n+((c.authUnits[cp]>0)?_rateWk((c.authUnitRates||{})[cp]):0),0)*10)/10:null;
+    const rem=Math.max(0,total-used);
     const exhaust=perWeek>0?fd(new Date(pd(today).getTime()+(rem/perWeek)*7*864e5)):null;
     const risk=(exhaust&&c.authEnd&&exhaust<c.authEnd)||(perWeek>0&&rem<=perWeek*2);
-    return{c,total,used,usedSrc,rem,perWeek,exhaust,risk};
+    return{c,total,used,usedSrc,rem,perWeek,authPaceWk,exhaust,risk,unitBased};
   }).sort((a,b)=>(a.exhaust||'9999').localeCompare(b.exhaust||'9999'));
   const unitRisk=unitRows.filter(x=>x.risk);
   const noUnitData=S.clients.filter(c=>c.active!==false&&!(c.authVisits||c.visitsAuth)).length;
@@ -6838,8 +6851,8 @@ function rDash(){
     <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Auth Units — Projected Exhaustion${unitRisk.length?` · <span style="color:var(--rd)">${unitRisk.length} at risk</span>`:''}</div>
       ${unitRows.length?`<table style="width:100%;border-collapse:collapse;font-size:12px">
-        <tr style="text-align:right;color:var(--mt);font-size:10px;text-transform:uppercase;letter-spacing:.4px"><th style="text-align:left;padding:4px 8px">Client</th><th style="padding:4px 8px">Units</th><th style="padding:4px 8px">Used</th><th style="padding:4px 8px">Left</th><th style="padding:4px 8px">Pace/wk</th><th style="padding:4px 8px">Est. Exhaustion</th><th style="padding:4px 8px">Auth Ends</th></tr>
-        ${unitRows.slice(0,12).map(x=>`<tr style="text-align:right;border-top:1px solid var(--bg);${x.risk?'background:#FFF5F5':''}"><td style="text-align:left;padding:5px 8px;font-weight:700;cursor:pointer" onclick="openClientDetail('${x.c.id}')">${cDisplayName(x.c)}${x.risk?' ⚠️':''}</td><td style="padding:5px 8px">${x.total}</td><td style="padding:5px 8px">${x.used}${x.usedSrc==='counted'?'<span title="counted from schedule, not billing" style="color:var(--mt)">*</span>':''}</td><td style="padding:5px 8px;font-weight:700;color:${x.rem<=5?'var(--rd)':'inherit'}">${x.rem}</td><td style="padding:5px 8px">${Math.round(x.perWeek*10)/10}</td><td style="padding:5px 8px;font-weight:700;color:${x.risk?'var(--rd)':'inherit'}">${x.exhaust?_fmtDashD(x.exhaust):'—'}</td><td style="padding:5px 8px">${x.c.authEnd?_fmtDashD(x.c.authEnd):'—'}</td></tr>`).join('')}
+        <tr style="text-align:right;color:var(--mt);font-size:10px;text-transform:uppercase;letter-spacing:.4px"><th style="text-align:left;padding:4px 8px">Client</th><th style="padding:4px 8px">Units</th><th style="padding:4px 8px">Used</th><th style="padding:4px 8px">Left</th><th style="padding:4px 8px">Pace/wk</th><th style="padding:4px 8px">Auth'd/wk</th><th style="padding:4px 8px">Est. Exhaustion</th><th style="padding:4px 8px">Auth Ends</th></tr>
+        ${unitRows.slice(0,12).map(x=>{const underPace=x.authPaceWk&&x.perWeek<x.authPaceWk*0.8;return`<tr style="text-align:right;border-top:1px solid var(--bg);${x.risk?'background:#FFF5F5':''}"><td style="text-align:left;padding:5px 8px;font-weight:700;cursor:pointer" onclick="openClientDetail('${x.c.id}')">${cDisplayName(x.c)}${x.risk?' ⚠️':''}</td><td style="padding:5px 8px">${x.total}</td><td style="padding:5px 8px">${x.used}${x.usedSrc==='counted'?'<span title="counted from schedule, not billing" style="color:var(--mt)">*</span>':''}</td><td style="padding:5px 8px;font-weight:700;color:${x.rem<=5?'var(--rd)':'inherit'}">${x.rem}</td><td style="padding:5px 8px;color:${underPace?'var(--am)':'inherit'}" ${underPace?'title="More than 20% below authorized pace — units may expire unused"':''}>${Math.round(x.perWeek*10)/10}${underPace?' ▼':''}</td><td style="padding:5px 8px;color:var(--mt)">${x.authPaceWk!==null?x.authPaceWk:'—'}</td><td style="padding:5px 8px;font-weight:700;color:${x.risk?'var(--rd)':'inherit'}">${x.exhaust?_fmtDashD(x.exhaust):'—'}</td><td style="padding:5px 8px">${x.c.authEnd?_fmtDashD(x.c.authEnd):'—'}</td></tr>`;}).join('')}
       </table>
       <div style="font-size:10px;color:var(--mt);margin-top:6px">* counted from delivered sessions since auth start (no billed-units record). ${noUnitData?noUnitData+' active clients have no authorized-units data — add it on the client card to include them.':''}</div>`
       :`<div style="font-size:12px;color:var(--mt)">No clients have authorized-units data yet. Add "Authorized Visits" on client cards to activate this panel${noUnitData?' ('+noUnitData+' active clients missing it)':''}.</div>`}
