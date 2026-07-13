@@ -1851,6 +1851,100 @@ function setSyncStatus(state, msg){
   else el.style.opacity='1';
 }
 
+// ══ FIRESTORE SPLIT STORAGE (v2) ══
+// Data is split across sub-documents instead of one 1MB-limited doc:
+//   scheduler/meta     → cfg, holidays, schedNotes, schedRequests, flags
+//   scheduler/staff    → staff array
+//   scheduler/clients  → clients array
+//   scheduler/leave    → leaveRequests, waitlist
+//   scheduler/sessions/months/{YYYY-MM} → sessions for that month
+//   scheduler/logs/months/{YYYY-MM}     → daily logs for that month
+// The legacy scheduler/data doc is left untouched as a rollback backup.
+// save() only writes docs whose content actually changed (dirty tracking).
+
+const FS_META_EXTRA = ['_leaveReqHoursMigrated']; // top-level flags stored in meta
+let _fsCache = {};                                       // docPath → last JSON written/read
+let _fsMonths = {sessions:new Set(), logs:new Set()};    // month docs known to exist
+
+function _fsMonthOf(d){ return (typeof d==='string' && d.length>=7) ? d.slice(0,7) : 'no-date'; }
+
+function _fsRef(path){
+  const p = path.split('/');
+  return p.length===1
+    ? db.collection('scheduler').doc(p[0])
+    : db.collection('scheduler').doc(p[0]).collection('months').doc(p[1]);
+}
+
+// Build docPath → {data} map representing the current S
+function _fsBuildDocs(){
+  const docs = {};
+  const meta = {cfg:S.cfg||{}, holidays:S.holidays||[], schedNotes:S.schedNotes||[], schedRequests:S.schedRequests||[]};
+  FS_META_EXTRA.forEach(k=>{ if(S[k]!==undefined) meta[k]=S[k]; });
+  docs['meta']    = {data:meta};
+  docs['staff']   = {data:{staff:S.staff||[]}};
+  docs['clients'] = {data:{clients:S.clients||[]}};
+  docs['leave']   = {data:{leaveRequests:S.leaveRequests||[], waitlist:S.waitlist||[]}};
+  const sb = {};
+  (S.sessions||[]).forEach(s=>{ const m=_fsMonthOf(s.date); (sb[m]=sb[m]||[]).push(s); });
+  Object.keys(sb).forEach(m=>{ docs['sessions/'+m]={data:{sessions:sb[m]}}; _fsMonths.sessions.add(m); });
+  _fsMonths.sessions.forEach(m=>{ if(!docs['sessions/'+m]) docs['sessions/'+m]={data:{sessions:[]}}; }); // emptied months
+  const lb = {};
+  Object.keys(S.logs||{}).forEach(k=>{ const m=_fsMonthOf(k); (lb[m]=lb[m]||{})[k]=S.logs[k]; });
+  Object.keys(lb).forEach(m=>{ docs['logs/'+m]={data:{logs:lb[m]}}; _fsMonths.logs.add(m); });
+  _fsMonths.logs.forEach(m=>{ if(!docs['logs/'+m]) docs['logs/'+m]={data:{logs:{}}}; });
+  return docs;
+}
+
+// Reseed dirty-tracking cache from current S (deterministic local serialization)
+function _fsSeedCache(){
+  const docs = _fsBuildDocs();
+  Object.keys(docs).forEach(p=>{ _fsCache[p]=JSON.stringify(docs[p].data); });
+}
+
+// Write only changed docs, in batches (JSON round-trip strips undefined → Firestore-safe)
+async function _fsSaveV2(){
+  const docs = _fsBuildDocs();
+  const now  = Date.now();
+  window._lastSaveTs = now;
+  const dirty = [];
+  Object.keys(docs).forEach(path=>{
+    const json = JSON.stringify(docs[path].data);
+    if(_fsCache[path]===json) return;
+    if(json.length>900000) console.warn('⚠️ Doc '+path+' is '+json.length+' bytes — approaching the 1MB limit');
+    dirty.push({path, json});
+  });
+  if(!dirty.length) return;
+  for(let i=0;i<dirty.length;i+=400){
+    const batch = db.batch();
+    dirty.slice(i,i+400).forEach(d=>batch.set(_fsRef(d.path), Object.assign(JSON.parse(d.json),{ts:now})));
+    await batch.commit();
+  }
+  dirty.forEach(d=>{ _fsCache[d.path]=d.json; });
+}
+
+// Merge one incoming doc into S (used by live-sync listeners)
+function _fsApplyDoc(path, data){
+  const p = path.split('/');
+  if(p[0]==='meta'){
+    S.cfg=data.cfg||{}; S.holidays=data.holidays||[]; S.schedNotes=data.schedNotes||[]; S.schedRequests=data.schedRequests||[];
+    FS_META_EXTRA.forEach(k=>{ if(data[k]!==undefined) S[k]=data[k]; });
+  }
+  else if(p[0]==='staff'){ S.staff=data.staff||[]; }
+  else if(p[0]==='clients'){ S.clients=data.clients||[]; }
+  else if(p[0]==='leave'){ S.leaveRequests=data.leaveRequests||[]; S.waitlist=data.waitlist||[]; }
+  else if(p[0]==='sessions'){
+    const m=p[1]; _fsMonths.sessions.add(m);
+    S.sessions=(S.sessions||[]).filter(s=>_fsMonthOf(s.date)!==m).concat(data.sessions||[]);
+  }
+  else if(p[0]==='logs'){
+    const m=p[1]; _fsMonths.logs.add(m);
+    const L={};
+    Object.keys(S.logs||{}).forEach(k=>{ if(_fsMonthOf(k)!==m) L[k]=S.logs[k]; });
+    Object.assign(L, data.logs||{});
+    S.logs=L;
+  }
+}
+
 function save(){
   if(useLocal){
     try{localStorage.setItem('abl-local',JSON.stringify(S));}catch(e){}
@@ -1862,7 +1956,7 @@ function save(){
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async ()=>{
     try{
-      await db.collection('scheduler').doc('data').set({payload: JSON.stringify(S), ts: Date.now()});
+      await _fsSaveV2();
       setSyncStatus('ok','Synced ✓');
     } catch(e){
       setSyncStatus('err','Save failed');
@@ -1951,38 +2045,148 @@ async function connectFirebaseWithCfg(cfg, isNew=false){
   });
 }
 
+// cfg defaults + one-time seed of the admin tasks URL — set on first load only,
+// then never touched again. If admin clears the value later (to hide the link),
+// we don't re-seed because adminTasksUrlSeeded stays true.
+function _fsPostLoadFixups(){
+  if(!S.cfg)S.cfg={};
+  if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
+  if(!S.cfg.adminTasksUrlSeeded){
+    S.cfg.adminTasksUrl = S.cfg.adminTasksUrl || 'https://docs.google.com/spreadsheets/d/1QhJ-FSYh7gfP-468WreYAnWxlcHC3mzjD1Vq6RGH_VI/edit';
+    S.cfg.adminTasksUrlSeeded = true;
+  }
+}
+
+// Load from the split (v2) structure. Returns false if not migrated yet.
+async function _fsLoadV2(){
+  const meta = await db.collection('scheduler').doc('meta').get();
+  if(!meta.exists) return false;
+  const [staff, clients, leave, sess, logs] = await Promise.all([
+    db.collection('scheduler').doc('staff').get(),
+    db.collection('scheduler').doc('clients').get(),
+    db.collection('scheduler').doc('leave').get(),
+    db.collection('scheduler').doc('sessions').collection('months').get(),
+    db.collection('scheduler').doc('logs').collection('months').get(),
+  ]);
+  const md = meta.data()||{};
+  S.cfg=md.cfg||{}; S.holidays=md.holidays||[]; S.schedNotes=md.schedNotes||[]; S.schedRequests=md.schedRequests||[];
+  FS_META_EXTRA.forEach(k=>{ if(md[k]!==undefined) S[k]=md[k]; });
+  S.staff         = (staff.data()||{}).staff||[];
+  S.clients       = (clients.data()||{}).clients||[];
+  S.leaveRequests = (leave.data()||{}).leaveRequests||[];
+  S.waitlist      = (leave.data()||{}).waitlist||[];
+  let sessions=[];
+  sess.forEach(d=>{ _fsMonths.sessions.add(d.id); sessions=sessions.concat((d.data()||{}).sessions||[]); });
+  S.sessions=sessions;
+  const L={};
+  logs.forEach(d=>{ _fsMonths.logs.add(d.id); Object.assign(L,(d.data()||{}).logs||{}); });
+  S.logs=L;
+  return true;
+}
+
+// One-time migration: legacy scheduler/data → split docs.
+// Meta is written LAST, only after read-back verification — its existence is
+// the "migration complete" marker, so a partial migration can never be
+// mistaken for a finished one. Legacy doc is left untouched as a backup.
+async function _fsMigrateToV2(){
+  const docs = _fsBuildDocs();
+  const now  = Date.now();
+  window._lastSaveTs = now;
+  const paths = Object.keys(docs).filter(p=>p!=='meta');
+  for(let i=0;i<paths.length;i+=400){
+    const batch = db.batch();
+    paths.slice(i,i+400).forEach(p=>batch.set(_fsRef(p), Object.assign(JSON.parse(JSON.stringify(docs[p].data)),{ts:now})));
+    await batch.commit();
+  }
+  // Read back and verify counts before declaring the migration complete
+  const [st, cl, lv, se, lg] = await Promise.all([
+    db.collection('scheduler').doc('staff').get(),
+    db.collection('scheduler').doc('clients').get(),
+    db.collection('scheduler').doc('leave').get(),
+    db.collection('scheduler').doc('sessions').collection('months').get(),
+    db.collection('scheduler').doc('logs').collection('months').get(),
+  ]);
+  const got = {
+    staff:((st.data()||{}).staff||[]).length,
+    clients:((cl.data()||{}).clients||[]).length,
+    leaveRequests:((lv.data()||{}).leaveRequests||[]).length,
+    waitlist:((lv.data()||{}).waitlist||[]).length,
+    sessions:0, logs:0
+  };
+  se.forEach(d=>{ got.sessions += ((d.data()||{}).sessions||[]).length; });
+  lg.forEach(d=>{ got.logs += Object.keys((d.data()||{}).logs||{}).length; });
+  const want = {
+    staff:(S.staff||[]).length, clients:(S.clients||[]).length,
+    leaveRequests:(S.leaveRequests||[]).length, waitlist:(S.waitlist||[]).length,
+    sessions:(S.sessions||[]).length, logs:Object.keys(S.logs||{}).length
+  };
+  const bad = Object.keys(want).filter(k=>got[k]!==want[k]);
+  if(bad.length){
+    console.error('❌ Migration verification failed:', bad, 'got:', got, 'want:', want);
+    setSyncStatus('err','Storage upgrade failed');
+    throw new Error('Migration verification failed: '+bad.join(','));
+  }
+  await _fsRef('meta').set(Object.assign(JSON.parse(JSON.stringify(docs['meta'].data)),{ts:now}));
+  console.log('✅ Storage upgraded to split documents.', want, '(legacy scheduler/data kept as backup)');
+}
+
+// Live sync: listen on the scheduler collection (meta/staff/clients/leave)
+// and both month subcollections. Our own writes are skipped via
+// hasPendingWrites; the first snapshot per listener is skipped because the
+// initial load already populated S.
+function _fsAttachListeners(){
+  if(window._fsListening) return;
+  window._fsListening = true;
+  const mk = (kind)=>{
+    let first = true;
+    return snap=>{
+      if(first){ first=false; return; }
+      let touched = false;
+      snap.docChanges().forEach(ch=>{
+        if(ch.type==='removed') return;
+        const d = ch.doc;
+        if(d.metadata && d.metadata.hasPendingWrites) return;   // our own write echoing back
+        if(kind==='root' && d.id==='data') return;              // ignore legacy backup doc
+        const data = Object.assign({}, d.data()||{});
+        delete data.ts;
+        _fsApplyDoc(kind==='root' ? d.id : kind+'/'+d.id, data);
+        touched = true;
+      });
+      if(touched){
+        _fsPostLoadFixups();
+        _fsSeedCache();
+        renderAll();
+        setSyncStatus('ok','Live update ↓');
+      }
+    };
+  };
+  const onErr = err=>{ console.warn('Sync listener error:',err); setSyncStatus('err','Sync error'); };
+  db.collection('scheduler').onSnapshot(mk('root'), onErr);
+  db.collection('scheduler').doc('sessions').collection('months').onSnapshot(mk('sessions'), onErr);
+  db.collection('scheduler').doc('logs').collection('months').onSnapshot(mk('logs'), onErr);
+}
+
 async function loadFromFirestore(){
   let loaded = false;
   try{
-    const doc = await db.collection('scheduler').doc('data').get();
-    if(doc.exists && doc.data().payload){
-      const L = JSON.parse(doc.data().payload);
-      S = Object.assign({},S,L);
-      if(!S.cfg)S.cfg={};
-      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
-      // One-time seed of the admin tasks URL — set on first load only, then
-      // never touched again. If admin clears the value later (to hide the
-      // link), we don't re-seed because adminTasksUrlSeeded stays true.
-      if(!S.cfg.adminTasksUrlSeeded){
-        S.cfg.adminTasksUrl = S.cfg.adminTasksUrl || 'https://docs.google.com/spreadsheets/d/1QhJ-FSYh7gfP-468WreYAnWxlcHC3mzjD1Vq6RGH_VI/edit';
-        S.cfg.adminTasksUrlSeeded = true;
+    loaded = await _fsLoadV2();
+    if(!loaded){
+      // Not migrated yet — load legacy doc and migrate it
+      const doc = await db.collection('scheduler').doc('data').get();
+      if(doc.exists && doc.data().payload){
+        const L = JSON.parse(doc.data().payload);
+        S = Object.assign({},S,L);
+        _fsPostLoadFixups();
+        renderAll();
+        setSyncStatus('saving','Upgrading storage…');
+        await _fsMigrateToV2();
+        loaded = true;
       }
-      loaded = true;
     }
   } catch(e){ console.warn('Firestore read error:',e); }
-  // Start empty if no data in Firestore
-  db.collection('scheduler').doc('data').onSnapshot(snap=>{
-    if(!snap.exists||!snap.data().payload) return;
-    const incoming = JSON.parse(snap.data().payload);
-    if(snap.data().ts && snap.data().ts > (window._lastSaveTs||0)){
-      window._lastSaveTs = snap.data().ts;
-      S = Object.assign({},S,incoming);
-      if(!S.cfg)S.cfg={};
-      if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
-      renderAll();
-      setSyncStatus('ok','Live update ↓');
-    }
-  }, err=>{ setSyncStatus('err','Sync error'); });
+  if(loaded) _fsPostLoadFixups();
+  _fsSeedCache();
+  _fsAttachListeners();
   renderAll();
   setSyncStatus('ok','Connected ✓');
 }
