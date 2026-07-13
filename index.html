@@ -4192,6 +4192,7 @@ function openEditStaff(id){
   openM(`<h3>Edit: ${s.name}</h3>
     <div class="fr2"><div class="fg"><label>Full Name</label><input id="es-n" value="${s.name}"></div><div class="fg"><label>Role</label><select id="es-r">${ro}</select></div></div>
     <div class="fr2"><div class="fg"><label>Contract Hrs/Wk</label><input type="number" id="es-h" value="${s.hrs||''}"></div><div class="fg"><label>Birthday</label><input type="date" id="es-bd" value="${s.birthday||''}"></div></div>
+    <div class="fr2"><div class="fg"><label>Billable Target % <span style="font-weight:400;color:var(--mt);font-size:10px">— of contract hrs (blank = ${DEFAULT_BILL_TARGET}%). Lower for CD/admin-heavy roles.</span></label><input type="number" id="es-billtarget" value="${s.billTargetPct||''}" min="0" max="100" step="5" placeholder="${DEFAULT_BILL_TARGET}"></div><div class="fg"></div></div>
     <div class="fg"><label>Color</label>
       <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
         <div id="es-prev" class="color-prev" style="background:${bg};color:${txtForBg(bg)}">${s.initials}</div>
@@ -4311,6 +4312,7 @@ function updStaff(id){
   const s=gs(id);if(!s)return;
   s.name=document.getElementById('es-n').value;s.role=document.getElementById('es-r').value;
   s.hrs=+document.getElementById('es-h').value||null;s.birthday=document.getElementById('es-bd').value;
+  s.billTargetPct=+document.getElementById('es-billtarget')?.value||null;
   s.color=document.getElementById('es-col').value;
   s.av=[0,1,2,3,4].map(i=>document.getElementById('es-av'+i).checked?1:0);
   s.bus=document.getElementById('es-bus').checked;
@@ -4921,7 +4923,7 @@ function rMyS(){
       ${_tile(_wkReal.length,'Sessions')}
       ${_tile(weekHrs+'h',contractHrs?'Scheduled · of '+contractHrs+'h':'Scheduled')}
       ${_tile((Math.round(billHrs*10)/10)+'h','Billable')}
-      ${billPct!==null?_tile(billPct+'%','Billable % of Contract',billPct>=80?'var(--gn)':billPct>=60?'var(--am)':'var(--rd)'):''}
+      ${billPct!==null?_tile(billPct+'%','Billable % · target '+billTarget(s)+'%',billPct>=billTarget(s)?'var(--gn)':billPct>=billTarget(s)-15?'var(--am)':'var(--rd)'):''}
       ${_tile((Math.round(admHrs*10)/10)+'h','Admin')}
       ${_tile(cxCount,'Cancellations',cxCount?'var(--rd)':'var(--gn)')}
       ${_tile([...new Set(weekAllSess.filter(x=>x.cid&&x.status!=='CX').map(x=>x.cid))].length,'Clients')}
@@ -6615,6 +6617,12 @@ function updateDashNav(){
   const d=document.getElementById('nav-dash'); if(d) d.style.display=show?'':'none';
   const m=document.getElementById('mnav-dash'); if(m) m.style.display=show?'':'none';
 }
+// Per-staff billable target: % of contract hours expected to be billable.
+// Set on the staff card (Billable Target %); blank falls back to the default.
+// Lets admin-heavy roles (Clinical Director) carry a lower requirement than
+// line BCBAs/RBTs without skewing their color coding and flags.
+const DEFAULT_BILL_TARGET=80;
+function billTarget(st){return (st&&st.billTargetPct>0)?st.billTargetPct:DEFAULT_BILL_TARGET;}
 function _dMins(x){const[a,b]=x.s.split(':').map(Number);const[c,d]=x.e.split(':').map(Number);return Math.max(0,(c*60+d)-(a*60+b));}
 // Scheduled real session: client-facing or CPT-coded, regardless of CX status
 function _isRealSched(s){return !s._autoAdmin && !s._virtual && (!!s.cid||!!s.cptCode);}
@@ -6723,7 +6731,7 @@ function rDash(){
     const schedH=mine.reduce((n,s)=>n+_dMins(s),0)/60;
     const heldH=mine.filter(s=>s.status!=='CX').reduce((n,s)=>n+_dMins(s),0)/60;
     const muH=mine.filter(s=>s.status!=='CX'&&s.makeup).reduce((n,s)=>n+_dMins(s),0)/60;
-    return{st,cap,schedH,heldH,cxH:schedH-heldH,muH,util:cap?Math.round(heldH/cap*100):null};
+    return{st,cap,schedH,heldH,cxH:schedH-heldH,muH,util:cap?Math.round(heldH/cap*100):null,tgt:billTarget(st)};
   }).sort((a,b)=>(b.util||0)-(a.util||0));
 
   // ── Improvement flags ──
@@ -6737,8 +6745,8 @@ function rDash(){
     const bh=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&s.stid===st.id&&_isRealSess(s)).reduce((n,s)=>n+_dMins(s),0)/60;
     const cap=st.hrs*(_workdaysInMonth(cur.ym)/5);
     return {st,pct:cap?Math.round(bh/cap*100):null};
-  }).filter(x=>x.pct!==null&&x.pct<60).sort((a,b)=>a.pct-b.pct);
-  if(lowUtil.length)flags.push({i:'📉',t:lowUtil.length+' staff below 60% utilization this month',d:lowUtil.map(x=>x.st.initials+' '+x.pct+'%').join(', ')});
+  }).filter(x=>x.pct!==null&&x.pct<billTarget(x.st)-15).sort((a,b)=>(a.pct-billTarget(a.st))-(b.pct-billTarget(b.st)));
+  if(lowUtil.length)flags.push({i:'📉',t:lowUtil.length+' staff well below their billable target this month',d:lowUtil.map(x=>x.st.initials+' '+x.pct+'% (target '+billTarget(x.st)+'%)').join(', ')});
   const expSoon=S.clients.filter(c=>c.active!==false&&c.authEnd&&Math.ceil((pd(c.authEnd)-pd(today))/864e5)<=30).length;
   if(expSoon)flags.push({i:'⚠️',t:expSoon+' authorization'+(expSoon>1?'s':'')+' expiring within 30 days',d:'Review the auth pipeline on the Clients tab'});
   const unass=S.sessions.filter(s=>s.stid==='UNASSIGNED'&&s.status!=='CX'&&s.date>=today).length;
@@ -6835,8 +6843,8 @@ function rDash(){
     <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Therapist Schedule Efficiency — ${_ymLbl(cur.ym)}</div>
       <table style="width:100%;border-collapse:collapse;font-size:12px">
-        <tr style="text-align:right;color:var(--mt);font-size:10px;text-transform:uppercase;letter-spacing:.4px"><th style="text-align:left;padding:4px 8px">Staff</th><th style="padding:4px 8px">Available h</th><th style="padding:4px 8px">Booked h</th><th style="padding:4px 8px">Held h</th><th style="padding:4px 8px">Cancelled h</th><th style="padding:4px 8px">Make-up h</th><th style="padding:4px 8px">Utilization</th></tr>
-        ${effRows.map(x=>`<tr style="text-align:right;border-top:1px solid var(--bg)"><td style="text-align:left;padding:5px 8px;font-weight:700">${x.st.initials} <span style="font-weight:400;color:var(--mt);font-size:10px">${x.st.role}</span></td><td style="padding:5px 8px">${Math.round(x.cap*10)/10}</td><td style="padding:5px 8px">${Math.round(x.schedH*10)/10}</td><td style="padding:5px 8px">${Math.round(x.heldH*10)/10}</td><td style="padding:5px 8px;color:${x.cxH>4?'var(--rd)':'inherit'}">${Math.round(x.cxH*10)/10}</td><td style="padding:5px 8px">${Math.round(x.muH*10)/10}</td><td style="padding:5px 8px;font-weight:700;color:${pctClr(x.util,60,80)}">${x.util!==null?x.util+'%':'—'}</td></tr>`).join('')}
+        <tr style="text-align:right;color:var(--mt);font-size:10px;text-transform:uppercase;letter-spacing:.4px"><th style="text-align:left;padding:4px 8px">Staff</th><th style="padding:4px 8px">Available h</th><th style="padding:4px 8px">Booked h</th><th style="padding:4px 8px">Held h</th><th style="padding:4px 8px">Cancelled h</th><th style="padding:4px 8px">Make-up h</th><th style="padding:4px 8px">Target</th><th style="padding:4px 8px">Utilization</th></tr>
+        ${effRows.map(x=>`<tr style="text-align:right;border-top:1px solid var(--bg)"><td style="text-align:left;padding:5px 8px;font-weight:700">${x.st.initials} <span style="font-weight:400;color:var(--mt);font-size:10px">${x.st.role}</span></td><td style="padding:5px 8px">${Math.round(x.cap*10)/10}</td><td style="padding:5px 8px">${Math.round(x.schedH*10)/10}</td><td style="padding:5px 8px">${Math.round(x.heldH*10)/10}</td><td style="padding:5px 8px;color:${x.cxH>4?'var(--rd)':'inherit'}">${Math.round(x.cxH*10)/10}</td><td style="padding:5px 8px">${Math.round(x.muH*10)/10}</td><td style="padding:5px 8px;color:var(--mt)">${x.tgt}%</td><td style="padding:5px 8px;font-weight:700;color:${x.util===null?'var(--mt)':x.util>=x.tgt?'var(--gn)':x.util>=x.tgt-15?'var(--am)':'var(--rd)'}">${x.util!==null?x.util+'%':'—'}</td></tr>`).join('')}
       </table>
     </div>
     <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
