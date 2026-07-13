@@ -1139,6 +1139,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
     <button class="mob-nt" onclick="sw('staff')" data-mt="staff"><span class="mi">🧑‍⚕️</span>Staff</button>
     <button class="mob-nt" onclick="sw('daily')" data-mt="daily"><span class="mi">📋</span>Daily</button>
     <button class="mob-nt edit-only" onclick="sw('reports')" data-mt="reports"><span class="mi">📊</span>Reports</button>
+    <button class="mob-nt" id="mnav-dash" style="display:none" onclick="sw('dash')" data-mt="dash"><span class="mi">📈</span>Dash</button>
     <button class="mob-nt edit-only" onclick="sw('settings')" data-mt="settings"><span class="mi">⚙️</span>Settings</button>
   </div>
 </div>
@@ -1160,6 +1161,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
   <div class="nt" onclick="sw('staff')" data-t="staff">🧑‍⚕️ Staff</div>
   <div class="nt edit-only" onclick="sw('daily')" data-t="daily">📋 Daily Log</div>
   <div class="nt edit-only" onclick="sw('reports')" data-t="reports">📊 Reports</div>
+  <div class="nt" id="nav-dash" style="display:none" onclick="sw('dash')" data-t="dash">📈 Dashboard</div>
   <div class="nt edit-only" onclick="sw('settings')" data-t="settings">⚙️ Settings</div>
 </nav>
 <main class="mn">
@@ -1456,6 +1458,8 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
 </div>
 
 <!-- REPORTS TAB -->
+<div class="tp" id="tp-dash"><div id="dash-content"></div></div>
+
 <div class="tp" id="tp-reports">
   <div class="rpt-wrap">
     <div class="rpt-sidebar">
@@ -2406,6 +2410,7 @@ function sw(t){
   if(t==='waitlist'){rWaitlist();}
   if(t==='discharged'){rDischarged();}
   if(t==='sched'){rAuthAlerts();rSchedRequests();}
+  if(t==='dash'){rDash();}
   // Update URL hash without triggering scroll (silently ignored in iframe contexts)
   try{ if(history.replaceState) history.replaceState(null,'','#'+t); }catch(e){}
 }
@@ -2425,7 +2430,9 @@ function renderAll(){
   // displays see hours-based data.
   S.staff.forEach(migratePtoToHours);
   migrateLeaveRequestsToHours();
+  updateDashNav();
   rSched();rClients();rStaff();rDaily();rSettings();initMyS();rAuthAlerts();rSchedRequests();rLeaveRequests();
+  if(atab==='dash')rDash();
   if(!window._tickerStarted){window._tickerStarted=true;startNowTicker();}
   updateUndoBtn();
   updateFab(atab);
@@ -2664,6 +2671,13 @@ function _schedShowSess(s){
   return true;
 }
 
+// "Real" session for stats counts: an actual client-facing or billable-indirect
+// session. Excludes cancelled, manual ADMIN blocks, auto-generated FREE blocks
+// (_autoAdmin), and virtual placeholders (_virtual).
+function _isRealSess(s){
+  return s.status!=='CX' && !s._autoAdmin && !s._virtual && (!!s.cid || !!s.cptCode);
+}
+
 function rWeekFull(){
   const DAY=['Mon','Tue','Wed','Thu','Fri'];
   const today=todayBerlin();
@@ -2673,7 +2687,7 @@ function rWeekFull(){
   const ws=S.sessions.filter(s=>wds.includes(s.date)&&_schedShowSess(s));
   const cxn=ws.filter(s=>s.status==='CX').length;
   document.getElementById('stats').innerHTML=`
-    <div class="sb"><div class="sn">${ws.length}</div><div class="sl">Sessions</div></div>
+    <div class="sb"><div class="sn">${ws.filter(_isRealSess).length}</div><div class="sl">Sessions</div></div>
     <div class="sb"><div class="sn">${[...new Set(ws.filter(s=>s.cid).map(s=>s.cid))].length}</div><div class="sl">Clients</div></div>
     <div class="sb"><div class="sn">${cxn}</div><div class="sl">Cancellations</div></div>
     <div class="sb"><div class="sn">${ws.filter(s=>s.makeup).length}</div><div class="sl">Make-ups</div></div>
@@ -2740,13 +2754,13 @@ function rWeekAgenda(){
   const DAY=['Mon','Tue','Wed','Thu','Fri'];
   const today=todayBerlin();
   const wEnd=new Date(wkStart);wEnd.setDate(wEnd.getDate()+4);
-  setVlbl(fsh(wkStart)+' – '+fsh(wEnd)+', '+wEnd.getFullYear(), wds.some(ds=>ds===todayBerlin()));
   const wds=DAY.map((_,i)=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
+  setVlbl(fsh(wkStart)+' – '+fsh(wEnd)+', '+wEnd.getFullYear(), wds.some(ds=>ds===todayBerlin()));
   const ws=S.sessions.filter(s=>wds.includes(s.date)&&_schedShowSess(s));
   // Reuse stats bar
   const cxn=ws.filter(s=>s.status==='CX').length;
   document.getElementById('stats').innerHTML=`
-    <div class="sb"><div class="sn">${ws.length}</div><div class="sl">Sessions</div></div>
+    <div class="sb"><div class="sn">${ws.filter(_isRealSess).length}</div><div class="sl">Sessions</div></div>
     <div class="sb"><div class="sn">${[...new Set(ws.filter(s=>s.cid).map(s=>s.cid))].length}</div><div class="sl">Clients</div></div>
     <div class="sb"><div class="sn">${cxn}</div><div class="sl">Cancelled</div></div>
     <div class="sb"><div class="sn">${ws.filter(s=>(s.cid||s.cptCode)&&s.status!=='CX'&&!s.noteWritten).length}</div><div class="sl" style="color:${ws.filter(s=>(s.cid||s.cptCode)&&s.status!=='CX'&&!s.noteWritten).length?'var(--rd)':'inherit'}">Notes Due</div></div>`;
@@ -2833,7 +2847,7 @@ function rDay(){
   // Stats for day
   const cxn=dsess.filter(s=>s.status==='CX').length;
   document.getElementById('stats').innerHTML=`
-    <div class="sb"><div class="sn">${dsess.length}</div><div class="sl">Sessions Today</div></div>
+    <div class="sb"><div class="sn">${dsess.filter(_isRealSess).length}</div><div class="sl">Sessions Today</div></div>
     <div class="sb"><div class="sn">${[...new Set(dsess.filter(s=>s.cid).map(s=>s.cid))].length}</div><div class="sl">Clients</div></div>
     <div class="sb"><div class="sn">${cxn}</div><div class="sl">Cancellations</div></div>
     <div class="sb"><div class="sn">${dsess.filter(s=>s.type==='OT').length}</div><div class="sl">OT</div></div>
@@ -3748,7 +3762,7 @@ function updSess(id){
 
   const doUpdate = function(isGroup){
     s.stid=newStid;s.cid=newCid;s.type=newType;s.date=newDate;s.s=newS;s.e=newE;
-    s.makeup=newMakeup;s.noteWritten=document.getElementById('sd-note')?.checked||false;// preserve sessionLog
+    const _wasNote=s.noteWritten;s.makeup=newMakeup;s.noteWritten=document.getElementById('sd-note')?.checked||false;if(s.noteWritten&&!_wasNote)s.noteWrittenAt=new Date().toISOString();// preserve sessionLog
     s.notes=newNotes;
     // Group flag: checkbox wins. If user explicitly checked "Group session" in
     // the modal, set true. If they unchecked it, set false (allows un-marking).
@@ -4851,15 +4865,74 @@ function rMyS(){
   },0);
   const weekHrs=(weekMins/60).toFixed(1);
   const contractHrs=s.hrs||0;
+
+  // ── Extended week metrics (billable / admin / CPT mix / leave / auths) ──
+  const _minsOf=arr=>arr.reduce((sum,x)=>{const[sh2,sm2]=x.s.split(':').map(Number);const[eh2,em2]=x.e.split(':').map(Number);return sum+Math.max(0,(eh2*60+em2)-(sh2*60+sm2));},0);
+  const _wkReal=weekAllSess.filter(_isRealSess);                              // billable: client sessions + CPT-coded indirect
+  const _wkAdmin=weekAllSess.filter(x=>x.status!=='CX'&&!_isRealSess(x)&&(x.type==='ADMIN'||x._autoAdmin));
+  const billHrs=_minsOf(_wkReal)/60;
+  const admHrs=_minsOf(_wkAdmin)/60;
+  const billPct=contractHrs?Math.round(billHrs/contractHrs*100):null;
+  const _fmtD=d=>pd(d).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  // Service / CPT mix chips for the week
+  const _mix={};
+  _wkReal.forEach(x=>{const k=x.cptCode?((INDIRECT_CHIP_LABELS[x.cptCode]||'')+' '+x.cptCode).trim():x.type;_mix[k]=(_mix[k]||0)+1;});
+  const mixChips=Object.keys(_mix).sort().map(k=>`<span style="display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:10px;background:#EEF2FF;color:#3730A3;margin:0 4px 4px 0">${k} ×${_mix[k]}</span>`).join('')||'<span style="font-size:11px;color:var(--mt)">None scheduled</span>';
+
+  // Leave balance + upcoming leave — respects leave visibility tiers
+  let leaveRow='';
+  if(canViewLeave(mySchedStid)){
+    const hpd=hrsPerDay(s);
+    const totH=s.ptoTotalHours||((s.ptoTotal||0)*hpd)||0;
+    const usedH=leaveHoursYTD(mySchedStid,'PTO');
+    const sickH=leaveHoursYTD(mySchedStid,'SICK');
+    const leftH=Math.max(0,totH-usedH);
+    const fmtHD=h=>(Math.round(h*10)/10)+'h'+(hpd?' <span style="font-weight:400;font-size:11px;color:var(--mt)">('+(Math.round(h/hpd*10)/10)+'d)</span>':'');
+    const upcoming=(S.leaveRequests||[]).filter(r=>r.stid===mySchedStid&&r.status==='approved'&&(r.to||r.from)>=today).sort((a,b)=>(a.from||'').localeCompare(b.from||''));
+    const up0=upcoming[0];
+    const upTxt=up0?`${_fmtD(up0.from)}${up0.to&&up0.to!==up0.from?' – '+_fmtD(up0.to):''} · ${leaveTypeMeta(up0.type).longLabel}${upcoming.length>1?' <span style="color:var(--mt)">+'+(upcoming.length-1)+' more</span>':''}`:'<span style="color:var(--mt)">None scheduled</span>';
+    leaveRow=`<div style="display:flex;gap:20px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid var(--bg)">
+      <div><div style="font-size:17px;font-weight:700;font-family:'Playfair Display',serif;color:${totH&&leftH<=hpd*3?'var(--rd)':'var(--nv)'}">${fmtHD(leftH)}</div><div style="font-size:10px;color:var(--mt)">PTO Remaining${totH?' · of '+(Math.round(totH*10)/10)+'h':''}</div></div>
+      <div><div style="font-size:17px;font-weight:700;font-family:'Playfair Display',serif;color:var(--nv)">${fmtHD(sickH)}</div><div style="font-size:10px;color:var(--mt)">Sick Used YTD</div></div>
+      <div style="flex:1;min-width:170px"><div style="font-size:13px;font-weight:600;color:var(--nv);margin-top:3px">🏖 ${upTxt}</div><div style="font-size:10px;color:var(--mt)">Upcoming Leave</div></div>
+    </div>`;
+  }
+
+  // Case-manager panel: auth expirations on their caseload (next 60 days)
+  let authRow='';
+  const _cmClients=S.clients.filter(c=>c.bcba===s.initials&&c.authEnd);
+  if(_cmClients.length){
+    const soon=_cmClients.map(c=>({c,days:Math.ceil((pd(c.authEnd)-pd(today))/864e5)})).filter(x=>x.days<=60).sort((a,b)=>a.days-b.days);
+    authRow=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bg)">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:6px">Auth Expirations — Your Caseload · next 60 days</div>
+      ${soon.length?`<div style="display:flex;flex-wrap:wrap;gap:6px">${soon.map(x=>{
+        const exp=x.days<0, red=x.days<=30;
+        const bg=exp?'#B71C1C':red?'#FFEBEE':'#FFF7ED', fg=exp?'#fff':red?'#B71C1C':'#92400E', bd=exp?'#B71C1C':red?'#EF9A9A':'#FCD34D';
+        return`<span onclick="openClientDetail('${x.c.id}')" title="Open client" style="cursor:pointer;font-size:11px;font-weight:700;padding:4px 10px;border-radius:12px;background:${bg};color:${fg};border:1px solid ${bd}">${cDisplayName(x.c)} · ${exp?'expired '+(-x.days)+'d ago':x.days+'d · '+_fmtD(x.c.authEnd)}</span>`;}).join('')}</div>`
+      :`<div style="font-size:11px;color:var(--gn);font-weight:600">✓ No auth expirations in the next 60 days</div>`}
+    </div>`;
+  }
+
+  const _tile=(val,lbl,clr)=>`<div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:${clr||'var(--nv)'}">${val}</div><div style="font-size:10px;color:var(--mt)">${lbl}</div></div>`;
+  const cxCount=weekAllSess.filter(x=>x.status==='CX').length;
   const weekSummary=`<div style="background:#fff;border-radius:10px;border:1px solid var(--bd);padding:12px 16px;margin-top:16px;box-shadow:var(--sh)">
     <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">This Week</div>
     <div style="display:flex;gap:16px;flex-wrap:wrap">
-      <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:var(--nv)">${weekAllSess.filter(x=>x.status!=='CX').length}</div><div style="font-size:10px;color:var(--mt)">Sessions</div></div>
-      <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:var(--nv)">${weekHrs}h</div><div style="font-size:10px;color:var(--mt)">${contractHrs?'of '+contractHrs+'h contract':'Scheduled'}</div></div>
-      <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:${weekAllSess.filter(x=>x.status==='CX').length?'var(--rd)':'var(--gn)'}">${weekAllSess.filter(x=>x.status==='CX').length}</div><div style="font-size:10px;color:var(--mt)">Cancellations</div></div>
-      <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:var(--nv)">${[...new Set(weekAllSess.filter(x=>x.cid&&x.status!=='CX').map(x=>x.cid))].length}</div><div style="font-size:10px;color:var(--mt)">Clients</div></div>
+      ${_tile(_wkReal.length,'Sessions')}
+      ${_tile(weekHrs+'h',contractHrs?'Scheduled · of '+contractHrs+'h':'Scheduled')}
+      ${_tile((Math.round(billHrs*10)/10)+'h','Billable')}
+      ${billPct!==null?_tile(billPct+'%','Billable % of Contract',billPct>=80?'var(--gn)':billPct>=60?'var(--am)':'var(--rd)'):''}
+      ${_tile((Math.round(admHrs*10)/10)+'h','Admin')}
+      ${_tile(cxCount,'Cancellations',cxCount?'var(--rd)':'var(--gn)')}
+      ${_tile([...new Set(weekAllSess.filter(x=>x.cid&&x.status!=='CX').map(x=>x.cid))].length,'Clients')}
+    </div>
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg)">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:6px">Scheduled Services / CPT</div>
+      ${mixChips}
     </div>
     ${contractHrs?`<div style="margin-top:10px"><div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden"><div style="height:100%;background:${weekHrs/contractHrs>=0.9?'var(--gn)':'var(--am)'};width:${Math.min(100,Math.round(weekHrs/contractHrs*100))}%;border-radius:3px;transition:width .4s"></div></div><div style="font-size:10px;color:var(--mt);margin-top:3px">${Math.round(weekHrs/contractHrs*100)}% of contract hours scheduled</div></div>`:''}
+    ${leaveRow}
+    ${authRow}
   </div>`;
 
   // ── Leave decisions banner ──
@@ -6517,6 +6590,8 @@ function promoteWL(id){
     notes:w.schedNotes||w.notes||'',
     extId:w.extId||'',
     medAlerts:w.medAlerts||[],
+    referralDate:w.referralDate||'',   // carried over for service-delivery KPI
+    createdAt:new Date().toISOString(),
   };
   S.clients.push(newC);
   S.waitlist=(S.waitlist||[]).filter(x=>x.id!==id);
@@ -6525,6 +6600,253 @@ function promoteWL(id){
   rClients();rWaitlist();
   showToast(w.name+' moved to active roster ✓','var(--gn)');
   setTimeout(()=>openClientDetail(newC.id),300);
+}
+
+// ═══════════ OBM / CLINIC PERFORMANCE DASHBOARD ═══════════
+// Visible to: scheduler (PIN unlocked) + leadership accounts in Staff View
+// (LEAVE_ALL_VIEWERS — Clinical Director + Owner).
+function canViewDash(){
+  if(!isViewOnly) return true;
+  const selfId=viewerStid||mySchedStid;
+  return !!selfId && LEAVE_ALL_VIEWERS.includes(selfId);
+}
+function updateDashNav(){
+  const show=canViewDash();
+  const d=document.getElementById('nav-dash'); if(d) d.style.display=show?'':'none';
+  const m=document.getElementById('mnav-dash'); if(m) m.style.display=show?'':'none';
+}
+function _dMins(x){const[a,b]=x.s.split(':').map(Number);const[c,d]=x.e.split(':').map(Number);return Math.max(0,(c*60+d)-(a*60+b));}
+// Scheduled real session: client-facing or CPT-coded, regardless of CX status
+function _isRealSched(s){return !s._autoAdmin && !s._virtual && (!!s.cid||!!s.cptCode);}
+function _workdaysInMonth(ym){const[y,mo]=ym.split('-').map(Number);let n=0;const d=new Date(y,mo-1,1);while(d.getMonth()===mo-1){const w=d.getDay();if(w>=1&&w<=5)n++;d.setDate(d.getDate()+1);}return n;}
+
+function rDash(){
+  const con=document.getElementById('dash-content');
+  if(!con) return;
+  if(!canViewDash()){con.innerHTML='<div class="mys-empty"><div class="mi">🔒</div><div style="font-size:13px">The dashboard is available to clinic leadership only.</div></div>';return;}
+  const today=todayBerlin();
+  const curYM=today.slice(0,7);
+  const _ymLbl=ym=>pd(ym+'-01').toLocaleDateString('en-US',{month:'short',year:'2-digit'});
+  const _fmtDashD=d=>pd(d).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+  const allYM=[...new Set(S.sessions.map(s=>(s.date||'').slice(0,7)))].filter(x=>/^\d{4}-\d{2}$/.test(x)).sort();
+  const months=allYM.filter(m=>m<=curYM).slice(-6);
+  const therapyStaff=S.staff.filter(st=>['BCBA','OT','RBT','ABAT'].includes(st.role)&&st.hrs>0);
+
+  // ── Per-month metrics ──
+  const M=months.map(ym=>{
+    const sched=S.sessions.filter(s=>(s.date||'').startsWith(ym)&&_isRealSched(s));
+    const delivered=sched.filter(s=>s.status!=='CX');
+    const billH=delivered.reduce((n,s)=>n+_dMins(s),0)/60;
+    const capH=therapyStaff.reduce((n,st)=>n+st.hrs*(_workdaysInMonth(ym)/5),0);
+    let sickD=0,ptoD=0;
+    (S.leaveRequests||[]).forEach(r=>{
+      if(r.status!=='approved')return;
+      const st=gs(r.stid);
+      const days=(r.days||[]).filter(d=>d.startsWith(ym)&&isStaffWorkday(st,d)).length;
+      if(!days)return;
+      const v=r.halfDay?days*0.5:days;
+      if(r.type==='SICK')sickD+=v; else if(r.type==='PTO')ptoD+=v;
+    });
+    return {ym,sched:sched.length,delivered:delivered.length,
+      clientsServed:[...new Set(delivered.filter(s=>s.cid).map(s=>s.cid))].length,
+      makeups:delivered.filter(s=>s.makeup).length,billH,capH,sickD,ptoD,
+      util:capH?Math.round(billH/capH*100):null,
+      delRate:sched.length?Math.round(delivered.length/sched.length*100):null};
+  });
+  const cur=M[M.length-1]||{ym:curYM,sched:0,delivered:0,clientsServed:0,makeups:0,sickD:0,ptoD:0,util:null,delRate:null};
+
+  // ── Days until service delivery: referral → first direct ABA (97153) ──
+  const sdRows=[];
+  S.clients.forEach(c=>{
+    if(c.active===false)return;
+    const ref=c.referralDate||(c.createdAt?String(c.createdAt).slice(0,10):'');
+    if(!ref||!/^\d{4}-\d{2}-\d{2}/.test(ref))return;
+    const first=S.sessions.filter(s=>s.cid===c.id&&s.status!=='CX'&&s.type==='ABA'&&(!s.cptCode||s.cptCode==='97153')).map(s=>s.date).sort()[0];
+    if(!first||first<ref)return;
+    sdRows.push({est:!c.referralDate,ins:c.ins||'—',days:Math.round((pd(first)-pd(ref.slice(0,10)))/864e5)});
+  });
+  const sdAvg=sdRows.length?Math.round(sdRows.reduce((n,x)=>n+x.days,0)/sdRows.length):null;
+  const sdAllEst=sdRows.length>0&&sdRows.every(x=>x.est);
+  // Referral → first session, by payer
+  const byPayer={};
+  sdRows.forEach(r=>{(byPayer[r.ins]=byPayer[r.ins]||[]).push(r.days);});
+
+  // ── Fill rate & open hours (this month) ──
+  const wkFactor=_workdaysInMonth(cur.ym)/5;
+  const capAll=therapyStaff.reduce((n,st)=>n+st.hrs*wkFactor,0);
+  const schedInclCxH=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&_isRealSched(s)).reduce((n,s)=>n+_dMins(s),0)/60;
+  const fillRate=capAll?Math.round(schedInclCxH/capAll*100):null;
+  const openH=capAll?Math.max(0,Math.round((capAll-schedInclCxH)*10)/10):null;
+
+  // ── Utilization by discipline ──
+  const discUtil=[['ABA',st=>st.role!=='OT'],['OT',st=>st.role==='OT']].map(([lbl,fn])=>{
+    const grp=therapyStaff.filter(fn);
+    const cap=grp.reduce((n,st)=>n+st.hrs*wkFactor,0);
+    const ids=new Set(grp.map(st=>st.id));
+    const bh=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&ids.has(s.stid)&&_isRealSess(s)).reduce((n,s)=>n+_dMins(s),0)/60;
+    return {lbl,pct:cap?Math.round(bh/cap*100):null};
+  });
+
+  // ── Cancellation breakdown (this month) ──
+  const cxSess=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&s.status==='CX');
+  const _cxFallback={'CX-CL':'Recurring Cancel','CX-CC':'Client Cancel','CX-DC':'Discharged'};
+  const cxLabel=code=>((S.cfg.cxCodes||[]).find(x=>x.code===code)||{}).label||_cxFallback[code]||code||'Uncoded';
+  const cxByCode={};
+  cxSess.forEach(s=>{const c=s.cx||'OTH';cxByCode[c]=(cxByCode[c]||0)+1;});
+  const cxRows=Object.entries(cxByCode).sort((a,b)=>b[1]-a[1]);
+  const sameDayCx=cxSess.filter(s=>s.cxAt&&String(s.cxAt).slice(0,10)===s.date).length;
+  const cxStamped=cxSess.filter(s=>s.cxAt).length;
+
+  // ── Auth units: usage + projected exhaustion ──
+  const unitRows=S.clients.filter(c=>c.active!==false&&(c.authVisits||c.visitsAuth)>0).map(c=>{
+    const total=c.authVisits||c.visitsAuth||0;
+    let used=(typeof c.visitsUsed==='number')?c.visitsUsed:null;
+    let usedSrc='tracked';
+    if(used===null){
+      used=S.sessions.filter(s=>s.cid===c.id&&s.status!=='CX'&&s.date<=today&&(!c.authStart||s.date>=c.authStart)).length;
+      usedSrc='counted';
+    }
+    const rem=Math.max(0,total-used);
+    const from=fd(new Date(pd(today).getTime()-27*864e5));
+    const perWeek=S.sessions.filter(s=>s.cid===c.id&&s.status!=='CX'&&s.date>=from&&s.date<=today).length/4;
+    const exhaust=perWeek>0?fd(new Date(pd(today).getTime()+(rem/perWeek)*7*864e5)):null;
+    const risk=(exhaust&&c.authEnd&&exhaust<c.authEnd)||(perWeek>0&&rem<=perWeek*2);
+    return{c,total,used,usedSrc,rem,perWeek,exhaust,risk};
+  }).sort((a,b)=>(a.exhaust||'9999').localeCompare(b.exhaust||'9999'));
+  const unitRisk=unitRows.filter(x=>x.risk);
+  const noUnitData=S.clients.filter(c=>c.active!==false&&!(c.authVisits||c.visitsAuth)).length;
+
+  // ── Per-staff schedule efficiency (this month) ──
+  const effRows=therapyStaff.map(st=>{
+    const cap=st.hrs*wkFactor;
+    const mine=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&s.stid===st.id&&_isRealSched(s));
+    const schedH=mine.reduce((n,s)=>n+_dMins(s),0)/60;
+    const heldH=mine.filter(s=>s.status!=='CX').reduce((n,s)=>n+_dMins(s),0)/60;
+    const muH=mine.filter(s=>s.status!=='CX'&&s.makeup).reduce((n,s)=>n+_dMins(s),0)/60;
+    return{st,cap,schedH,heldH,cxH:schedH-heldH,muH,util:cap?Math.round(heldH/cap*100):null};
+  }).sort((a,b)=>(b.util||0)-(a.util||0));
+
+  // ── Improvement flags ──
+  const flags=[];
+  if(cur.delRate!==null&&cur.delRate<90){
+    const cxBy={};S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&s.status==='CX'&&s.cid).forEach(s=>{cxBy[s.cid]=(cxBy[s.cid]||0)+1;});
+    const top=Object.entries(cxBy).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([cid,n])=>(gc(cid)?cDisplayName(gc(cid)):'?')+' ×'+n).join(', ');
+    flags.push({i:'❌',t:'Cancellation rate is '+(100-cur.delRate)+'% this month (target <10%)',d:top?'Most cancellations: '+top:''});
+  }
+  const lowUtil=therapyStaff.map(st=>{
+    const bh=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&s.stid===st.id&&_isRealSess(s)).reduce((n,s)=>n+_dMins(s),0)/60;
+    const cap=st.hrs*(_workdaysInMonth(cur.ym)/5);
+    return {st,pct:cap?Math.round(bh/cap*100):null};
+  }).filter(x=>x.pct!==null&&x.pct<60).sort((a,b)=>a.pct-b.pct);
+  if(lowUtil.length)flags.push({i:'📉',t:lowUtil.length+' staff below 60% utilization this month',d:lowUtil.map(x=>x.st.initials+' '+x.pct+'%').join(', ')});
+  const expSoon=S.clients.filter(c=>c.active!==false&&c.authEnd&&Math.ceil((pd(c.authEnd)-pd(today))/864e5)<=30).length;
+  if(expSoon)flags.push({i:'⚠️',t:expSoon+' authorization'+(expSoon>1?'s':'')+' expiring within 30 days',d:'Review the auth pipeline on the Clients tab'});
+  const unass=S.sessions.filter(s=>s.stid==='UNASSIGNED'&&s.status!=='CX'&&s.date>=today).length;
+  if(unass)flags.push({i:'🙋',t:unass+' upcoming session'+(unass>1?'s':'')+' unassigned',d:'Assign therapists before the session dates'});
+  const wl=(S.waitlist||[]).filter(w=>w.status==='WAITING');
+  if(wl.length){
+    const withRef=wl.filter(w=>w.referralDate);
+    const avgWait=withRef.length?Math.round(withRef.reduce((n,w)=>n+(pd(today)-pd(w.referralDate))/864e5,0)/withRef.length):null;
+    flags.push({i:'⏳',t:wl.length+' client'+(wl.length>1?'s':'')+' waiting for services',d:avgWait!==null?'Average wait so far: '+avgWait+' days':''});
+  }
+  const notesMissing=S.sessions.filter(s=>s.date<today&&months[0]&&s.date>=months[0]+'-01'&&(s.cid||s.cptCode)&&s.status!=='CX'&&!s.noteWritten).length;
+  if(notesMissing)flags.push({i:'📝',t:notesMissing+' past sessions missing notes',d:'Since '+(months[0]?_ymLbl(months[0]):'')});
+  if(!flags.length)flags.push({i:'✅',t:'No flags — clinic metrics look healthy',d:''});
+
+  // ── Chart: scheduled sessions (bars) + clients served (line) per month ──
+  let chart='';
+  if(M.length){
+    const W=680,H=230,PL=42,PR=42,PT=18,PB=28;
+    const iw=W-PL-PR, ih=H-PT-PB;
+    const maxS=Math.max(...M.map(x=>x.sched),1);
+    const maxC=Math.max(...M.map(x=>x.clientsServed),1);
+    const bw=Math.min(56,iw/M.length*0.5);
+    const xs=i=>PL+iw/M.length*(i+0.5);
+    let g='';
+    [0,0.5,1].forEach(f=>{const y=PT+ih*(1-f);g+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#ECEFF1"/><text x="${PL-6}" y="${y+3}" text-anchor="end" font-size="9" fill="#90A4AE">${Math.round(maxS*f)}</text><text x="${W-PR+6}" y="${y+3}" font-size="9" fill="#3730A3">${Math.round(maxC*f)}</text>`;});
+    M.forEach((x,i)=>{
+      const bh=ih*x.sched/maxS;
+      g+=`<rect x="${xs(i)-bw/2}" y="${PT+ih-bh}" width="${bw}" height="${Math.max(1,bh)}" rx="3" fill="#C5CAE9"/><text x="${xs(i)}" y="${PT+ih-bh-4}" text-anchor="middle" font-size="9" fill="#546E7A">${x.sched}</text><text x="${xs(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="#607D8B">${_ymLbl(x.ym)}</text>`;
+    });
+    g+=`<polyline points="${M.map((x,i)=>xs(i)+','+(PT+ih*(1-x.clientsServed/maxC))).join(' ')}" fill="none" stroke="#3730A3" stroke-width="2"/>`;
+    M.forEach((x,i)=>{const cy=PT+ih*(1-x.clientsServed/maxC);g+=`<circle cx="${xs(i)}" cy="${cy}" r="3.5" fill="#3730A3"/><text x="${xs(i)}" y="${cy-7}" text-anchor="middle" font-size="9" font-weight="700" fill="#3730A3">${x.clientsServed}</text>`;});
+    chart=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block">${g}</svg>
+      <div style="display:flex;gap:14px;font-size:10px;color:var(--mt);margin-top:2px"><span><span style="display:inline-block;width:10px;height:10px;background:#C5CAE9;border-radius:2px;vertical-align:-1px"></span> Scheduled sessions</span><span><span style="display:inline-block;width:10px;height:3px;background:#3730A3;vertical-align:2px"></span> Clients served</span></div>`;
+  }
+
+  // ── Assemble ──
+  const kpi=(val,lbl,sub,clr)=>`<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);min-width:130px;flex:1">
+    <div style="font-size:26px;font-weight:700;font-family:'Playfair Display',serif;color:${clr||'var(--nv)'}">${val}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin-top:2px">${lbl}</div>
+    ${sub?`<div style="font-size:10px;color:var(--mt);margin-top:2px">${sub}</div>`:''}
+  </div>`;
+  const pctClr=(p,lo,hi)=>p===null?'var(--mt)':p>=hi?'var(--gn)':p>=lo?'var(--am)':'var(--rd)';
+  con.innerHTML=`
+  <div class="sh2"><h2>📈 Clinic Performance</h2><div style="font-size:11px;color:var(--mt)">OBM dashboard · ${_ymLbl(cur.ym)} · updates live</div></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+    ${kpi(sdAvg!==null?sdAvg+'d':'—','Days to Service Delivery',sdRows.length?('referral → first direct session · '+sdRows.length+' clients'+(sdAllEst?' · <span style="color:var(--am)">estimated from record creation</span>':'')):'needs referral dates — imports & waitlist promotions will fill this in')}
+    ${kpi(cur.util!==null?cur.util+'%':'—','Utilization',("billable ÷ contracted hours · this month"),pctClr(cur.util,60,80))}
+    ${kpi(cur.delRate!==null?cur.delRate+'%':'—','Delivery Rate','sessions held ÷ scheduled · this month',pctClr(cur.delRate,85,92))}
+    ${kpi(fillRate!==null?fillRate+'%':'—','Fill Rate','booked ÷ available hours · this month',pctClr(fillRate,75,90))}
+    ${kpi(openH!==null?openH+'h':'—','Open Hours','available but unbooked · this month')}
+    ${discUtil.map(d=>kpi(d.pct!==null?d.pct+'%':'—',d.lbl+' Utilization','this month',pctClr(d.pct,60,80))).join('')}
+    ${kpi(cur.clientsServed,'Clients Served','this month')}
+    ${kpi(Math.round(cur.sickD*10)/10,'Sick Days','this month',cur.sickD>10?'var(--rd)':undefined)}
+    ${kpi(Math.round(cur.ptoD*10)/10,'PTO Days','this month')}
+    ${kpi(cur.makeups,'Make-up Sessions','this month')}
+  </div>
+  <div style="display:grid;grid-template-columns:1fr;gap:14px;max-width:980px">
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh)">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Clients Served & Scheduled Sessions per Month</div>
+      ${chart||'<div style="font-size:12px;color:var(--mt)">No session data yet</div>'}
+    </div>
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh)">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Key Areas for Improvement</div>
+      ${flags.map(f=>`<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--bg)">
+        <span style="font-size:16px;flex-shrink:0">${f.i}</span>
+        <div><div style="font-size:12px;font-weight:700;color:var(--nv)">${f.t}</div>${f.d?`<div style="font-size:11px;color:var(--t2);margin-top:1px">${f.d}</div>`:''}</div>
+      </div>`).join('')}
+    </div>
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh)">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Cancellations by Reason — ${_ymLbl(cur.ym)}</div>
+      ${cxRows.length?cxRows.map(([code,n])=>{const w=Math.round(n/cxRows[0][1]*100);return`<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+        <span style="font-size:11px;font-weight:700;width:130px;flex-shrink:0">${cxLabel(code)}</span>
+        <div style="flex:1;height:12px;background:var(--bg);border-radius:6px;overflow:hidden"><div style="height:100%;width:${w}%;background:${['TC'].includes(code)?'#EF9A9A':'#C5CAE9'};border-radius:6px"></div></div>
+        <span style="font-size:11px;font-weight:700;width:26px;text-align:right">${n}</span>
+      </div>`;}).join(''):'<div style="font-size:12px;color:var(--mt)">No cancellations this month 🎉</div>'}
+      ${cxStamped?`<div style="font-size:11px;color:var(--t2);margin-top:8px">Same-day cancellations: <strong>${sameDayCx}</strong> of ${cxStamped} time-stamped (${Math.round(sameDayCx/cxStamped*100)}%)</div>`:''}
+    </div>
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Auth Units — Projected Exhaustion${unitRisk.length?` · <span style="color:var(--rd)">${unitRisk.length} at risk</span>`:''}</div>
+      ${unitRows.length?`<table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr style="text-align:right;color:var(--mt);font-size:10px;text-transform:uppercase;letter-spacing:.4px"><th style="text-align:left;padding:4px 8px">Client</th><th style="padding:4px 8px">Units</th><th style="padding:4px 8px">Used</th><th style="padding:4px 8px">Left</th><th style="padding:4px 8px">Pace/wk</th><th style="padding:4px 8px">Est. Exhaustion</th><th style="padding:4px 8px">Auth Ends</th></tr>
+        ${unitRows.slice(0,12).map(x=>`<tr style="text-align:right;border-top:1px solid var(--bg);${x.risk?'background:#FFF5F5':''}"><td style="text-align:left;padding:5px 8px;font-weight:700;cursor:pointer" onclick="openClientDetail('${x.c.id}')">${cDisplayName(x.c)}${x.risk?' ⚠️':''}</td><td style="padding:5px 8px">${x.total}</td><td style="padding:5px 8px">${x.used}${x.usedSrc==='counted'?'<span title="counted from schedule, not billing" style="color:var(--mt)">*</span>':''}</td><td style="padding:5px 8px;font-weight:700;color:${x.rem<=5?'var(--rd)':'inherit'}">${x.rem}</td><td style="padding:5px 8px">${Math.round(x.perWeek*10)/10}</td><td style="padding:5px 8px;font-weight:700;color:${x.risk?'var(--rd)':'inherit'}">${x.exhaust?_fmtDashD(x.exhaust):'—'}</td><td style="padding:5px 8px">${x.c.authEnd?_fmtDashD(x.c.authEnd):'—'}</td></tr>`).join('')}
+      </table>
+      <div style="font-size:10px;color:var(--mt);margin-top:6px">* counted from delivered sessions since auth start (no billed-units record). ${noUnitData?noUnitData+' active clients have no authorized-units data — add it on the client card to include them.':''}</div>`
+      :`<div style="font-size:12px;color:var(--mt)">No clients have authorized-units data yet. Add "Authorized Visits" on client cards to activate this panel${noUnitData?' ('+noUnitData+' active clients missing it)':''}.</div>`}
+    </div>
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Referral → First Direct Session, by Payer</div>
+      ${Object.keys(byPayer).length?`<table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr style="text-align:right;color:var(--mt);font-size:10px;text-transform:uppercase;letter-spacing:.4px"><th style="text-align:left;padding:4px 8px">Payer</th><th style="padding:4px 8px">Clients</th><th style="padding:4px 8px">Avg Days</th></tr>
+        ${Object.entries(byPayer).sort((a,b)=>b[1].length-a[1].length).map(([ins,arr])=>`<tr style="text-align:right;border-top:1px solid var(--bg)"><td style="text-align:left;padding:5px 8px;font-weight:700">${ins}</td><td style="padding:5px 8px">${arr.length}</td><td style="padding:5px 8px;font-weight:700">${Math.round(arr.reduce((n,d)=>n+d,0)/arr.length)}</td></tr>`).join('')}
+      </table>`:'<div style="font-size:12px;color:var(--mt)">Needs referral dates — waitlist promotions now carry them automatically.</div>'}
+    </div>
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Therapist Schedule Efficiency — ${_ymLbl(cur.ym)}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr style="text-align:right;color:var(--mt);font-size:10px;text-transform:uppercase;letter-spacing:.4px"><th style="text-align:left;padding:4px 8px">Staff</th><th style="padding:4px 8px">Available h</th><th style="padding:4px 8px">Booked h</th><th style="padding:4px 8px">Held h</th><th style="padding:4px 8px">Cancelled h</th><th style="padding:4px 8px">Make-up h</th><th style="padding:4px 8px">Utilization</th></tr>
+        ${effRows.map(x=>`<tr style="text-align:right;border-top:1px solid var(--bg)"><td style="text-align:left;padding:5px 8px;font-weight:700">${x.st.initials} <span style="font-weight:400;color:var(--mt);font-size:10px">${x.st.role}</span></td><td style="padding:5px 8px">${Math.round(x.cap*10)/10}</td><td style="padding:5px 8px">${Math.round(x.schedH*10)/10}</td><td style="padding:5px 8px">${Math.round(x.heldH*10)/10}</td><td style="padding:5px 8px;color:${x.cxH>4?'var(--rd)':'inherit'}">${Math.round(x.cxH*10)/10}</td><td style="padding:5px 8px">${Math.round(x.muH*10)/10}</td><td style="padding:5px 8px;font-weight:700;color:${pctClr(x.util,60,80)}">${x.util!==null?x.util+'%':'—'}</td></tr>`).join('')}
+      </table>
+    </div>
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Monthly Detail</div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr style="text-align:right;color:var(--mt);font-size:10px;text-transform:uppercase;letter-spacing:.4px"><th style="text-align:left;padding:4px 8px">Month</th><th style="padding:4px 8px">Scheduled</th><th style="padding:4px 8px">Held</th><th style="padding:4px 8px">Delivery %</th><th style="padding:4px 8px">Clients</th><th style="padding:4px 8px">Make-ups</th><th style="padding:4px 8px">Sick d</th><th style="padding:4px 8px">PTO d</th><th style="padding:4px 8px">Utilization</th></tr>
+        ${M.slice().reverse().map(x=>`<tr style="text-align:right;border-top:1px solid var(--bg)"><td style="text-align:left;padding:5px 8px;font-weight:700">${_ymLbl(x.ym)}</td><td style="padding:5px 8px">${x.sched}</td><td style="padding:5px 8px">${x.delivered}</td><td style="padding:5px 8px;color:${pctClr(x.delRate,85,92)};font-weight:700">${x.delRate!==null?x.delRate+'%':'—'}</td><td style="padding:5px 8px">${x.clientsServed}</td><td style="padding:5px 8px">${x.makeups}</td><td style="padding:5px 8px">${Math.round(x.sickD*10)/10}</td><td style="padding:5px 8px">${Math.round(x.ptoD*10)/10}</td><td style="padding:5px 8px;color:${pctClr(x.util,60,80)};font-weight:700">${x.util!==null?x.util+'%':'—'}</td></tr>`).join('')}
+      </table>
+    </div>
+  </div>`;
 }
 
 function renderAvailStripDaily(daySessions, ds){
@@ -6692,7 +7014,7 @@ function toggleNote(id){
     showToast('Only '+(gs(s.stid)?.name||'the assigned therapist')+' can mark this note done','#FFA000');
     return;
   }
-  s.noteWritten=!s.noteWritten;save();rSched();
+  s.noteWritten=!s.noteWritten;if(s.noteWritten)s.noteWrittenAt=new Date().toISOString();save();rSched();
 }
 function showMissingNotes(){
   const wds=[0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
@@ -6992,6 +7314,7 @@ function tapNote(el){
     return;
   }
   s.noteWritten = !s.noteWritten;
+  if(s.noteWritten) s.noteWrittenAt=new Date().toISOString();
   // Update UI immediately without full re-render
   el.classList.toggle('done', s.noteWritten);
   el.classList.toggle('missing', !s.noteWritten);
@@ -7019,7 +7342,7 @@ function tapNote(el){
 function markAllNotesDone(date, stid){
   const toMark = S.sessions.filter(x=>x.date===date&&x.stid===stid&&x.cid&&x.status!=='CX'&&!x.noteWritten);
   if(!toMark.length) return;
-  toMark.forEach(x=>{ x.noteWritten=true; });
+  toMark.forEach(x=>{ x.noteWritten=true; x.noteWrittenAt=new Date().toISOString(); });
   save();
   // Re-render My Schedule to reflect all changes
   rMyS();
