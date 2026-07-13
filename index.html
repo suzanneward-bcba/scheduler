@@ -3900,6 +3900,7 @@ function openClientDetail(id){
     <div class="fg"><label>Schedule Display Name <span style="font-weight:400;color:var(--mt);font-size:10px">— shown on session blocks · leave blank to auto-generate</span></label><input id="cd-short" value="${c.shortName||''}" placeholder="e.g. MaJa2 or LenKl" maxlength="8" style="font-family:monospace;font-size:13px;letter-spacing:.5px"></div>
     <div class="fr2"><div class="fg"><label>DOB</label><input type="date" id="cd-dob" value="${c.dob||''}"></div><div class="fg"><label>Insurance</label><select id="cd-ins">${insOpts(c.ins)}</select></div></div>
     <div class="fr2"><div class="fg"><label>Case Manager</label><select id="cd-bcba">${bo}</select></div><div class="fg"><label>Authorized Visits <span style="font-weight:400;color:var(--mt);font-size:10px">default 40</span></label><input type="number" id="cd-visits" value="${c.authVisits||40}" min="1"></div></div>
+    <div class="fr2"><div class="fg"><label>Case Number <span style="font-weight:400;color:var(--mt);font-size:10px">— TRICARE</span></label><input id="cd-case" value="${c.caseId||''}" placeholder="e.g. 05325553" style="font-family:monospace;font-size:12px"></div><div class="fg"><label>Auth Number</label><input id="cd-authnum" value="${c.authNumber||''}" placeholder="e.g. AT-0001623626" style="font-family:monospace;font-size:12px"></div></div>
     <div class="fr2"><div class="fg"><label>Visits Used <span style="font-weight:400;color:var(--mt);font-size:10px">manually maintained</span></label><input type="number" id="cd-visits-used" value="${c.visitsUsed??''}" min="0" placeholder="e.g. 12"></div><div class="fg"><label>Alert Threshold <span style="font-weight:400;color:var(--mt);font-size:10px">% remaining · default 20</span></label><input type="number" id="cd-visit-alert" value="${c.visitAlertThreshold??20}" min="1" max="100"></div></div>
     ${(()=>{const used=c.visitsUsed,auth=c.authVisits||40;if(used==null)return `<div style="background:#FFF3E0;border:1px solid #FFB300;border-radius:6px;padding:7px 10px;font-size:11px;color:#E65100;margin:-4px 0 10px">📝 Enter \"Visits Used\" to enable visit tracking alerts</div>`;const rem=auth-used;const pct=Math.max(0,Math.min(100,(used/auth)*100));const clr=rem<=0?'var(--rd)':pct>=80?'var(--am)':'var(--gn)';return `<div style="background:var(--bg);border-radius:6px;padding:8px 11px;margin:-4px 0 10px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--mt)">Visit utilization</span><span style="font-weight:700;color:${clr}">${used}/${auth} used · ${Math.max(0,rem)} remaining</span></div><div style="height:6px;background:#E0E0E0;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${clr}"></div></div></div>`;})()}
     <div class="fr2"><div class="fg"><label>Auth Start Date</label><input type="date" id="cd-auth-start" value="${c.authStart||''}"></div><div class="fg"><label>Auth End Date</label><input type="date" id="cd-auth" value="${c.authEnd||''}"></div></div>
@@ -3941,22 +3942,17 @@ function openClientDetail(id){
     <div class="fg"><label>Schedule Display Name <span style="font-weight:400;color:var(--mt);font-size:10px">— shown on session blocks · leave blank to auto-generate</span></label><input id="cd-short" value="${c.shortName||''}" placeholder="e.g. MaJa2 or LenKl" maxlength="8" style="font-family:monospace;font-size:13px;letter-spacing:.5px"></div>
     <div class="fr2"><div class="fg"><label>DOB</label><input type="date" id="cd-dob" value="${c.dob||''}"></div><div class="fg"><label>Insurance</label><select id="cd-ins">${insOpts(c.ins)}</select></div></div>
     <div class="fr2"><div class="fg"><label>Rec. Hrs/Wk</label><input type="number" id="cd-rec" value="${c.rec}"></div><div class="fg"><label>Sched. Hrs/Wk</label><input type="number" id="cd-sch" value="${c.sch}"></div></div>
-    <div class="fr2"><div class="fg"><label>Case Manager</label><select id="cd-bcba">${bo}</select></div><div class="fg"><label>Auth End Date</label><input type="date" id="cd-auth" value="${c.authEnd||''}"></div></div>
+    <div class="fr2"><div class="fg"><label>Case Manager</label><select id="cd-bcba">${bo}</select></div><div class="fg"><label>Case Number <span style="font-weight:400;color:var(--mt);font-size:10px">— TRICARE</span></label><input id="cd-case" value="${c.caseId||''}" placeholder="e.g. 05325553" style="font-family:monospace;font-size:12px"></div></div>
+    <div class="fr2"><div class="fg"><label>Auth Number</label><input id="cd-authnum" value="${c.authNumber||''}" placeholder="e.g. AT-0001623626" style="font-family:monospace;font-size:12px"></div><div class="fg"><label>Auth Start</label><input type="date" id="cd-auth-start" value="${c.authStart||''}"></div></div>
+    <div class="fr2"><div class="fg"><label>Auth End Date</label><input type="date" id="cd-auth" value="${c.authEnd||''}"></div><div class="fg"></div></div>
     <div class="fg"><label>Authorization Pipeline</label>
       <div class="pipe-steps" id="pipe-steps">${pipeHtml}</div>
       <div class="auth-pipeline-card">
-        <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Authorization Dates</div>
-        <div class="fr2" style="margin-bottom:8px">
-          <div class="fg" style="margin:0"><label>Submitted</label><input type="date" id="cd-pipe-sub" class="fi" value="${c.authSubmittedDate||''}"></div>
-          <div class="fg" style="margin:0"><label>Approved</label><input type="date" id="cd-pipe-app" class="fi" value="${c.authApprovedDate||''}"></div>
+        <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Authorized Units by CPT <span style="font-weight:400;text-transform:none;letter-spacing:0">— from the TRICARE auth letter · leave blank if not authorized</span></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          ${['97151','97153','97155','97156','97158'].map(cp=>`<div class="fg" style="margin:0;flex:1;min-width:72px"><label style="font-family:monospace;font-size:10px">${cp}</label><input type="number" id="cd-units-${cp}" class="fi" value="${(c.authUnits||{})[cp]??''}" min="0" placeholder="—"></div>`).join('')}
         </div>
-        <div class="fg" style="margin-bottom:8px"><label>Next Auth Start</label><input type="date" id="cd-pipe-next" class="fi" value="${c.nextAuthStart||''}"></div>
-        <div class="sep"></div>
-        <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;margin-top:8px">Reassessment</div>
-        <div class="fr2" style="margin-bottom:8px">
-          <div class="fg" style="margin:0"><label>Last Reassessment</label><input type="date" id="cd-reassess" class="fi" value="${c.lastReassess||''}"></div>
-          <div class="fg" style="margin:0"><label>Reassessment Due</label><input type="date" id="cd-reassess-due" class="fi" value="${c.reassessDue||''}"></div>
-        </div>
+        <div style="font-size:10px;color:var(--mt);margin-bottom:8px">97151 Assessment · 97153 Direct · 97155 Prog Mod · 97156 Parent Training · 97158 Group</div>
         <div class="sep"></div>
         <div style="margin-top:8px"><label style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:5px">Pipeline Notes</label><textarea id="cd-pipe-notes" rows="2" style="width:100%;padding:7px 9px;font-size:12px;border:1.5px solid var(--bd);border-radius:6px;resize:none;font-family:'DM Sans',sans-serif">${c.authNotes||''}</textarea></div>
       </div>
@@ -4114,12 +4110,27 @@ function updClient(id){
   c.primaryContactEmail=document.getElementById('cd-pcemail')?.value.trim()||'';
   c.medAlerts=MED_ALERTS.map(m=>m.id).filter(id=>document.getElementById('med-'+id)?.checked);
   c.authPipeline=window._pipeStatus||c.authPipeline||'NONE';
-  c.authSubmittedDate=document.getElementById('cd-pipe-sub')?.value||'';
-  c.authApprovedDate=document.getElementById('cd-pipe-app')?.value||'';
-  c.nextAuthStart=document.getElementById('cd-pipe-next')?.value||'';
-  c.authNotes=document.getElementById('cd-pipe-notes')?.value||'';
-  c.lastReassess=document.getElementById('cd-reassess')?.value||'';
-  c.reassessDue=document.getElementById('cd-reassess-due')?.value||'';
+  if(document.getElementById('cd-case')) c.caseId=document.getElementById('cd-case').value.trim();
+  if(document.getElementById('cd-authnum')) c.authNumber=document.getElementById('cd-authnum').value.trim();
+  // Authorized units by CPT (ABA card). Total mirrors into authVisits so the
+  // dashboard's exhaustion projection works without per-CPT awareness.
+  if(document.getElementById('cd-units-97153')){
+    const u={};let tot=0;
+    ['97151','97153','97155','97156','97158'].forEach(cp=>{
+      const el=document.getElementById('cd-units-'+cp);
+      if(el&&el.value!==''){const v=+el.value;if(v>=0){u[cp]=v;tot+=v;}}
+    });
+    c.authUnits=u;
+    if(tot>0)c.authVisits=tot;
+  }
+  // These fields were removed from the card UI (now tracked on the auth
+  // spreadsheet) — preserve stored values, update only if an input exists.
+  [['cd-pipe-sub','authSubmittedDate'],['cd-pipe-app','authApprovedDate'],['cd-pipe-next','nextAuthStart'],['cd-reassess','lastReassess'],['cd-reassess-due','reassessDue']].forEach(([elId,key])=>{
+    const el=document.getElementById(elId);
+    if(el)c[key]=el.value;
+  });
+  const _pnEl=document.getElementById('cd-pipe-notes');
+  if(_pnEl)c.authNotes=_pnEl.value;
   // OT authorization — save whatever's in the DOM (section is hidden but inputs persist).
   // This way, toggling therapy type in the modal doesn't destroy previously-entered OT auth data.
   if(document.getElementById('cd-ot-start')||document.getElementById('cd-ot-end')||document.getElementById('cd-ot-visits-auth')){
