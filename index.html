@@ -2055,6 +2055,9 @@ async function connectFirebaseWithCfg(cfg, isNew=false){
 function _fsPostLoadFixups(){
   if(!S.cfg)S.cfg={};
   if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX();
+  // Field consolidation: extId IS the TRICARE Case ID. Fold any legacy
+  // caseId values into extId so there's a single canonical field.
+  (S.clients||[]).forEach(c=>{ if(!c.extId&&c.caseId)c.extId=c.caseId; });
   if(!S.cfg.adminTasksUrlSeeded){
     S.cfg.adminTasksUrl = S.cfg.adminTasksUrl || 'https://docs.google.com/spreadsheets/d/1QhJ-FSYh7gfP-468WreYAnWxlcHC3mzjD1Vq6RGH_VI/edit';
     S.cfg.adminTasksUrlSeeded = true;
@@ -2384,10 +2387,14 @@ function thrChip(sid){const s=gs(sid);if(!s)return'';const bg=tClr(sid),tx=tTxt(
 function dbu(bs){if(!bs)return null;const t=new Date();t.setHours(0,0,0,0);const[,m,d]=bs.split('-').map(Number);let nx=new Date(t.getFullYear(),m-1,d);if(nx<t)nx.setFullYear(t.getFullYear()+1);return Math.round((nx-t)/864e5);}
 function isHol(ds){return S.holidays.find(h=>h.date===ds);}
 // birthdays on a given date string
+// Canonical "no longer active" check — discharge sets status='discharged';
+// imports may use active:false. Both mean: exclude from alerts and stats.
+function _isDischarged(c){return !c||c.status==='discharged'||c.active===false;}
+
 function bdaysOn(ds){
   const d=pd(ds);const m=d.getMonth()+1,day=d.getDate();
   const sb=S.staff.filter(s=>s.birthday&&parseInt(s.birthday.split('-')[1])===m&&parseInt(s.birthday.split('-')[2])===day);
-  const cb=S.clients.filter(c=>c.dob&&parseInt(c.dob.split('-')[1])===m&&parseInt(c.dob.split('-')[2])===day);
+  const cb=S.clients.filter(c=>!_isDischarged(c)&&c.dob&&parseInt(c.dob.split('-')[1])===m&&parseInt(c.dob.split('-')[2])===day);
   return{staff:sb,clients:cb};
 }
 
@@ -3902,7 +3909,7 @@ function openClientDetail(id){
     <div class="fg"><label>Schedule Display Name <span style="font-weight:400;color:var(--mt);font-size:10px">— shown on session blocks · leave blank to auto-generate</span></label><input id="cd-short" value="${c.shortName||''}" placeholder="e.g. MaJa2 or LenKl" maxlength="8" style="font-family:monospace;font-size:13px;letter-spacing:.5px"></div>
     <div class="fr2"><div class="fg"><label>DOB</label><input type="date" id="cd-dob" value="${c.dob||''}"></div><div class="fg"><label>Insurance</label><select id="cd-ins">${insOpts(c.ins)}</select></div></div>
     <div class="fr2"><div class="fg"><label>Case Manager</label><select id="cd-bcba">${bo}</select></div><div class="fg"><label>Authorized Visits <span style="font-weight:400;color:var(--mt);font-size:10px">default 40</span></label><input type="number" id="cd-visits" value="${c.authVisits||40}" min="1"></div></div>
-    <div class="fr2"><div class="fg"><label>Case Number <span style="font-weight:400;color:var(--mt);font-size:10px">— TRICARE</span></label><input id="cd-case" value="${c.caseId||''}" placeholder="e.g. 05325553" style="font-family:monospace;font-size:12px"></div><div class="fg"><label>Auth Number</label><input id="cd-authnum" value="${c.authNumber||''}" placeholder="e.g. AT-0001623626" style="font-family:monospace;font-size:12px"></div></div>
+    <div class="fr2"><div class="fg"><label>Auth Number</label><input id="cd-authnum" value="${c.authNumber||''}" placeholder="e.g. AT-0001623626" style="font-family:monospace;font-size:12px"></div><div class="fg"></div></div>
     <div class="fr2"><div class="fg"><label>Visits Used <span style="font-weight:400;color:var(--mt);font-size:10px">manually maintained</span></label><input type="number" id="cd-visits-used" value="${c.visitsUsed??''}" min="0" placeholder="e.g. 12"></div><div class="fg"><label>Alert Threshold <span style="font-weight:400;color:var(--mt);font-size:10px">% remaining · default 20</span></label><input type="number" id="cd-visit-alert" value="${c.visitAlertThreshold??20}" min="1" max="100"></div></div>
     ${(()=>{const used=c.visitsUsed,auth=c.authVisits||40;if(used==null)return `<div style="background:#FFF3E0;border:1px solid #FFB300;border-radius:6px;padding:7px 10px;font-size:11px;color:#E65100;margin:-4px 0 10px">📝 Enter \"Visits Used\" to enable visit tracking alerts</div>`;const rem=auth-used;const pct=Math.max(0,Math.min(100,(used/auth)*100));const clr=rem<=0?'var(--rd)':pct>=80?'var(--am)':'var(--gn)';return `<div style="background:var(--bg);border-radius:6px;padding:8px 11px;margin:-4px 0 10px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--mt)">Visit utilization</span><span style="font-weight:700;color:${clr}">${used}/${auth} used · ${Math.max(0,rem)} remaining</span></div><div style="height:6px;background:#E0E0E0;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${clr}"></div></div></div>`;})()}
     <div class="fr2"><div class="fg"><label>Auth Start Date</label><input type="date" id="cd-auth-start" value="${c.authStart||''}"></div><div class="fg"><label>Auth End Date</label><input type="date" id="cd-auth" value="${c.authEnd||''}"></div></div>
@@ -3920,7 +3927,7 @@ function openClientDetail(id){
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-bus" ${c.hasBus?'checked':''}> Bus Rider</label>
     </div>
     <div class="fg"><label>Notes</label><textarea id="cd-notes" rows="2">${c.notes||''}</textarea></div>
-    <div class="fg"><label>External ID <span style="font-weight:400;color:var(--mt);font-size:10px">— HiRasmus / Cowork reference</span></label><input id="cd-ext" value="${c.extId||''}" placeholder="e.g. HR-10042" style="font-family:monospace;font-size:12px"></div>
+    <div class="fg"><label>TRICARE Case # <span style="font-weight:400;color:var(--mt);font-size:10px">— External ID · matches auth letters from the pipeline</span></label><input id="cd-ext" value="${c.extId||''}" placeholder="e.g. 05325553" style="font-family:monospace;font-size:12px"></div>
     <div class="fg"><label>Primary Contact Email <span style="font-weight:400;color:var(--mt);font-size:10px">— for auth expiration reminders · separate multiple addresses with commas</span></label><input id="cd-pcemail" value="${c.primaryContactEmail||''}" placeholder="parent1@example.com, parent2@example.com" style="font-size:12px"></div>
     <div class="fg" style="margin-top:8px"><label style="display:flex;align-items:center;gap:6px;margin-bottom:8px"><span style="font-size:12px;font-weight:700;color:#B71C1C">⚠️ Medical Alerts</span></label>
       <div style="display:flex;flex-wrap:wrap;gap:6px">${MED_ALERTS.map(m=>`<label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;cursor:pointer;border:1.5px solid var(--bd);background:#fff;font-size:11px;font-weight:600" class="med-toggle" data-med="${m.id}"><input type="checkbox" id="med-${m.id}" ${(c.medAlerts||[]).includes(m.id)?'checked':''} style="accent-color:#B71C1C;width:13px;height:13px"> ${m.label}</label>`).join('')}</div>
@@ -3944,9 +3951,8 @@ function openClientDetail(id){
     <div class="fg"><label>Schedule Display Name <span style="font-weight:400;color:var(--mt);font-size:10px">— shown on session blocks · leave blank to auto-generate</span></label><input id="cd-short" value="${c.shortName||''}" placeholder="e.g. MaJa2 or LenKl" maxlength="8" style="font-family:monospace;font-size:13px;letter-spacing:.5px"></div>
     <div class="fr2"><div class="fg"><label>DOB</label><input type="date" id="cd-dob" value="${c.dob||''}"></div><div class="fg"><label>Insurance</label><select id="cd-ins">${insOpts(c.ins)}</select></div></div>
     <div class="fr2"><div class="fg"><label>Rec. Hrs/Wk</label><input type="number" id="cd-rec" value="${c.rec}"></div><div class="fg"><label>Sched. Hrs/Wk</label><input type="number" id="cd-sch" value="${c.sch}"></div></div>
-    <div class="fr2"><div class="fg"><label>Case Manager</label><select id="cd-bcba">${bo}</select></div><div class="fg"><label>Case Number <span style="font-weight:400;color:var(--mt);font-size:10px">— TRICARE</span></label><input id="cd-case" value="${c.caseId||''}" placeholder="e.g. 05325553" style="font-family:monospace;font-size:12px"></div></div>
-    <div class="fr2"><div class="fg"><label>Auth Number</label><input id="cd-authnum" value="${c.authNumber||''}" placeholder="e.g. AT-0001623626" style="font-family:monospace;font-size:12px"></div><div class="fg"><label>Auth Start</label><input type="date" id="cd-auth-start" value="${c.authStart||''}"></div></div>
-    <div class="fr2"><div class="fg"><label>Auth End Date</label><input type="date" id="cd-auth" value="${c.authEnd||''}"></div><div class="fg"></div></div>
+    <div class="fr2"><div class="fg"><label>Case Manager</label><select id="cd-bcba">${bo}</select></div><div class="fg"><label>Auth Number</label><input id="cd-authnum" value="${c.authNumber||''}" placeholder="e.g. AT-0001623626" style="font-family:monospace;font-size:12px"></div></div>
+    <div class="fr2"><div class="fg"><label>Auth Start</label><input type="date" id="cd-auth-start" value="${c.authStart||''}"></div><div class="fg"><label>Auth End Date</label><input type="date" id="cd-auth" value="${c.authEnd||''}"></div></div>
     <div class="fg"><label>Authorization Pipeline</label>
       <div class="pipe-steps" id="pipe-steps">${pipeHtml}</div>
       <div class="auth-pipeline-card">
@@ -3989,8 +3995,8 @@ function openClientDetail(id){
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="cd-bus" ${c.hasBus?'checked':''}> Bus Rider</label>
     </div>
     <div class="fg"><label>Notes</label><textarea id="cd-notes" rows="2">${c.notes||''}</textarea></div>
-    <div class="fg"><label>External ID <span style="font-weight:400;color:var(--mt);font-size:10px">— HiRasmus / Cowork / billing system reference</span></label>
-      <input id="cd-ext" value="${c.extId||''}" placeholder="e.g. HR-10042" style="font-family:monospace;font-size:12px">
+    <div class="fg"><label>TRICARE Case # <span style="font-weight:400;color:var(--mt);font-size:10px">— External ID · matches auth letters from the pipeline · also HiRasmus/billing reference</span></label>
+      <input id="cd-ext" value="${c.extId||''}" placeholder="e.g. 05325553" style="font-family:monospace;font-size:12px">
     </div>
     <div class="fg"><label>Primary Contact Email <span style="font-weight:400;color:var(--mt);font-size:10px">— for auth expiration reminders · separate multiple addresses with commas</span></label>
       <input id="cd-pcemail" value="${c.primaryContactEmail||''}" placeholder="parent1@example.com, parent2@example.com" style="font-size:12px">
@@ -4112,7 +4118,6 @@ function updClient(id){
   c.primaryContactEmail=document.getElementById('cd-pcemail')?.value.trim()||'';
   c.medAlerts=MED_ALERTS.map(m=>m.id).filter(id=>document.getElementById('med-'+id)?.checked);
   c.authPipeline=window._pipeStatus||c.authPipeline||'NONE';
-  if(document.getElementById('cd-case')) c.caseId=document.getElementById('cd-case').value.trim();
   if(document.getElementById('cd-authnum')) c.authNumber=document.getElementById('cd-authnum').value.trim();
   // Authorized units by CPT (ABA card). Total mirrors into authVisits so the
   // dashboard's exhaustion projection works without per-CPT awareness.
@@ -4919,7 +4924,7 @@ function rMyS(){
 
   // Case-manager panel: auth expirations on their caseload (next 60 days)
   let authRow='';
-  const _cmClients=S.clients.filter(c=>c.bcba===s.initials&&c.authEnd);
+  const _cmClients=S.clients.filter(c=>!_isDischarged(c)&&c.bcba===s.initials&&c.authEnd);
   if(_cmClients.length){
     const soon=_cmClients.map(c=>({c,days:Math.ceil((pd(c.authEnd)-pd(today))/864e5)})).filter(x=>x.days<=60).sort((a,b)=>a.days-b.days);
     authRow=`<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--bg)">
@@ -6607,7 +6612,7 @@ function promoteWL(id){
     hasBus:false,
     team:[],
     notes:w.schedNotes||w.notes||'',
-    extId:w.extId||'',
+    extId:w.extId||w.caseId||'',       // extId = TRICARE Case ID (canonical)
     medAlerts:w.medAlerts||[],
     referralDate:w.referralDate||'',   // carried over for service-delivery KPI
     createdAt:new Date().toISOString(),
@@ -6705,7 +6710,7 @@ function rDash(){
   // ── Days until service delivery: referral → first direct ABA (97153) ──
   const sdRows=[];
   S.clients.forEach(c=>{
-    if(c.active===false)return;
+    if(_isDischarged(c))return;
     const ref=c.referralDate||(c.createdAt?String(c.createdAt).slice(0,10):'');
     if(!ref||!/^\d{4}-\d{2}-\d{2}/.test(ref))return;
     const first=S.sessions.filter(s=>s.cid===c.id&&s.status!=='CX'&&s.type==='ABA'&&(!s.cptCode||s.cptCode==='97153')).map(s=>s.date).sort()[0];
@@ -6757,7 +6762,7 @@ function rDash(){
   // stay on visit counting (visitsUsed or delivered-session count).
   // authPaceWk = authorized units/week (rate caps converted to weekly equiv).
   const _rateWk=r=>{if(!r||!r.rate)return 0;const e=r.every||1;return (r.unit||'').startsWith('month')?r.rate/(e*4.345):r.rate/e;};
-  const unitRows=S.clients.filter(c=>c.active!==false&&(c.authVisits||c.visitsAuth)>0).map(c=>{
+  const unitRows=S.clients.filter(c=>!_isDischarged(c)&&(c.authVisits||c.visitsAuth)>0).map(c=>{
     const total=c.authVisits||c.visitsAuth||0;
     const unitBased=!!(c.authUnits&&Object.keys(c.authUnits).length);
     const from=fd(new Date(pd(today).getTime()-27*864e5));
@@ -6781,7 +6786,7 @@ function rDash(){
     return{c,total,used,usedSrc,rem,perWeek,authPaceWk,exhaust,risk,unitBased};
   }).sort((a,b)=>(a.exhaust||'9999').localeCompare(b.exhaust||'9999'));
   const unitRisk=unitRows.filter(x=>x.risk);
-  const noUnitData=S.clients.filter(c=>c.active!==false&&!(c.authVisits||c.visitsAuth)).length;
+  const noUnitData=S.clients.filter(c=>!_isDischarged(c)&&!(c.authVisits||c.visitsAuth)).length;
 
   // ── Per-staff schedule efficiency (this month) ──
   const effRows=therapyStaff.map(st=>{
@@ -6806,7 +6811,7 @@ function rDash(){
     return {st,pct:cap?Math.round(bh/cap*100):null};
   }).filter(x=>x.pct!==null&&x.pct<billTarget(x.st)-15).sort((a,b)=>(a.pct-billTarget(a.st))-(b.pct-billTarget(b.st)));
   if(lowUtil.length)flags.push({i:'📉',t:lowUtil.length+' staff well below their billable target this month',d:lowUtil.map(x=>x.st.initials+' '+x.pct+'% (target '+billTarget(x.st)+'%)').join(', ')});
-  const expSoon=S.clients.filter(c=>c.active!==false&&c.authEnd&&Math.ceil((pd(c.authEnd)-pd(today))/864e5)<=30).length;
+  const expSoon=S.clients.filter(c=>!_isDischarged(c)&&c.authEnd&&Math.ceil((pd(c.authEnd)-pd(today))/864e5)<=30).length;
   if(expSoon)flags.push({i:'⚠️',t:expSoon+' authorization'+(expSoon>1?'s':'')+' expiring within 30 days',d:'Review the auth pipeline on the Clients tab'});
   const unass=S.sessions.filter(s=>s.stid==='UNASSIGNED'&&s.status!=='CX'&&s.date>=today).length;
   if(unass)flags.push({i:'🙋',t:unass+' upcoming session'+(unass>1?'s':'')+' unassigned',d:'Assign therapists before the session dates'});
