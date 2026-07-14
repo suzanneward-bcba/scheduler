@@ -6638,6 +6638,28 @@ function _dMins(x){const[a,b]=x.s.split(':').map(Number);const[c,d]=x.e.split(':
 // Scheduled real session: client-facing or CPT-coded, regardless of CX status
 function _isRealSched(s){return !s._autoAdmin && !s._virtual && (!!s.cid||!!s.cptCode);}
 function _workdaysInMonth(ym){const[y,mo]=ym.split('-').map(Number);let n=0;const d=new Date(y,mo-1,1);while(d.getMonth()===mo-1){const w=d.getDay();if(w>=1&&w<=5)n++;d.setDate(d.getDate()+1);}return n;}
+// Leave-adjusted capacity: contract hours minus approved leave and holidays
+// falling on the staff member's workdays in the month. Keeps vacation season
+// from reading as under-utilization / phantom open hours.
+function _staffLeaveHrs(st,ym){
+  let t=0;
+  (S.leaveRequests||[]).forEach(r=>{
+    if(r.status!=='approved'||r.stid!==st.id)return;
+    const days=(r.days||[]).filter(d=>d.startsWith(ym)&&isStaffWorkday(st,d)).length;
+    if(days)t+=days*hrsPerDay(st)*(r.halfDay?0.5:1);
+  });
+  return t;
+}
+function _staffHolHrs(st,ym){
+  let t=0;
+  (S.holidays||[]).forEach(h=>{
+    if((h.date||'').startsWith(ym)&&isStaffWorkday(st,h.date))t+=hrsPerDay(st);
+  });
+  return t;
+}
+function _staffCapAdj(st,ym,wkF){
+  return Math.max(0,(st.hrs||0)*wkF-_staffLeaveHrs(st,ym)-_staffHolHrs(st,ym));
+}
 
 function rDash(){
   const con=document.getElementById('dash-content');
@@ -6656,7 +6678,7 @@ function rDash(){
     const sched=S.sessions.filter(s=>(s.date||'').startsWith(ym)&&_isRealSched(s));
     const delivered=sched.filter(s=>s.status!=='CX');
     const billH=delivered.reduce((n,s)=>n+_dMins(s),0)/60;
-    const capH=therapyStaff.reduce((n,st)=>n+st.hrs*(_workdaysInMonth(ym)/5),0);
+    const capH=therapyStaff.reduce((n,st)=>n+_staffCapAdj(st,ym,_workdaysInMonth(ym)/5),0);
     let sickD=0,ptoD=0;
     (S.leaveRequests||[]).forEach(r=>{
       if(r.status!=='approved')return;
@@ -6690,17 +6712,24 @@ function rDash(){
   const byPayer={};
   sdRows.forEach(r=>{(byPayer[r.ins]=byPayer[r.ins]||[]).push(r.days);});
 
-  // ── Fill rate & open hours (this month) ──
+  // ── Fill rate & open hours (this month, leave-adjusted) ──
   const wkFactor=_workdaysInMonth(cur.ym)/5;
-  const capAll=therapyStaff.reduce((n,st)=>n+st.hrs*wkFactor,0);
+  const capAll=therapyStaff.reduce((n,st)=>n+_staffCapAdj(st,cur.ym,wkFactor),0);
+  const leaveHAdj=therapyStaff.reduce((n,st)=>n+_staffLeaveHrs(st,cur.ym),0);
+  const holHAdj=therapyStaff.reduce((n,st)=>n+_staffHolHrs(st,cur.ym),0);
   const schedInclCxH=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&_isRealSched(s)).reduce((n,s)=>n+_dMins(s),0)/60;
+  const heldBillH=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&_isRealSess(s)).reduce((n,s)=>n+_dMins(s),0)/60;
+  const cxLostH=Math.max(0,schedInclCxH-heldBillH); // billable hours lost to cancellations
+  const adminBookedH=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&s.status!=='CX'&&!_isRealSched(s)&&(s.type==='ADMIN'||s._autoAdmin)).reduce((n,s)=>n+_dMins(s),0)/60;
   const fillRate=capAll?Math.round(schedInclCxH/capAll*100):null;
-  const openH=capAll?Math.max(0,Math.round((capAll-schedInclCxH)*10)/10):null;
+  // Open = adjusted capacity minus everything actually occupying the calendar
+  // (held billable + admin blocks — auto-admin covers freed cancellation slots)
+  const openH=capAll?Math.max(0,Math.round((capAll-heldBillH-adminBookedH)*10)/10):null;
 
   // ── Utilization by discipline ──
   const discUtil=[['ABA',st=>st.role!=='OT'],['OT',st=>st.role==='OT']].map(([lbl,fn])=>{
     const grp=therapyStaff.filter(fn);
-    const cap=grp.reduce((n,st)=>n+st.hrs*wkFactor,0);
+    const cap=grp.reduce((n,st)=>n+_staffCapAdj(st,cur.ym,wkFactor),0);
     const ids=new Set(grp.map(st=>st.id));
     const bh=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&ids.has(s.stid)&&_isRealSess(s)).reduce((n,s)=>n+_dMins(s),0)/60;
     return {lbl,pct:cap?Math.round(bh/cap*100):null};
@@ -6750,7 +6779,7 @@ function rDash(){
 
   // ── Per-staff schedule efficiency (this month) ──
   const effRows=therapyStaff.map(st=>{
-    const cap=st.hrs*wkFactor;
+    const cap=_staffCapAdj(st,cur.ym,wkFactor);
     const mine=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&s.stid===st.id&&_isRealSched(s));
     const schedH=mine.reduce((n,s)=>n+_dMins(s),0)/60;
     const heldH=mine.filter(s=>s.status!=='CX').reduce((n,s)=>n+_dMins(s),0)/60;
@@ -6767,7 +6796,7 @@ function rDash(){
   }
   const lowUtil=therapyStaff.map(st=>{
     const bh=S.sessions.filter(s=>(s.date||'').startsWith(cur.ym)&&s.stid===st.id&&_isRealSess(s)).reduce((n,s)=>n+_dMins(s),0)/60;
-    const cap=st.hrs*(_workdaysInMonth(cur.ym)/5);
+    const cap=_staffCapAdj(st,cur.ym,_workdaysInMonth(cur.ym)/5);
     return {st,pct:cap?Math.round(bh/cap*100):null};
   }).filter(x=>x.pct!==null&&x.pct<billTarget(x.st)-15).sort((a,b)=>(a.pct-billTarget(a.st))-(b.pct-billTarget(b.st)));
   if(lowUtil.length)flags.push({i:'📉',t:lowUtil.length+' staff well below their billable target this month',d:lowUtil.map(x=>x.st.initials+' '+x.pct+'% (target '+billTarget(x.st)+'%)').join(', ')});
@@ -6817,10 +6846,11 @@ function rDash(){
   <div class="sh2"><h2>📈 Clinic Performance</h2><div style="font-size:11px;color:var(--mt)">OBM dashboard · ${_ymLbl(cur.ym)} · updates live</div></div>
   <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
     ${kpi(sdAvg!==null?sdAvg+'d':'—','Days to Service Delivery',sdRows.length?('referral → first direct session · '+sdRows.length+' clients'+(sdAllEst?' · <span style="color:var(--am)">estimated from record creation</span>':'')):'needs referral dates — imports & waitlist promotions will fill this in')}
-    ${kpi(cur.util!==null?cur.util+'%':'—','Utilization',("billable ÷ contracted hours · this month"),pctClr(cur.util,60,80))}
+    ${kpi(cur.util!==null?cur.util+'%':'—','Utilization','billable ÷ available hrs · leave-adjusted',pctClr(cur.util,60,80))}
     ${kpi(cur.delRate!==null?cur.delRate+'%':'—','Delivery Rate','sessions held ÷ scheduled · this month',pctClr(cur.delRate,85,92))}
-    ${kpi(fillRate!==null?fillRate+'%':'—','Fill Rate','booked ÷ available hours · this month',pctClr(fillRate,75,90))}
-    ${kpi(openH!==null?openH+'h':'—','Open Hours','available but unbooked · this month')}
+    ${kpi(fillRate!==null?fillRate+'%':'—','Fill Rate','booked ÷ available hrs · leave-adjusted',pctClr(fillRate,75,90))}
+    ${kpi(openH!==null?openH+'h':'—','Open Hours','truly schedulable · after '+Math.round(leaveHAdj)+'h leave'+(holHAdj?', '+Math.round(holHAdj)+'h holidays':'')+' & '+Math.round(adminBookedH)+'h admin')}
+    ${kpi(Math.round(cxLostH*10)/10+'h','Hours Lost to CX','billable hours cancelled · this month',cxLostH>capAll*0.05?'var(--rd)':'var(--am)')}
     ${discUtil.map(d=>kpi(d.pct!==null?d.pct+'%':'—',d.lbl+' Utilization','this month',pctClr(d.pct,60,80))).join('')}
     ${kpi(cur.clientsServed,'Clients Served','this month')}
     ${kpi(Math.round(cur.sickD*10)/10,'Sick Days','this month',cur.sickD>10?'var(--rd)':undefined)}
@@ -6847,6 +6877,7 @@ function rDash(){
         <span style="font-size:11px;font-weight:700;width:26px;text-align:right">${n}</span>
       </div>`;}).join(''):'<div style="font-size:12px;color:var(--mt)">No cancellations this month 🎉</div>'}
       ${cxStamped?`<div style="font-size:11px;color:var(--t2);margin-top:8px">Same-day cancellations: <strong>${sameDayCx}</strong> of ${cxStamped} time-stamped (${Math.round(sameDayCx/cxStamped*100)}%)</div>`:''}
+      ${cxSess.length?`<div style="font-size:11px;color:var(--t2);margin-top:4px">Billable hours lost to cancellations this month: <strong style="color:var(--rd)">${Math.round(cxLostH*10)/10}h</strong></div>`:''}
     </div>
     <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Auth Units — Projected Exhaustion${unitRisk.length?` · <span style="color:var(--rd)">${unitRisk.length} at risk</span>`:''}</div>
@@ -6865,7 +6896,7 @@ function rDash(){
       </table>`:'<div style="font-size:12px;color:var(--mt)">Needs referral dates — waitlist promotions now carry them automatically.</div>'}
     </div>
     <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
-      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Therapist Schedule Efficiency — ${_ymLbl(cur.ym)}</div>
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Therapist Schedule Efficiency — ${_ymLbl(cur.ym)} <span style="font-weight:400;text-transform:none;letter-spacing:0">· Available h is leave- &amp; holiday-adjusted</span></div>
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <tr style="text-align:right;color:var(--mt);font-size:10px;text-transform:uppercase;letter-spacing:.4px"><th style="text-align:left;padding:4px 8px">Staff</th><th style="padding:4px 8px">Available h</th><th style="padding:4px 8px">Booked h</th><th style="padding:4px 8px">Held h</th><th style="padding:4px 8px">Cancelled h</th><th style="padding:4px 8px">Make-up h</th><th style="padding:4px 8px">Target</th><th style="padding:4px 8px">Utilization</th></tr>
         ${effRows.map(x=>`<tr style="text-align:right;border-top:1px solid var(--bg)"><td style="text-align:left;padding:5px 8px;font-weight:700">${x.st.initials} <span style="font-weight:400;color:var(--mt);font-size:10px">${x.st.role}</span></td><td style="padding:5px 8px">${Math.round(x.cap*10)/10}</td><td style="padding:5px 8px">${Math.round(x.schedH*10)/10}</td><td style="padding:5px 8px">${Math.round(x.heldH*10)/10}</td><td style="padding:5px 8px;color:${x.cxH>4?'var(--rd)':'inherit'}">${Math.round(x.cxH*10)/10}</td><td style="padding:5px 8px">${Math.round(x.muH*10)/10}</td><td style="padding:5px 8px;color:var(--mt)">${x.tgt}%</td><td style="padding:5px 8px;font-weight:700;color:${x.util===null?'var(--mt)':x.util>=x.tgt?'var(--gn)':x.util>=x.tgt-15?'var(--am)':'var(--rd)'}">${x.util!==null?x.util+'%':'—'}</td></tr>`).join('')}
