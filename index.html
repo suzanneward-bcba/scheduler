@@ -4271,19 +4271,22 @@ function renderStplSlots(s){
   if(!wrap)return;
   const days=['Monday','Tuesday','Wednesday','Thursday','Friday'];
   const co=_byLastName(S.clients).map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
-  const to=STYPES.filter(t=>t.id!=='ADMIN').map(t=>`<option value="${t.id}">${t.label}</option>`).join('');
+  // ADMIN is allowed here (unlike the client template) so hybrid clinical/admin
+  // and admin-only positions can block recurring admin time in their week.
+  const to=STYPES.map(t=>`<option value="${t.id}">${t.label}</option>`).join('');
   wrap.innerHTML=_stplSlots.length?_stplSlots.map((sl,i)=>{
     const dOpts=days.map((d,di)=>`<option value="${di+1}" ${sl.dow==di+1?'selected':''}>${d.slice(0,3)}</option>`).join('');
     const clOpts='<option value="">— any —</option>'+_byLastName(S.clients).map(c=>`<option value="${c.id}" ${c.id===sl.cid?'selected':''}>${c.name}</option>`).join('');
-    const tyOpts=STYPES.filter(t=>t.id!=='ADMIN').map(t=>`<option value="${t.id}" ${t.id===sl.type?'selected':''}>${t.label}</option>`).join('');
+    const tyOpts=STYPES.map(t=>`<option value="${t.id}" ${t.id===sl.type?'selected':''}>${t.label}</option>`).join('');
+    const isAdminSlot=sl.type==='ADMIN';
     return`<div class="stpl-slot">
       <select onchange="_stplSlots[${i}].dow=+this.value;renderStplSlots()">${dOpts}</select>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">
         ${tpicker('stpl-s-' + i, sl.s||'09:00', '_stplSlots[' + i + '].s=this.value;renderStplSlots()')}
         ${tpicker('stpl-e-' + i, sl.e||'11:00', '_stplSlots[' + i + '].e=this.value;renderStplSlots()')}
       </div>
-      <select onchange="_stplSlots[${i}].cid=this.value" style="border-left:2px solid var(--bd);padding-left:8px">${clOpts}</select>
-      <select onchange="_stplSlots[${i}].type=this.value">${tyOpts}</select>
+      ${isAdminSlot?`<select disabled title="Admin blocks have no client" style="border-left:2px solid var(--bd);padding-left:8px;opacity:.5"><option>— no client —</option></select>`:`<select onchange="_stplSlots[${i}].cid=this.value" style="border-left:2px solid var(--bd);padding-left:8px">${clOpts}</select>`}
+      <select onchange="_stplSlots[${i}].type=this.value;if(this.value==='ADMIN')_stplSlots[${i}].cid='';renderStplSlots()">${tyOpts}</select>
       <button class="tpl-rm" onclick="removeStplSlot(${i})">×</button>
     </div>`;
   }).join(''):'<div style="font-size:11px;color:var(--mt);text-align:center;padding:8px 0">No preferred slots set yet.</div>';
