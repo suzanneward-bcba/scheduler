@@ -2940,7 +2940,7 @@ function rDay(){
     } else {
       // Empty block — show who's free
       const freeStaff=S.staff.filter(st=>{
-        if(st.role==='Billing') return false;
+        if(st.role==='Billing'||st.nonClinical) return false;
         const _f = (typeof schedSvcFilter==='string'?schedSvcFilter:'ABA');
         const _isOt = (st.role==='OT');
         if(_f==='ABA' && _isOt) return false;
@@ -2979,7 +2979,9 @@ function rDay(){
   // Staff panel
   const hol=isHol(dayDate);
   let staffPanel='<div class="stf-pnl"><h4>Staff Today</h4>';
-  S.staff.forEach(st=>{
+  // Billers and non-clinical / not-yet-credentialed staff aren't schedulable —
+  // keep them out of the daily availability panel entirely.
+  S.staff.filter(st=>st.role!=='Billing'&&!st.nonClinical).forEach(st=>{
     const av=st.av[dowIdx>=0?dowIdx:0];
     // ptoEntry holds {date, type:'PTO'|'SICK'} or null. We branch the
     // status label on entry.type so sick days don't display as "PTO".
