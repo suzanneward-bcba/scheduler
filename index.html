@@ -2865,7 +2865,7 @@ function rDay(){
   S.staff.forEach(st=>{
     const avCheck=st.av[dowIdx>=0?dowIdx:0];
     const ptoCheck=!!ptoOnDate(st,dayDate);
-    if(ptoCheck||!avCheck||st.role==='Billing') return;
+    if(ptoCheck||!avCheck||st.role==='Billing'||st.nonClinical) return;
     const _f = (typeof schedSvcFilter==='string'?schedSvcFilter:'ABA');
     const _isOt = (st.role==='OT');
     if(_f==='ABA' && _isOt) return;
@@ -4203,7 +4203,7 @@ function openEditStaff(id){
   openM(`<h3>Edit: ${s.name}</h3>
     <div class="fr2"><div class="fg"><label>Full Name</label><input id="es-n" value="${s.name}"></div><div class="fg"><label>Role</label><select id="es-r">${ro}</select></div></div>
     <div class="fr2"><div class="fg"><label>Contract Hrs/Wk</label><input type="number" id="es-h" value="${s.hrs||''}"></div><div class="fg"><label>Birthday</label><input type="date" id="es-bd" value="${s.birthday||''}"></div></div>
-    <div class="fr2"><div class="fg"><label>Billable Target % <span style="font-weight:400;color:var(--mt);font-size:10px">— of contract hrs (blank = ${DEFAULT_BILL_TARGET}%). Lower for CD/admin-heavy roles.</span></label><input type="number" id="es-billtarget" value="${s.billTargetPct||''}" min="0" max="100" step="5" placeholder="${DEFAULT_BILL_TARGET}"></div><div class="fg"></div></div>
+    <div class="fr2"><div class="fg"><label>Billable Target % <span style="font-weight:400;color:var(--mt);font-size:10px">— of contract hrs (blank = ${DEFAULT_BILL_TARGET}%). Lower for CD/admin-heavy roles.</span></label><input type="number" id="es-billtarget" value="${s.billTargetPct||''}" min="0" max="100" step="5" placeholder="${DEFAULT_BILL_TARGET}"></div><div class="fg" style="display:flex;align-items:flex-end;padding-bottom:2px"><label style="display:flex;align-items:flex-start;gap:7px;font-size:12px;cursor:pointer;font-weight:600"><input type="checkbox" id="es-nonclin" ${s.nonClinical?'checked':''} style="margin-top:2px"> Non-clinical / not yet credentialed <span style="font-weight:400;color:var(--mt);font-size:10px">— hidden from "free for sessions" and excluded from billable metrics. Untick when credentialed.</span></label></div></div>
     <div class="fg"><label>Color</label>
       <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
         <div id="es-prev" class="color-prev" style="background:${bg};color:${txtForBg(bg)}">${s.initials}</div>
@@ -4324,6 +4324,7 @@ function updStaff(id){
   s.name=document.getElementById('es-n').value;s.role=document.getElementById('es-r').value;
   s.hrs=+document.getElementById('es-h').value||null;s.birthday=document.getElementById('es-bd').value;
   s.billTargetPct=+document.getElementById('es-billtarget')?.value||null;
+  s.nonClinical=document.getElementById('es-nonclin')?.checked||false;
   s.color=document.getElementById('es-col').value;
   s.av=[0,1,2,3,4].map(i=>document.getElementById('es-av'+i).checked?1:0);
   s.bus=document.getElementById('es-bus').checked;
@@ -6671,7 +6672,7 @@ function rDash(){
   const _fmtDashD=d=>pd(d).toLocaleDateString('en-US',{month:'short',day:'numeric'});
   const allYM=[...new Set(S.sessions.map(s=>(s.date||'').slice(0,7)))].filter(x=>/^\d{4}-\d{2}$/.test(x)).sort();
   const months=allYM.filter(m=>m<=curYM).slice(-6);
-  const therapyStaff=S.staff.filter(st=>['BCBA','OT','RBT','ABAT'].includes(st.role)&&st.hrs>0);
+  const therapyStaff=S.staff.filter(st=>['BCBA','OT','RBT','ABAT'].includes(st.role)&&st.hrs>0&&!st.nonClinical);
 
   // ── Per-month metrics ──
   const M=months.map(ym=>{
@@ -6926,6 +6927,7 @@ function renderAvailStripDaily(daySessions, ds){
   var staffShown = S.staff.filter(function(st){
     if(!st || !st.role) return false;
     if(st.role === 'Billing') return false;
+    if(st.nonClinical) return false; // biller / not-yet-credentialed — never "free for sessions"
     var isOt = (st.role === 'OT');
     if(f === 'ABA' && isOt) return false;
     if(f === 'OT'  && !isOt) return false;
@@ -7002,6 +7004,7 @@ function renderAvailStrip(weekSessions){
   var staffShown = S.staff.filter(function(st){
     if(!st || !st.role) return false;
     if(st.role === 'Billing') return false;
+    if(st.nonClinical) return false; // biller / not-yet-credentialed — never "free for sessions"
     var isOt = (st.role === 'OT');
     if(f === 'ABA' && isOt) return false;
     if(f === 'OT'  && !isOt) return false;
