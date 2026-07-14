@@ -6838,12 +6838,17 @@ function rDash(){
     [0,0.5,1].forEach(f=>{const y=PT+ih*(1-f);g+=`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#ECEFF1"/><text x="${PL-6}" y="${y+3}" text-anchor="end" font-size="9" fill="#90A4AE">${Math.round(maxS*f)}</text><text x="${W-PR+6}" y="${y+3}" font-size="9" fill="#3730A3">${Math.round(maxC*f)}</text>`;});
     M.forEach((x,i)=>{
       const bh=ih*x.sched/maxS;
-      g+=`<rect x="${xs(i)-bw/2}" y="${PT+ih-bh}" width="${bw}" height="${Math.max(1,bh)}" rx="3" fill="#C5CAE9"/><text x="${xs(i)}" y="${PT+ih-bh-4}" text-anchor="middle" font-size="9" fill="#546E7A">${x.sched}</text><text x="${xs(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="#607D8B">${_ymLbl(x.ym)}</text>`;
+      const dh=ih*x.delivered/maxS; // held sessions — overlaid on the same bar
+      g+=`<rect x="${xs(i)-bw/2}" y="${PT+ih-bh}" width="${bw}" height="${Math.max(1,bh)}" rx="3" fill="#C5CAE9"/>`;
+      g+=`<rect x="${xs(i)-bw/2}" y="${PT+ih-dh}" width="${bw}" height="${Math.max(1,dh)}" rx="3" fill="#7986CB"/>`;
+      g+=`<text x="${xs(i)}" y="${PT+ih-bh-4}" text-anchor="middle" font-size="9" fill="#546E7A">${x.sched}</text>`;
+      if(dh>=14)g+=`<text x="${xs(i)}" y="${PT+ih-dh+11}" text-anchor="middle" font-size="9" font-weight="700" fill="#fff">${x.delivered}</text>`;
+      g+=`<text x="${xs(i)}" y="${H-8}" text-anchor="middle" font-size="10" fill="#607D8B">${_ymLbl(x.ym)}</text>`;
     });
     g+=`<polyline points="${M.map((x,i)=>xs(i)+','+(PT+ih*(1-x.clientsServed/maxC))).join(' ')}" fill="none" stroke="#3730A3" stroke-width="2"/>`;
     M.forEach((x,i)=>{const cy=PT+ih*(1-x.clientsServed/maxC);g+=`<circle cx="${xs(i)}" cy="${cy}" r="3.5" fill="#3730A3"/><text x="${xs(i)}" y="${cy-7}" text-anchor="middle" font-size="9" font-weight="700" fill="#3730A3">${x.clientsServed}</text>`;});
     chart=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:${W}px;display:block">${g}</svg>
-      <div style="display:flex;gap:14px;font-size:10px;color:var(--mt);margin-top:2px"><span><span style="display:inline-block;width:10px;height:10px;background:#C5CAE9;border-radius:2px;vertical-align:-1px"></span> Scheduled sessions</span><span><span style="display:inline-block;width:10px;height:3px;background:#3730A3;vertical-align:2px"></span> Clients served</span></div>`;
+      <div style="display:flex;gap:14px;font-size:10px;color:var(--mt);margin-top:2px"><span><span style="display:inline-block;width:10px;height:10px;background:#C5CAE9;border-radius:2px;vertical-align:-1px"></span> Scheduled</span><span><span style="display:inline-block;width:10px;height:10px;background:#7986CB;border-radius:2px;vertical-align:-1px"></span> Held</span><span><span style="display:inline-block;width:10px;height:3px;background:#3730A3;vertical-align:2px"></span> Clients served</span></div>`;
   }
 
   // ── Assemble ──
