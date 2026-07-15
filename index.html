@@ -1263,7 +1263,6 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
       <button class="btn bsm edit-only" id="undo-btn" onclick="undoLast()" title="Undo last edit" style="display:none;border-color:var(--am);color:var(--am)">↩ Undo</button>
     </div>
   </div>
-  <div id="auth-alerts-wrap"></div>
   <div id="sched-requests-wrap" class="edit-only"></div>
   <div class="srow" id="stats"></div>
   <div class="avail-strip" id="avail-strip"></div>
@@ -1502,6 +1501,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
 
 <!-- MY SCHEDULE TAB -->
 <div class="tp" id="tp-mysched">
+  <div id="mys-auth-alerts" style="margin-bottom:12px"></div>
   <div class="sh2" style="margin-bottom:14px" id="mys-hdr">
     <h2>🙋 My Schedule</h2>
     <div id="mys-sched-btns" style="display:flex;gap:6px">
@@ -2488,8 +2488,8 @@ function sw(t){
   if(t==='staff'){rLeaveRequests();}
   if(t==='waitlist'){rWaitlist();}
   if(t==='discharged'){rDischarged();}
-  if(t==='sched'){rAuthAlerts();rSchedRequests();}
-  if(t==='dash'){rDash();}
+  if(t==='sched'){rSchedRequests();}
+  if(t==='dash'){if(!canViewDash()){sw('sched');return;}rDash();rAuthAlerts();}
   // Update URL hash without triggering scroll (silently ignored in iframe contexts)
   try{ if(history.replaceState) history.replaceState(null,'','#'+t); }catch(e){}
 }
@@ -4943,10 +4943,40 @@ function initMyS(){
   if(sel.value) rMyS();
 }
 
+// Compact auth alerts for My Schedule — only this staff member's clients, expiring within 30d
+function rMySAuthAlerts(stid){
+  const wrap=document.getElementById('mys-auth-alerts');
+  if(!wrap) return;
+  if(!stid){ wrap.innerHTML=''; return; }
+  const st=gs(stid);
+  if(!st||!['BCBA','OT'].includes(st.role)){ wrap.innerHTML=''; return; }
+  const today=todayBerlin();
+  const myCls=S.clients.filter(c=>c.status!=='discharged'&&(c.bcba===stid||(c.team||[]).includes(stid)));
+  const alerts=myCls.map(c=>{
+    const daysLeft=c.authEnd?Math.ceil((pd(c.authEnd)-pd(today))/864e5):null;
+    if(daysLeft===null||daysLeft>30) return null;
+    const lvl=daysLeft<=7?'red':daysLeft<=14?'orange':'yellow';
+    const badge=daysLeft<0?`Expired ${Math.abs(daysLeft)}d ago`:`${daysLeft}d left`;
+    return `<div class="auth-alert lvl-${lvl}" onclick="openClientDetail('${c.id}')" style="cursor:pointer">
+      <div class="auth-alert-body">
+        <div class="auth-alert-name">${cDisplayName(c)}</div>
+        <div class="auth-alert-detail">Auth ends ${pd(c.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+      </div>
+      <div class="auth-alert-badge">${badge}</div>
+    </div>`;
+  }).filter(Boolean);
+  if(!alerts.length){ wrap.innerHTML=''; return; }
+  wrap.innerHTML=`<div class="auth-alerts">
+    <div class="auth-alerts-hdr"><h3>⚠️ Your Auth Alerts <span style="background:#FEE2E2;color:#991B1B;font-size:10px;padding:2px 7px;border-radius:10px;margin-left:6px">${alerts.length}</span></h3></div>
+    ${alerts.join('')}
+  </div>`;
+}
+
 function rMyS(){
   const sel=document.getElementById('mys-who');
   if(!sel) return;
   mySchedStid=sel.value;
+  rMySAuthAlerts(mySchedStid);
   // Show/hide note posting based on role
   // My Schedule header button visibility
   const noteBtns=document.getElementById('mys-note-btns');
@@ -5266,7 +5296,8 @@ function authAlertLevel(daysLeft, insId){
 }
 
 function rAuthAlerts(){
-  const wrap = document.getElementById('auth-alerts-wrap');
+  // Renders into the Dashboard slot (after Cancellations by Reason); legacy wrap as fallback
+  const wrap = document.getElementById('dash-auth-alerts-slot') || document.getElementById('auth-alerts-wrap');
   if(!wrap) return;
   // Auth expiration dates contain client medical/insurance info that should
   // only be visible to staff who actually manage authorizations: admins,
@@ -6927,10 +6958,12 @@ function promoteWL(id){
 // ═══════════ OBM / CLINIC PERFORMANCE DASHBOARD ═══════════
 // Visible to: scheduler (PIN unlocked) + leadership accounts in Staff View
 // (LEAVE_ALL_VIEWERS — Clinical Director + Owner).
+// Dashboard access: admin only — Suzanne (SW), Sara (SB), Jill (JW)
+const DASH_VIEWERS = ['SW','SB','JW'];
 function canViewDash(){
-  if(!isViewOnly) return true;
+  if(!isViewOnly) return true; // unlocked scheduler session
   const selfId=viewerStid||mySchedStid;
-  return !!selfId && LEAVE_ALL_VIEWERS.includes(selfId);
+  return !!selfId && DASH_VIEWERS.includes(selfId);
 }
 function updateDashNav(){
   const show=canViewDash();
@@ -7193,6 +7226,7 @@ function rDash(){
       ${cxStamped?`<div style="font-size:11px;color:var(--t2);margin-top:8px">Same-day cancellations: <strong>${sameDayCx}</strong> of ${cxStamped} time-stamped (${Math.round(sameDayCx/cxStamped*100)}%)</div>`:''}
       ${cxSess.length?`<div style="font-size:11px;color:var(--t2);margin-top:4px">Billable hours lost to cancellations this month: <strong style="color:var(--rd)">${Math.round(cxLostH*10)/10}h</strong></div>`:''}
     </div>
+    <div id="dash-auth-alerts-slot"></div>
     <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Auth Units — Projected Exhaustion${unitRisk.length?` · <span style="color:var(--rd)">${unitRisk.length} at risk</span>`:''}</div>
       ${unitRows.length?`<table style="width:100%;border-collapse:collapse;font-size:12px">
