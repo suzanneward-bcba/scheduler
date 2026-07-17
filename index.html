@@ -2986,7 +2986,7 @@ function rDay(){
         const bg=tClr(s.stid),tx=tTxt(s.stid);
         const insBg=cl?iColor(cl.ins):'#9E9E9E';
         const tbdg=`<span class="bdg ${sessChipBdg(s)}">${sessChipLabel(s)}</span>`;
-        const insLbl=cl?`<span class="bdg ${iBdg(cl.ins)}">${iLabel(cl.ins)}</span>`:'';
+        const insLbl=(window._kioskMode)?'':(cl?`<span class="bdg ${iBdg(cl.ins)}">${iLabel(cl.ins)}</span>`:'');
         const muBdg=s.makeup?'<span class="bdg b-mu">MU</span>':'';
         // GRP badge: solid only — to mark a session as group, use the modal checkbox.
         const grpBdg = s.isGroup
