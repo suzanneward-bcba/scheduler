@@ -394,6 +394,10 @@ body.kiosk-mode .tl-sess,body.kiosk-mode .cs-sess{cursor:default!important}
 #kiosk-bar{display:none;position:fixed;top:0;left:0;right:0;height:52px;background:#0D0D1A;color:#fff;font-size:15px;font-weight:700;padding:0 20px;z-index:300;align-items:center;justify-content:space-between;border-bottom:1px solid #1E1E3A}
 body.kiosk-mode #kiosk-bar{display:flex}
 body.kiosk-mode #app{padding-top:52px}
+/* Kiosk: cancelled sessions unmistakably greyed — faded, desaturated, struck through */
+body.kiosk-mode .blk-sess.cx{opacity:.45;filter:grayscale(1);background:#E8E8E8!important;border-left-color:#9E9E9E!important}
+body.kiosk-mode .blk-sess.cx .blk-cl{text-decoration:line-through;color:#777!important}
+body.kiosk-mode .blk-sess.cx .tchip{background:#BDBDBD!important;color:#fff!important}
 /* ── KIOSK PORTRAIT MONITOR LAYOUT ─────────────── */
 @media screen and (min-height:900px){
   body.kiosk-mode{font-size:15px}
