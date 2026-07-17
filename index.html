@@ -2233,6 +2233,7 @@ function _fsAttachListeners(){
         _fsSeedCache();
         renderAll();
         setSyncStatus('ok','Live update ↓');
+        if(window._kioskMode) try{ kioskChime(); }catch(e){}
       }
     };
   };
@@ -2965,6 +2966,7 @@ function rDay(){
   const realDsess=dsess.filter(s=>!s._virtual);
   const virtuals=dsess.filter(s=>s._virtual);
   let sessRows='';
+  window._dvNowDone = false;
 
   DAY_BLOCKS.forEach(blk=>{
     // Sessions that overlap this block (including cancelled for visibility)
@@ -3043,6 +3045,13 @@ function rDay(){
 
     const addBtn=`<div class="blk-add edit-only" onclick="openAddSess('${dayDate}')">+ Add session in this block</div>`;
 
+    // Flow now-line: sits between blocks, above the block containing/next after now.
+    // Accurate to the stacked-list layout (the old %-of-day bar landed in wrong rows).
+    if(dayDate===todayBerlin() && !window._dvNowDone && nowBerlin() < blk.e){
+      sessRows+=`<div class="ag-now-line"><div class="ag-now-dot"></div><div class="ag-now-bar"></div><div class="ag-now-lbl now-lbl-live">${ftm(nowBerlin())}</div></div>`;
+      window._dvNowDone = true;
+    }
+
     sessRows+=`<div class="blk-section">
       <div class="blk-hdr${isSoft?' soft':''}" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':''">
         <div class="blk-hdr-left">
@@ -3109,10 +3118,7 @@ function rDay(){
     busHtml=`<div class="stf-pnl"><h4>🚌 Bus</h4><div style="font-size:12px"><strong>${duty?.name||'—'}</strong> on duty</div>${busC.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:7px">${busC.map(c=>`<span style="font-size:10px;padding:2px 7px;background:var(--bg);border-radius:4px">${cDisplayName(c)}</span>`).join('')}</div>`:'<div style="font-size:10px;color:var(--mt);margin-top:5px">No riders checked in</div>'}</div>`;
   }
 
-  const _nowPct = calcNowPct();
-  // Now-bar: absolute positioned within .dv-main so top:X% updates correctly without re-render
-  const _nowBar = dayDate===todayBerlin()&&_nowPct>0&&_nowPct<100
-    ?`<div id="dv-now-line" style="position:absolute;left:0;right:0;top:${_nowPct}%;height:2px;background:var(--rd);border-radius:1px;z-index:5;pointer-events:none"><div style="position:absolute;left:0;top:-4px;width:10px;height:10px;background:var(--rd);border-radius:50%"></div></div>`:'';
+  const _nowBar = ''; // replaced by flow now-line inserted between blocks (see DAY_BLOCKS loop)
   // Sidebar (Staff Today + Bus): scheduler-only. Staff in view-only mode see
   // a clean session-only day view; the availability sidebar is operational
   // info that isn't relevant to therapists looking at their own day.
@@ -4742,6 +4748,24 @@ function activateKioskMode(){
     }, 5 * 60 * 1000);
   }
   scheduleKioskMidnightAdvance();
+}
+// Soft two-tone chime for live schedule updates on the display
+function kioskChime(){
+  try{
+    if(!window._kioskAudioCtx) window._kioskAudioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const ctx = window._kioskAudioCtx;
+    if(ctx.state==='suspended') ctx.resume();
+    const t = ctx.currentTime;
+    [[880,0],[1174.66,0.18]].forEach(function(p){
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type='sine'; o.frequency.value=p[0];
+      g.gain.setValueAtTime(0.0001, t+p[1]);
+      g.gain.exponentialRampToValueAtTime(0.12, t+p[1]+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t+p[1]+0.35);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t+p[1]); o.stop(t+p[1]+0.4);
+    });
+  }catch(e){}
 }
 function startKioskClock(){
   function tick(){
