@@ -4517,7 +4517,7 @@ function openEditStaff(id){
       <button class="btn bsm" style="width:100%;border-style:dashed;margin-top:4px" onclick="addStplSlot()">+ Add Preferred Slot</button>
       <div class="stpl-hours" id="stpl-hours"></div>
     </div>
-    <div class="mact" style="margin-top:16px"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updStaff('${id}')">Save</button></div>`);
+    <div class="mact" style="margin-top:16px"><button class="btn bd" onclick="delStaff('${id}')" title="Permanently remove this staff member and all their data">Delete</button><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updStaff('${id}')">Save</button></div>`);
   renderStplSlots(s);
 }
 
@@ -4580,6 +4580,38 @@ function prevClrE(sid){
   const el=document.getElementById('es-prev');
   el.style.background=hex;el.style.color=txtForBg(hex);el.textContent=s?.initials||'AB';
 }
+// Permanently remove a staff member and everything tied to them.
+// Two-step confirm; shows exactly what will be deleted before acting.
+function delStaff(id){
+  const st=gs(id); if(!st) return;
+  const sessN=(S.sessions||[]).filter(s=>s.stid===id).length;
+  const leaveN=(S.leaveRequests||[]).filter(l=>l.stid===id).length;
+  const bcbaCls=(S.clients||[]).filter(cl=>cl.bcba===id);
+  const teamCls=(S.clients||[]).filter(cl=>(cl.team||[]).includes(id));
+  const msg='Permanently delete '+st.name+' ('+st.initials+')?\n\nThis removes:\n'+
+    '\u2022 Their staff record & availability\n'+
+    '\u2022 '+sessN+' session(s) \u2014 past and future\n'+
+    '\u2022 '+leaveN+' leave request(s)\n'+
+    (bcbaCls.length?'\u2022 Case manager on '+bcbaCls.length+' client(s) \u2192 will need reassignment\n':'')+
+    (teamCls.length?'\u2022 Removed from '+teamCls.length+' client team(s)\n':'')+
+    '\nThis cannot be undone.';
+  if(!confirm(msg)) return;
+  const typed=prompt('Type their initials ('+st.initials+') to confirm permanent deletion:');
+  if(!typed||typed.trim().toUpperCase()!==String(st.initials).toUpperCase()){
+    alert('Initials did not match \u2014 nothing was deleted.');
+    return;
+  }
+  S.sessions=(S.sessions||[]).filter(s=>s.stid!==id);
+  S.leaveRequests=(S.leaveRequests||[]).filter(l=>l.stid!==id);
+  (S.clients||[]).forEach(cl=>{
+    if(cl.bcba===id) cl.bcba='';
+    if(Array.isArray(cl.team)) cl.team=cl.team.filter(t=>t!==id);
+  });
+  S.staff=(S.staff||[]).filter(s=>s.id!==id);
+  save();closeM();rStaff();rSched();rClients();rDaily();
+  alert(st.name+' removed.'+(bcbaCls.length?' Reminder: '+bcbaCls.length+' client(s) now have no case manager assigned.':''));
+}
+
 function updStaff(id){
   const s=gs(id);if(!s)return;
   s.name=document.getElementById('es-n').value;s.role=document.getElementById('es-r').value;
