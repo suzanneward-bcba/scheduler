@@ -1499,6 +1499,14 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
           <button class="btn bp bsm" onclick="addTZ()">Add</button>
         </div>
       </div>
+      <div class="scard">
+        <h3>&#128190; Storage</h3>
+        <p style="font-size:11px;color:var(--mt);margin-bottom:10px">Firestore limits each document to 1MB. Sizes update on open.</p>
+        <div id="storage-diag" style="font-size:12px"></div>
+        <div class="sep"></div>
+        <button class="btn bsm" onclick="storageCleanup()">&#129529; Clean Up Old Data</button>
+        <p style="font-size:10px;color:var(--mt);margin-top:6px">Removes: leave requests fully ended &gt;60 days ago &middot; schedule requests &gt;60 days old &middot; expired schedule notes &middot; past auto-admin placeholder blocks. Real session history is never touched.</p>
+      </div>
     </div>
   </div>
 </div>
@@ -2036,7 +2044,17 @@ function save(){
       await _fsSaveV2();
       setSyncStatus('ok','Synced ✓');
     } catch(e){
-      setSyncStatus('err','Save failed');
+      // Identify any doc over Firestore's 1MB limit so the failure isn't silent
+      let oversized='';
+      try{
+        const docs=_fsBuildDocs();
+        Object.keys(docs).forEach(p=>{ const n=JSON.stringify(docs[p].data).length; if(n>950000) oversized+=(oversized?', ':'')+p+' ('+Math.round(n/1024)+'KB)'; });
+      }catch(_e){}
+      setSyncStatus('err', oversized?('SAVE FAILED — '+oversized+' over 1MB limit'):'Save failed');
+      if(oversized && !window._sizeAlertShown){
+        window._sizeAlertShown=true;
+        alert('⚠️ SAVE FAILED\n\nThe following data exceeds Firestore\'s 1MB document limit:\n'+oversized+'\n\nRecent changes are NOT being saved. Open Settings → Storage and run Clean Up to free space, then retry.');
+      }
       console.error('Firebase save error:',e);
     }
   }, 600); // debounce 600ms so rapid changes batch
@@ -3399,6 +3417,20 @@ function rSettings(){
 
 
   document.getElementById('cxlist').innerHTML=S.cfg.cxCodes.map((c,i)=>`<div class="cdi"><div><div class="cda">${c.code}</div><div class="cdd">${c.label}</div></div><button class="btn bxs bd" onclick="rmCX(${i})">Remove</button></div>`).join('');
+  const sdEl=document.getElementById('storage-diag');
+  if(sdEl){
+    try{
+      const docs=_fsBuildDocs();
+      const rows=Object.keys(docs).map(p=>({p, n:JSON.stringify(docs[p].data).length}))
+        .sort((a,b)=>b.n-a.n);
+      sdEl.innerHTML=rows.map(r=>{
+        const pct=Math.min(100,Math.round(r.n/1048576*100));
+        const clr=r.n>900000?'#C62828':r.n>650000?'#E65100':'#2E7D32';
+        return `<div style="margin-bottom:6px"><div style="display:flex;justify-content:space-between;font-size:11px"><span>${r.p}</span><span style="color:${clr};font-weight:700">${Math.round(r.n/1024)} KB</span></div>
+        <div style="height:5px;background:#EEE;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${clr}"></div></div></div>`;
+      }).join('');
+    }catch(e){ sdEl.innerHTML='<span style="color:var(--mt)">Unavailable</span>'; }
+  }
   const tzEl=document.getElementById('tzlist');
   if(tzEl) tzEl.innerHTML=getTravelZones().map((z,i)=>`<div class="cdi"><div><div class="cda">${z.label}</div><div class="cdd" style="display:flex;align-items:center;gap:8px"><input type="number" value="${z.mins}" min="1" style="width:56px;padding:3px 6px;border:1.5px solid var(--bd);border-radius:5px;font-size:11px;font-family:'DM Sans',sans-serif" onchange="updTZMins(${i},+this.value)"> min from clinic</div></div><button class="btn bxs bd" onclick="rmTZ(${i})">Remove</button></div>`).join('');
   document.getElementById('hollist').innerHTML=S.holidays.length?S.holidays.map((h,i)=>`<div class="holi"><div><div style="font-weight:600;font-size:11px">${h.name}</div><div style="font-size:10px;color:var(--mt)">${pd(h.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</div></div><button class="btn bxs bd" onclick="rmHol(${i})">×</button></div>`).join(''):'<div style="font-size:11px;color:var(--mt);margin-bottom:7px">None added.</div>';
@@ -3486,6 +3518,35 @@ function addTZ(){
 }
 function rmTZ(i){if(!confirm('Remove this zone? Any clients assigned to it will need updating.'))return;S.cfg.travelZones.splice(i,1);save();rSettings();}
 function updTZMins(i,v){if(!v||v<1)return;S.cfg.travelZones[i].mins=v;save();}
+// Prune stale data that accumulates forever. Never touches real session history.
+function storageCleanup(){
+  const today=todayBerlin();
+  const cutoff=(d=>{d.setDate(d.getDate()-60);return fd(d);})(pd(today));
+  const before={
+    leave:(S.leaveRequests||[]).length,
+    reqs:(S.schedRequests||[]).length,
+    notes:(S.schedNotes||[]).length,
+    auto:(S.sessions||[]).filter(s=>s._autoAdmin).length
+  };
+  S.leaveRequests=(S.leaveRequests||[]).filter(lr=>{
+    const days=lr.days||[]; const last=days.length?days[days.length-1]:'';
+    return !last || last>=cutoff; // keep anything recent or malformed
+  });
+  S.schedRequests=(S.schedRequests||[]).filter(r=>!r.createdAt||String(r.createdAt).slice(0,10)>=cutoff);
+  S.schedNotes=(S.schedNotes||[]).filter(n=>!n.expires||n.expires>=today);
+  S.sessions=(S.sessions||[]).filter(s=>!(s._autoAdmin&&s.date<today));
+  const after={
+    leave:S.leaveRequests.length, reqs:S.schedRequests.length,
+    notes:S.schedNotes.length, auto:S.sessions.filter(s=>s._autoAdmin).length
+  };
+  window._sizeAlertShown=false;
+  save();rSettings();
+  alert('Cleanup done:\n\u2022 Leave requests: '+before.leave+' \u2192 '+after.leave+
+    '\n\u2022 Schedule requests: '+before.reqs+' \u2192 '+after.reqs+
+    '\n\u2022 Schedule notes: '+before.notes+' \u2192 '+after.notes+
+    '\n\u2022 Past auto-admin blocks: '+before.auto+' \u2192 '+after.auto+
+    '\n\nCheck the size bars above \u2014 red means still over limit.');
+}
 function expData(){const b=new Blob([JSON.stringify(S,null,2)],{type:'application/json'});const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download='abl-'+todayBerlin()+'.json';a.click();}
 function confReset(){
   _openM(`<h3 style="color:var(--rd)">⚠️ Reset All Data</h3>
