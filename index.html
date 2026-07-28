@@ -2037,12 +2037,19 @@ function save(){
     return;
   }
   if(!db) return;
+  window._localDirty = true;   // pause live-sync overwrites until this edit is committed
   setSyncStatus('saving','Saving…');
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async ()=>{
     try{
       await _fsSaveV2();
+      window._localDirty = false;
       setSyncStatus('ok','Synced ✓');
+      // If we skipped incoming updates while this edit was pending, reconcile now
+      if(window._snapsDeferred){
+        window._snapsDeferred = false;
+        setTimeout(function(){ if(!window._localDirty && typeof loadFromFirestore==='function') try{ loadFromFirestore(); }catch(e){} }, 300);
+      }
     } catch(e){
       // Identify any doc over Firestore's 1MB limit so the failure isn't silent
       let oversized='';
@@ -2239,6 +2246,11 @@ function _fsAttachListeners(){
     let first = true;
     return snap=>{
       if(first){ first=false; return; }
+      // A local edit is queued or in flight: applying this snapshot would
+      // overwrite it (server state predates the edit) and reseed the cache so
+      // the change never writes — the "checkbox unchecks itself" race.
+      // Defer; save() reconciles via a one-shot reload after commit.
+      if(window._localDirty){ window._snapsDeferred = true; return; }
       let touched = false;
       snap.docChanges().forEach(ch=>{
         if(ch.type==='removed') return;
@@ -7780,7 +7792,7 @@ function doImport(){
 
   if(mode==='replace'){
     // Full overwrite — original behaviour
-    S.clients=d.clients||[];
+    S.clients=(d.clients||[]).map(function(x){ return _normClientDates(x); });
     S.staff=d.staff||[];
     S.sessions=d.sessions||[];
     S.logs=d.logs||{};
@@ -7815,7 +7827,36 @@ function doImport(){
     return;
   }
 
+  // Normalize any date field the spreadsheet/automation may deliver as an ISO
+  // datetime, German DD.MM.YYYY, US MM/DD/YYYY, or Excel serial. ISO datetimes
+  // are converted in Europe/Berlin — a raw UTC slice lands one day early.
+  const _dateFields=['authEnd','authSubmittedDate','authApprovedDate','nextAuthStart','reassessDue','lastReassess','dob'];
+  function _normDate(v){
+    if(v===undefined||v===null||v==='') return v;
+    if(typeof v==='number'&&isFinite(v)&&v>20000&&v<60000){ // Excel serial
+      const ms=Math.round((v-25569)*864e5); return _berlinYmd(new Date(ms));
+    }
+    const s=String(v).trim();
+    if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;                       // already clean
+    if(/^\d{4}-\d{2}-\d{2}T/.test(s)){ const d=new Date(s); return isNaN(d)?s:_berlinYmd(d); }
+    let m=s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);               // DD.MM.YYYY
+    if(m) return m[3]+'-'+String(m[2]).padStart(2,'0')+'-'+String(m[1]).padStart(2,'0');
+    m=s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);                    // MM/DD/YYYY
+    if(m) return m[3]+'-'+String(m[1]).padStart(2,'0')+'-'+String(m[2]).padStart(2,'0');
+    return s;
+  }
+  function _berlinYmd(d){
+    const p=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Berlin',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+    return p; // en-CA gives YYYY-MM-DD
+  }
+  function _normClientDates(o){
+    _dateFields.forEach(f=>{ if(o[f]!==undefined) o[f]=_normDate(o[f]); });
+    if(o.otAuth){ ['start','end'].forEach(f=>{ if(o.otAuth[f]!==undefined) o.otAuth[f]=_normDate(o.otAuth[f]); }); }
+    return o;
+  }
+
   (d.clients||[]).forEach(incoming=>{
+    _normClientDates(incoming);
     // Find existing match
     let existing=null;
     if(incoming.extId) existing=S.clients.find(c=>c.extId&&c.extId===incoming.extId);
