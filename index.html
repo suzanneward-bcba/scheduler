@@ -1554,6 +1554,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
       <button class="rpt-btn" id="rbt-hours" onclick="setReport('hours',this)">Employee Hours</button>
       <button class="rpt-btn" id="rbt-badmin" onclick="setReport('badmin',this)">🧾 Indirect Services</button>
       <button class="rpt-btn" id="rbt-leave" onclick="setReport('leave',this)">🏖 Leave &amp; Absence</button>
+      <button class="rpt-btn" id="rbt-supervision" onclick="setReport('supervision',this)">🎓 Supervision</button>
       <div class="rpt-filters">
         <span class="rfl">Date From</span>
         <input type="date" id="rpt-from" class="rft">
@@ -5338,7 +5339,7 @@ function rMySSup(stid){
   const missChips=s.missing.map(cid=>{const cl=gc(cid);return cl?`<span class="flg" style="background:#FFEBEE;color:#B71C1C" onclick="openClientDetail('${cid}')" title="No supervised session with this client yet this month">${cDisplayName(cl)}</span>`:'';}).join(' ');
   wrap.innerHTML=`<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh)">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt)">My Supervision \u00B7 ${_ymLbl?_ymLbl(ym):ym}</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt)">My Supervision \u00B7 ${pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
       <div style="display:flex;align-items:center;gap:8px">
         <span style="background:${stat.bg};color:${stat.clr};font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px">${stat.lbl}</span>
         <input type="month" id="mys-sup-month" value="${ym}" max="${ym}" style="font-size:11px;padding:3px 6px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
@@ -5953,8 +5954,90 @@ function periodLabel(){
 
 function runReport(){
   initReports();
-  const fn={billing:rptBilling,attendance:rptAttendance,cancellations:rptCancellations,hours:rptHours,badmin:rptBillableAdmin,leave:rptLeave};
+  const fn={billing:rptBilling,attendance:rptAttendance,cancellations:rptCancellations,hours:rptHours,badmin:rptBillableAdmin,leave:rptLeave,supervision:rptSupervision};
   (fn[curReport]||rptBilling)();
+}
+
+// ─────────────────────────────────────────
+// SUPERVISION COMPLIANCE (monthly)
+// ─────────────────────────────────────────
+function rptSupervision(){
+  const ym = window._supRptYm || todayBerlin().slice(0,7);
+  window._supRptYm = ym;
+  const techs=_byLastName(S.staff.filter(x=>['RBT','ABAT'].includes(x.role)));
+  const monthLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const rows=techs.map(t=>{
+    const st=supStats(t.id,ym);
+    const stat=supStatus(st);
+    const pendingN=(S.sessions||[]).filter(x=>x.stid===t.id&&(x.date||'').startsWith(ym)&&x.supervised&&!x.supAckAt).length;
+    const miss=st.missing.map(cid=>{const cl=gc(cid);return cl?cDisplayName(cl):'';}).filter(Boolean).join(', ');
+    return `<tr>
+      <td style="padding:6px 8px;font-weight:600">${t.initials} – ${t.name}</td>
+      <td style="padding:6px 8px">${t.role}</td>
+      <td style="padding:6px 8px;text-align:right">${_h1(st.directMin)}h</td>
+      <td style="padding:6px 8px;text-align:right">${_h1(st.supMin)}h</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:700;color:${stat.clr}">${st.directMin?st.pct.toFixed(1)+'%':'—'}</td>
+      <td style="padding:6px 8px"><span style="background:${stat.bg};color:${stat.clr};font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap">${stat.lbl}</span>${miss?`<div style="font-size:10px;color:#B71C1C;margin-top:2px">⚠ ${miss}</div>`:''}</td>
+      <td style="padding:6px 8px;text-align:center">${pendingN?`<span style="background:#FFF3E0;color:#E65100;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px">${pendingN} pending</span>`:'✓'}</td>
+      <td style="padding:6px 4px"><button class="btn bxs" onclick="supReport('${t.id}','${ym}')" title="Print monthly report">🖨</button></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('rpt-main').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:700">Supervision Compliance · ${monthLbl}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <input type="month" value="${ym}" max="${todayBerlin().slice(0,7)}" onchange="window._supRptYm=this.value;rptSupervision()" style="font-size:12px;padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
+        <button class="btn bsm bp" onclick="supReportAll(window._supRptYm)">🖨 Print All (${techs.length})</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--mt);margin-bottom:10px">5% of direct hours per BACB · ⚠ = client served with no supervised session this month · Ack = technician acknowledgment status</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
+        <th style="padding:5px 8px">Therapist</th><th style="padding:5px 8px">Cred</th><th style="padding:5px 8px;text-align:right">Direct</th><th style="padding:5px 8px;text-align:right">Supervised</th><th style="padding:5px 8px;text-align:right">%</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px;text-align:center">Ack</th><th></th>
+      </tr></thead><tbody>${rows||'<tr><td colspan="8" style="padding:14px;text-align:center;color:var(--mt)">No RBT/ABAT staff found</td></tr>'}</tbody>
+    </table></div>`;
+}
+
+// Combined monthly report for all techs — one print window, page break per tech
+function supReportAll(ym){
+  ym = ym || todayBerlin().slice(0,7);
+  const techs=_byLastName(S.staff.filter(x=>['RBT','ABAT'].includes(x.role)));
+  if(!techs.length) return alert('No RBT/ABAT staff found.');
+  const monthLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const secs=techs.map(t=>{
+    const s=supStats(t.id,ym);
+    const stat=supStatus(s);
+    const sess=(S.sessions||[]).filter(x=>x.stid===t.id&&(x.date||'').startsWith(ym)&&x.supervised&&x.status!=='CX')
+      .sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
+    const supNames=[...new Set(sess.map(x=>gs(x.supervisorStid)?.name).filter(Boolean))].join(', ')||'—';
+    const rows=sess.map(x=>{
+      const cl=gc(x.cid);
+      const ack=x.supAckAt?('✓ '+String(x.supAckAt).slice(0,10)):'<span style="color:#E65100">Pending</span>';
+      return '<tr><td>'+x.date+'</td><td>'+(cl?cDisplayName(cl):'—')+'</td><td>'+(gs(x.supervisorStid)?.name||'—')+'</td><td>'+x.s+'–'+x.e+'</td><td style="text-align:right">'+(x.supMinutes||0)+' min</td><td>'+ack+'</td></tr>';
+    }).join('');
+    const missNames=s.missing.map(cid=>{const cl=gc(cid);return cl?cDisplayName(cl):'';}).filter(Boolean).join(', ');
+    return '<div class="tech">'+
+      '<h1>Monthly Supervision Report</h1><h2>adaptABILITY Therapie GmbH · '+monthLbl+'</h2>'+
+      '<div class="grid"><div><b>Technician:</b> '+t.name+' ('+t.initials+')</div><div><b>Credential:</b> '+t.role+'</div>'+
+      '<div><b>Supervisor(s):</b> '+supNames+'</div><div><b>Direct:</b> '+_h1(s.directMin)+' h · <b>Supervised:</b> '+_h1(s.supMin)+' h · <b style="color:'+stat.clr+'">'+(s.directMin?s.pct.toFixed(2)+'%':'—')+'</b></div></div>'+
+      (missNames?'<div class="warn">⚠ No supervised session this month with: '+missNames+'</div>':'')+
+      '<table><thead><tr><th>Date</th><th>Client</th><th>Supervising BCBA</th><th>Time</th><th style="text-align:right">Observed</th><th>Acknowledged</th></tr></thead><tbody>'+
+      (rows||'<tr><td colspan="6" style="text-align:center;color:#889">No supervised sessions this month</td></tr>')+'</tbody></table></div>';
+  }).join('');
+  const w=window.open('','_blank','width=800,height=900');
+  if(!w){ alert('Please allow pop-ups to generate the report.'); return; }
+  w.document.write('<!DOCTYPE html><html><head><title>Supervision Reports — '+monthLbl+'</title><style>'+
+    'body{font-family:Georgia,serif;color:#1a1a1a;max-width:720px;margin:20px auto;padding:0 24px;font-size:13px}'+
+    'h1{font-size:18px;color:#1F3864;margin:0 0 2px}h2{font-size:11px;color:#2E5FA3;text-transform:uppercase;letter-spacing:1px;margin:0 0 14px;font-weight:600}'+
+    '.grid{display:grid;grid-template-columns:1fr 1fr;gap:5px 22px;margin:10px 0;font-size:12px}.grid b{color:#1F3864}'+
+    'table{width:100%;border-collapse:collapse;margin:10px 0 0;font-size:11px}'+
+    'th{background:#1F3864;color:#fff;padding:4px 7px;text-align:left;font-size:9px;text-transform:uppercase}'+
+    'td{padding:4px 7px;border-bottom:1px solid #DDE3EC}'+
+    '.warn{background:#FFF3E0;border-left:3px solid #E65100;padding:6px 10px;margin:8px 0;font-size:11px}'+
+    '.tech{page-break-after:always;padding-top:8px}.tech:last-child{page-break-after:auto}'+
+    '</style></head><body>'+secs+
+    '<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script></body></html>');
+  w.document.close();
 }
 
 // ─────────────────────────────────────────
