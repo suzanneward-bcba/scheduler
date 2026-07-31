@@ -5364,11 +5364,17 @@ function tsEntries(stid, ym){
   const otherMin=rows.filter(r=>!r.isDirect&&!r.cx).reduce((t,r)=>t+r.mins,0);
   const st=gs(stid);
   const dayHrs=((st?.hrs)||40)/5;
-  let leaveDays=0;
-  (S.leaveRequests||[]).filter(l=>l.stid===stid&&l.status==='approved').forEach(l=>{
-    (l.days||[]).forEach(d=>{ if((d||'').startsWith(ym)) leaveDays++; });
-  });
-  return {rows, directMin, otherMin, leaveMin:Math.round(leaveDays*dayHrs*60), leaveDays};
+  // Leave comes from st.pto[] — the operational array the schedule itself uses
+  // to show someone as off. Approved requests mirror into it, and manually
+  // entered or imported PTO/Sick days live ONLY there, so reading requests
+  // alone missed them. Legacy string entries default to PTO.
+  const ptoEntries=((st&&st.pto)||[]).map(x=>typeof x==='string'?{date:x,type:'PTO'}:x)
+    .filter(e=>e&&(e.date||'').startsWith(ym))
+    .sort((a,b)=>a.date.localeCompare(b.date));
+  const leaveDays=ptoEntries.length;
+  const ptoDays=ptoEntries.filter(e=>e.type!=='SICK').length;
+  const sickDays=ptoEntries.filter(e=>e.type==='SICK').length;
+  return {rows, directMin, otherMin, leaveMin:Math.round(leaveDays*dayHrs*60), leaveDays, ptoDays, sickDays, ptoEntries, dayHrs};
 }
 function tsConfirmOf(stid, ym){ return (S.tsConfirms||[]).find(x=>x.stid===stid&&x.ym===ym); }
 
@@ -5410,6 +5416,13 @@ function rMySTimesheet(stid){
     if(!tsConfirmOf(stid,m)) dueMonths.push(m);
   });
   const banner=dueMonths.length?`<div style="background:#FFF3E0;border:1px solid #FFB74D;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:600;color:#E65100">\u23F0 Please review and confirm your timesheet for: ${dueMonths.map(m=>pd(m+'-01').toLocaleDateString('en-US',{month:'short',year:'numeric'})).join(', ')}</div>`:'';
+  const leaveRows=e.ptoEntries.map(p=>`<tr style="background:${p.type==='SICK'?'#FFF5F5':'#FFFDF2'}">
+      <td style="padding:3px 6px">${p.date.slice(5)}</td>
+      <td style="padding:3px 6px">${p.type==='SICK'?'\u{1F912} Sick leave':'\u{1F3D6} PTO / Vacation'}</td>
+      <td style="padding:3px 6px">${p.type==='SICK'?'SICK':'PTO'}</td>
+      <td style="padding:3px 6px;text-align:right">${_h1(e.dayHrs*60)}h</td>
+      <td style="padding:3px 6px;text-align:center"></td>
+    </tr>`).join('');
   const entryRows=e.rows.map(r=>{
     const cl=r.s.cid?gc(r.s.cid):null;
     const label=cl?cDisplayName(cl):sTypeLabel(r.s.type);
@@ -5433,13 +5446,13 @@ function rMySTimesheet(stid){
     <div style="display:flex;gap:22px;margin-top:10px;flex-wrap:wrap">
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.directMin)}h</div><div style="font-size:10px;color:var(--mt)">DIRECT</div></div>
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.otherMin)}h</div><div style="font-size:10px;color:var(--mt)">INDIRECT / ADMIN</div></div>
-      <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${e.leaveDays}d</div><div style="font-size:10px;color:var(--mt)">LEAVE (\u2248${_h1(e.leaveMin)}h)</div></div>
+      <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${e.leaveDays}d</div><div style="font-size:10px;color:var(--mt)">LEAVE${e.leaveDays?` \u00B7 ${e.ptoDays}\u{1F3D6} ${e.sickDays}\u{1F912}`:''} (\u2248${_h1(e.leaveMin)}h)</div></div>
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.directMin+e.otherMin+e.leaveMin)}h</div><div style="font-size:10px;color:var(--mt)">TOTAL</div></div>
     </div>
-    <details style="margin-top:10px"><summary style="font-size:11px;font-weight:700;color:var(--pu);cursor:pointer">Show ${e.rows.length} entries</summary>
+    <details style="margin-top:10px"><summary style="font-size:11px;font-weight:700;color:var(--pu);cursor:pointer">Show ${e.rows.length+e.leaveDays} entries</summary>
       <div style="max-height:260px;overflow-y:auto;margin-top:6px"><table style="width:100%;border-collapse:collapse;font-size:11px">
         <thead><tr style="color:var(--mt);font-size:9px;text-transform:uppercase;text-align:left;border-bottom:1px solid var(--bd)"><th style="padding:3px 6px">Date</th><th style="padding:3px 6px">Client / Activity</th><th style="padding:3px 6px">Code</th><th style="padding:3px 6px;text-align:right">Hrs</th><th style="padding:3px 6px;text-align:center">Note</th></tr></thead>
-        <tbody>${entryRows||'<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--mt)">No entries this month</td></tr>'}</tbody>
+        <tbody>${(entryRows+leaveRows)||'<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--mt)">No entries this month</td></tr>'}</tbody>
       </table></div>
     </details>
     ${conf
