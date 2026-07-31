@@ -1513,9 +1513,6 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
 
 <!-- MY SCHEDULE TAB -->
 <div class="tp" id="tp-mysched">
-  <div id="mys-auth-alerts" style="margin-bottom:12px"></div>
-  <div id="mys-sup-card" style="margin-bottom:12px"></div>
-  <div id="mys-ts-card" style="margin-bottom:12px"></div>
   <div class="sh2" style="margin-bottom:14px" id="mys-hdr">
     <h2>🙋 My Schedule</h2>
     <div id="mys-sched-btns" style="display:flex;gap:6px">
@@ -5234,6 +5231,26 @@ function supStatus(st){
 }
 function _h1(min){ return (Math.round(min/6)/10).toFixed(1); }
 
+// 📣 My Messages & Alerts — posted notes for this therapist (today + week-wide)
+// plus the auth-alert slot. Label renders only when there's something to show.
+function rMySMessages(stid){
+  const wrap=document.getElementById('mys-msg-sect');
+  if(!wrap) return;
+  if(!stid){ wrap.innerHTML=''; return; }
+  const notesHtml=buildSchedNotes(todayBerlin(), stid);
+  // Will the auth-alert slot have content? (same criteria as rMySAuthAlerts)
+  const st=gs(stid);
+  let hasAuth=false;
+  if(st&&['BCBA','OT'].includes(st.role)){
+    const today=todayBerlin();
+    hasAuth=S.clients.some(c=>c.status!=='discharged'&&(c.bcba===stid||(c.team||[]).includes(stid))&&c.authEnd&&Math.ceil((pd(c.authEnd)-pd(today))/864e5)<=30);
+  }
+  if(!notesHtml && !hasAuth){ wrap.innerHTML=''; return; }
+  wrap.innerHTML=`<div class="mys-section-lbl" style="margin-top:12px">\u{1F4E3} My Messages & Alerts</div>
+    ${notesHtml}
+    <div id="mys-auth-alerts" style="margin-bottom:14px"></div>`;
+}
+
 // Compact auth alerts for My Schedule — only this staff member's clients, expiring within 30d
 function rMySAuthAlerts(stid){
   const wrap=document.getElementById('mys-auth-alerts');
@@ -5372,7 +5389,7 @@ function tsConfirm(stid, ym){
 
 // "My Timesheet" card — every payroll role reviews & confirms monthly
 function rMySTimesheet(stid){
-  const wrap=document.getElementById('mys-ts-card');
+  const wrap=document.getElementById('mys-ts-sect')||document.getElementById('mys-ts-card');
   if(!wrap) return;
   const st=gs(stid);
   if(!st||st.role==='Billing'||(st.role||'').toLowerCase()==='display'){ wrap.innerHTML=''; return; }
@@ -5405,7 +5422,7 @@ function rMySTimesheet(stid){
       <td style="padding:3px 6px;text-align:center">${noteCell}</td>
     </tr>`;
   }).join('');
-  wrap.innerHTML=`${banner}<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh)">
+  wrap.innerHTML=`<div class="mys-section-lbl">\u{1F393} My Supervision</div>${banner}<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt)">My Timesheet \u00B7 ${monthLbl}</div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -5455,7 +5472,7 @@ function ackSup(sessId){
 
 // "My Supervision" card — shown when the selected staff member is an RBT/ABAT
 function rMySSup(stid){
-  const wrap=document.getElementById('mys-sup-card');
+  const wrap=document.getElementById('mys-sup-sect')||document.getElementById('mys-sup-card');
   if(!wrap) return;
   const st=gs(stid);
   if(!st||!['RBT','ABAT'].includes(st.role)){ wrap.innerHTML=''; return; }
@@ -5501,9 +5518,6 @@ function rMyS(){
   const sel=document.getElementById('mys-who');
   if(!sel) return;
   mySchedStid=sel.value;
-  rMySAuthAlerts(mySchedStid);
-  rMySSup(mySchedStid);
-  rMySTimesheet(mySchedStid);
   // Show/hide note posting based on role
   // My Schedule header button visibility
   const noteBtns=document.getElementById('mys-note-btns');
@@ -5781,12 +5795,38 @@ function rMyS(){
     }).join('')
   }</div>`:'';
 
-  con.innerHTML = header + decisionsBanner + weekNav +
+  // Upcoming approved time off for the Downtime section
+  const _upLeave=(S.leaveRequests||[]).filter(l=>l.stid===mySchedStid&&l.status==='approved'&&(l.days||[]).some(d=>d>=todayBerlin()))
+    .sort((a,b)=>((a.days||[])[0]||'').localeCompare((b.days||[])[0]||''))
+    .map(l=>{
+      const ds=(l.days||[]).filter(d=>d>=todayBerlin()).sort();
+      const range=ds.length>1?(pd(ds[0]).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' \u2013 '+pd(ds[ds.length-1]).toLocaleDateString('en-US',{month:'short',day:'numeric'})):pd(ds[0]).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      return `<span class="flg" style="background:#FFF3E0;color:#E65100">\u{1F3D6} ${range} \u00B7 ${l.type||'Leave'}${ds.length>1?' ('+ds.length+'d)':''}</span>`;
+    }).join(' ');
+  const downtime = `<div class="mys-section-lbl">\u{1F3D6} My Downtime</div>` +
+    decisionsBanner +
+    (_upLeave
+      ? `<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:10px 14px;box-shadow:var(--sh);margin-bottom:14px"><div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Upcoming time off</div>${_upLeave}</div>`
+      : `<div style="font-size:12px;color:var(--mt);margin-bottom:14px;padding:0 2px">No upcoming time off \u00B7 use the \u{1F3D6} Leave button above to request.</div>`);
+
+  con.innerHTML = header +
+    `<div id="mys-msg-sect"></div>` +
+    `<div id="mys-sup-sect"></div>` +
+    `<div id="mys-ts-sect"></div>` +
+    downtime +
+    `<div class="mys-section-lbl">\u{1F4C5} My Day</div>` +
+    weekNav +
     `<div class="mys-week">${weekStrip}</div>` +
     busBar + bdayBar +
     `<div class="mys-section-lbl">📋 ${dayLabel}</div>` +
     `<div class="mys-sess-wrap">${sessHtml}</div>` +
     weekSummary;
+
+  // Section cards render into their slots now that the DOM exists
+  rMySMessages(mySchedStid);
+  rMySAuthAlerts(mySchedStid);
+  rMySSup(mySchedStid);
+  rMySTimesheet(mySchedStid);
 }
 
 // Dismiss a leave decision card from the My Schedule banner. Persists by
