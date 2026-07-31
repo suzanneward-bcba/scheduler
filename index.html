@@ -5470,11 +5470,51 @@ function ackSup(sessId){
   showToast('Supervision record acknowledged \u2713','var(--gn)');
 }
 
+// 🎓 My Supervisees — the BCBA-facing flip of the supervision card: every
+// RBT/ABAT working this BCBA's caseload, worst status first, with the
+// specific clients OF THIS BCBA still lacking a supervised session.
+function rMySSupervisees(stid, wrap){
+  const ym=todayBerlin().slice(0,7);
+  const myClients=(S.clients||[]).filter(cl=>cl.status!=='discharged'&&cl.bcba===stid);
+  const myCids=new Set(myClients.map(cl=>cl.id));
+  const techIds=new Set();
+  myClients.forEach(cl=>(cl.team||[]).forEach(tid=>{const t=gs(tid);if(t&&['RBT','ABAT'].includes(t.role))techIds.add(tid);}));
+  (S.sessions||[]).forEach(s=>{
+    if(myCids.has(s.cid)&&(s.date||'').startsWith(ym)&&s.status!=='CX'&&!s._autoAdmin){
+      const t=gs(s.stid); if(t&&['RBT','ABAT'].includes(t.role)) techIds.add(s.stid);
+    }
+  });
+  if(!techIds.size){ wrap.innerHTML=''; return; }
+  const order={'#B71C1C':0,'#E65100':1,'#1B5E20':2,'#9E9E9E':3};
+  const rows=[...techIds].map(tid=>{
+    const t=gs(tid); const s=supStats(tid,ym); const stat=supStatus(s);
+    const missMine=s.missing.filter(cid=>myCids.has(cid)).map(cid=>{const cl=gc(cid);return cl?cDisplayName(cl):'';}).filter(Boolean);
+    return {t,s,stat,missMine};
+  }).sort((a,b)=>(order[a.stat.clr]??9)-(order[b.stat.clr]??9)||a.t.name.localeCompare(b.t.name));
+  const lastOfMonth=(()=>{const d=pd(ym+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
+  const daysLeft=Math.ceil((pd(lastOfMonth)-pd(todayBerlin()))/864e5);
+  const urgent=daysLeft<=7&&rows.some(r=>r.stat.lbl!=='Met \u2713'&&r.s.directMin>0);
+  wrap.innerHTML=`<div class="mys-section-lbl">\u{1F393} My Supervisees</div>
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);margin-bottom:14px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt)">Supervision on my caseload \u00B7 ${pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
+        ${urgent?`<span style="background:#FFF3E0;color:#E65100;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px">${daysLeft} day${daysLeft===1?'':'s'} left this month</span>`:''}
+      </div>
+      ${rows.map(r=>`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:7px 0;border-top:1px solid var(--bd)">
+        <div style="flex:1;min-width:150px;font-size:12.5px;font-weight:600">${r.t.initials} \u2013 ${r.t.name} <span style="font-weight:400;color:var(--mt)">(${r.t.role})</span></div>
+        <span style="background:${r.stat.bg};color:${r.stat.clr};font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap">${r.s.directMin?r.s.pct.toFixed(1)+'%':'\u2014'} ${r.stat.lbl==='Met \u2713'?'\u2713':''}</span>
+        ${r.missMine.length?`<span style="font-size:11px;color:#B71C1C">\u26A0 needs: ${r.missMine.join(', ')}</span>`:''}
+      </div>`).join('')}
+      <div style="font-size:10px;color:var(--mt);margin-top:8px">\u26A0 = your client with no supervised session yet this month \u00B7 record supervision on any of their sessions via the checkbox</div>
+    </div>`;
+}
+
 // "My Supervision" card — shown when the selected staff member is an RBT/ABAT
 function rMySSup(stid){
   const wrap=document.getElementById('mys-sup-sect')||document.getElementById('mys-sup-card');
   if(!wrap) return;
   const st=gs(stid);
+  if(st&&st.role==='BCBA'){ rMySSupervisees(stid, wrap); return; }
   if(!st||!['RBT','ABAT'].includes(st.role)){ wrap.innerHTML=''; return; }
   const ym=todayBerlin().slice(0,7);
   const s=supStats(stid,ym);
