@@ -1987,6 +1987,40 @@ function _fsSeedCache(){
 }
 
 // Write only changed docs, in batches (JSON round-trip strips undefined → Firestore-safe)
+// Tombstones: session ids deliberately deleted on this device this session.
+// Merge-on-write must not resurrect them from the server copy.
+window._sessDel = window._sessDel || new Set();
+
+// Stale-device protection: a tab that slept overnight or lost its listener
+// holds old data; any edit from it would clobber newer state (merge-on-write
+// softens this, but fresh data is still the best defense). Refresh whenever
+// the tab becomes visible again or the network returns — unless local edits
+// are pending, in which case the pending save wins first.
+(function(){
+  function _refreshIfClean(){
+    if(window._localDirty) return;
+    if(typeof loadFromFirestore==='function') try{ loadFromFirestore(); }catch(e){}
+  }
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='visible'){
+      // Overnight-tab day snap: if the user was viewing "today" when the tab
+      // was hidden and the date has since rolled over, follow to the new today.
+      // (A deliberately viewed past/future day is left alone.)
+      try{
+        const tb=todayBerlin();
+        if(window._dayWasToday && dayDate!==tb){ dayDate=tb; rSched(); if(typeof rDaily==='function') rDaily(); }
+      }catch(e){}
+      _refreshIfClean();
+    } else {
+      try{ window._dayWasToday = (dayDate===todayBerlin()); }catch(e){}
+    }
+  });
+  window.addEventListener('online', function(){
+    if(window._localDirty && typeof save==='function'){ try{ save(); }catch(e){} }
+    else _refreshIfClean();
+  });
+})();
+
 async function _fsSaveV2(){
   const docs = _fsBuildDocs();
   const now  = Date.now();
@@ -1999,12 +2033,48 @@ async function _fsSaveV2(){
     dirty.push({path, json});
   });
   if(!dirty.length) return;
+
+  // ── MERGE-ON-WRITE for session month docs ──────────────────────────────
+  // We write whole month docs from in-memory state, so a device holding a
+  // stale copy would silently clobber every newer change in that month
+  // (the "checkbox reverts overnight" bug). Before writing a month doc,
+  // read the server copy and merge per session id: newer _mod wins,
+  // sessions unknown locally are kept, tombstoned ids stay deleted.
+  let mergedChanged = false;
+  for(const d of dirty){
+    const p = d.path.split('/');
+    if(p[0]!=='sessions') continue;
+    try{
+      const snap = await _fsRef(d.path).get();
+      if(!snap.exists) continue;
+      const srv = (snap.data().sessions)||[];
+      const loc = JSON.parse(d.json).sessions||[];
+      const byId = new Map();
+      srv.forEach(s=>{ if(s&&s.id&&!window._sessDel.has(s.id)) byId.set(s.id,s); });
+      loc.forEach(s=>{
+        if(!s||!s.id) return;
+        const ex = byId.get(s.id);
+        if(!ex || (s._mod||0) >= (ex._mod||0)) byId.set(s.id,s);
+      });
+      const merged = Array.from(byId.values());
+      const mergedJson = JSON.stringify({sessions: merged});
+      if(mergedJson !== d.json){
+        mergedChanged = true;
+        d.json = mergedJson;
+        // reflect merge into local state so UI matches what we write
+        const m = p[1];
+        S.sessions = (S.sessions||[]).filter(s=>_fsMonthOf(s.date)!==m).concat(merged);
+      }
+    }catch(e){ console.warn('merge-on-write skipped for '+d.path, e); }
+  }
+
   for(let i=0;i<dirty.length;i+=400){
     const batch = db.batch();
     dirty.slice(i,i+400).forEach(d=>batch.set(_fsRef(d.path), Object.assign(JSON.parse(d.json),{ts:now})));
     await batch.commit();
   }
   dirty.forEach(d=>{ _fsCache[d.path]=d.json; });
+  if(mergedChanged){ try{ renderAll(); }catch(e){} }
 }
 
 // Merge one incoming doc into S (used by live-sync listeners)
@@ -2044,6 +2114,7 @@ function save(){
     try{
       await _fsSaveV2();
       window._localDirty = false;
+      window._saveRetryN = 0; window._saveFailAlertShown = false;
       setSyncStatus('ok','Synced ✓');
       // If we skipped incoming updates while this edit was pending, reconcile now
       if(window._snapsDeferred){
@@ -2051,6 +2122,18 @@ function save(){
         setTimeout(function(){ if(!window._localDirty && typeof loadFromFirestore==='function') try{ loadFromFirestore(); }catch(e){} }, 300);
       }
     } catch(e){
+      // Retry with backoff — transient blips shouldn't cost anyone their edit.
+      window._saveRetryN = (window._saveRetryN||0)+1;
+      if(window._saveRetryN<=3){
+        const delay=[0,5000,15000,45000][window._saveRetryN];
+        setSyncStatus('err','Save failed — retrying in '+(delay/1000)+'s ('+window._saveRetryN+'/3)');
+        setTimeout(function(){ try{ save(); }catch(_e){} }, delay);
+        return;
+      }
+      if(!window._saveFailAlertShown){
+        window._saveFailAlertShown=true;
+        alert('⚠️ Your changes could NOT be saved after several attempts.\n\nKeep this tab open (your edits are still here) and check the internet connection. Saving will retry automatically when the connection returns.');
+      }
       // Identify any doc over Firestore's 1MB limit so the failure isn't silent
       let oversized='';
       try{
@@ -3343,13 +3426,14 @@ function setCX(id,code){
   pushUndo('Cancel session');
   const s=S.sessions.find(x=>x.id===id);if(!s)return;
   const wasCX=s.status==='CX';
-  s.cx=code;s.status=code?'CX':'OK';
+  s.cx=code;s.status=code?'CX':'OK';s._mod=Date.now();
   // Audit: stamp on transition INTO CX (not clears, not re-saves of an existing CX).
   if(code && !wasCX) stampCxAudit(s);
   if(code==='CX-T'&&!wasCX) setTimeout(()=>showSubstitutes(s),300);
 
   if(code&&!wasCX){
     // Remove any existing auto-admin for this therapist at this time/date first
+    S.sessions.forEach(x=>{ if(x._autoAdmin&&x.stid===s.stid&&x.date===s.date&&x.s===s.s) window._sessDel.add(x.id); });
     S.sessions=S.sessions.filter(x=>!(x._autoAdmin&&x.stid===s.stid&&x.date===s.date&&x.s===s.s));
     if(!NO_ADMIN_CX.includes(code)){
       // Normal cancellation — create Admin block so therapist time is visible
@@ -3365,6 +3449,7 @@ function setCX(id,code){
     // Holiday/Closure codes — therapist simply appears free (no admin block)
   } else if(!code&&wasCX){
     // Cancellation cleared — remove the auto-admin block that was created
+    S.sessions.forEach(x=>{ if(x._autoAdmin&&x._fromCx===id) window._sessDel.add(x.id); });
     S.sessions=S.sessions.filter(x=>!(x._autoAdmin&&x._fromCx===id));
     delete s._leaveType; // clear leave tag if restored
   }
@@ -3546,6 +3631,7 @@ function storageCleanup(){
   });
   S.schedRequests=(S.schedRequests||[]).filter(r=>!r.createdAt||String(r.createdAt).slice(0,10)>=cutoff);
   S.schedNotes=(S.schedNotes||[]).filter(n=>!n.expires||n.expires>=today);
+  (S.sessions||[]).forEach(s=>{ if(s._autoAdmin&&s.date<today) window._sessDel.add(s.id); });
   S.sessions=(S.sessions||[]).filter(s=>!(s._autoAdmin&&s.date<today));
   const after={
     leave:S.leaveRequests.length, reqs:S.schedRequests.length,
@@ -3977,6 +4063,7 @@ function updSess(id){
     const _wasNote=s.noteWritten;s.makeup=newMakeup;s.noteWritten=document.getElementById('sd-note')?.checked||false;if(s.noteWritten&&!_wasNote)s.noteWrittenAt=new Date().toISOString();// preserve sessionLog
     s.notes=newNotes;
     s.location=newLocation;
+    s._mod=Date.now();
     if(newSupervised){ s.supervised=true; s.supMinutes=newSupMins||null; s.supervisorStid=viewerStid||''; }
     else if(document.getElementById('sd-sup')){ delete s.supervised; delete s.supMinutes; delete s.supervisorStid; }
     // Group flag: checkbox wins. If user explicitly checked "Group session" in
@@ -3992,6 +4079,7 @@ function updSess(id){
     }
     // serviceNote field is deprecated — cleanup any stale value
     delete s.serviceNote;
+    S.sessions.forEach(x=>{ if(x._autoAdmin&&x._fromCx===id) window._sessDel.add(x.id); });
     S.sessions=S.sessions.filter(x=>!(x._autoAdmin&&x._fromCx===id));
     s.cx=cx;s.status=cx?'CX':'OK';
     // Audit: stamp on transition INTO CX. Skip if it was already CX
@@ -4032,7 +4120,7 @@ function updSess(id){
     doUpdate(false);
   }
 }
-function delSess(id){if(!confirm('Delete this session?'))return;pushUndo('Delete session');S.sessions=S.sessions.filter(s=>s.id!==id);save();closeM();rSched();rDaily();}
+function delSess(id){if(!confirm('Delete this session?'))return;pushUndo('Delete session');window._sessDel.add(id);S.sessions=S.sessions.filter(s=>s.id!==id);save();closeM();rSched();rDaily();}
 function cancelFuture(rg, fromDate){if(!confirm('Cancel all future sessions in this recurring group?'))return;pushUndo('Cancel recurring');S.sessions.filter(s=>s.recurGroup===rg&&s.date>fromDate).forEach(s=>{const wasCX=s.status==='CX';s.status='CX';s.cx='CX-CL';if(!wasCX)stampCxAudit(s);});save();closeM();rSched();}
 
 // ── ADD CLIENT ──
@@ -4322,6 +4410,7 @@ function genSchedule(cid){
   const startEl=document.getElementById('gen-start-date');
   const startFrom=startEl&&startEl.value?pd(startEl.value):today;
   // Remove existing future recurring sessions from the start date forward
+  S.sessions.forEach(s=>{ if(s.cid===cid&&s.recurGroup&&pd(s.date)>=startFrom) window._sessDel.add(s.id); });
   S.sessions=S.sessions.filter(s=>!(s.cid===cid&&s.recurGroup&&pd(s.date)>=startFrom));
   // Generate from startFrom through auth end
   const rg=uid();
@@ -4430,7 +4519,7 @@ function updClient(id){
   c.team.forEach(sid=>{const s=gs(sid);if(s){if(!s.clients)s.clients=[];if(!s.clients.includes(id))s.clients.push(id);}});
   save();closeM();rClients();rStaff();
 }
-function delClient(id){if(!confirm('Delete client and all sessions?'))return;S.clients=S.clients.filter(c=>c.id!==id);S.sessions=S.sessions.filter(s=>s.cid!==id);save();closeM();rClients();rSched();}
+function delClient(id){if(!confirm('Delete client and all sessions?'))return;S.sessions.forEach(s=>{ if(s.cid===id) window._sessDel.add(s.id); });S.clients=S.clients.filter(c=>c.id!==id);S.sessions=S.sessions.filter(s=>s.cid!==id);save();closeM();rClients();rSched();}
 
 // ── ADD STAFF ──
 function openAddStaff(){
@@ -4613,6 +4702,7 @@ function delStaff(id){
     alert('Initials did not match \u2014 nothing was deleted.');
     return;
   }
+  (S.sessions||[]).forEach(s=>{ if(s.stid===id) window._sessDel.add(s.id); });
   S.sessions=(S.sessions||[]).filter(s=>s.stid!==id);
   S.leaveRequests=(S.leaveRequests||[]).filter(l=>l.stid!==id);
   (S.clients||[]).forEach(cl=>{
@@ -7570,7 +7660,7 @@ function toggleNote(id){
     showToast('Only '+(gs(s.stid)?.name||'the assigned therapist')+' can mark this note done','#FFA000');
     return;
   }
-  s.noteWritten=!s.noteWritten;if(s.noteWritten)s.noteWrittenAt=new Date().toISOString();save();rSched();
+  s.noteWritten=!s.noteWritten;if(s.noteWritten)s.noteWrittenAt=new Date().toISOString();save();rSched(); s._mod=Date.now();
 }
 function showMissingNotes(){
   const wds=[0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
