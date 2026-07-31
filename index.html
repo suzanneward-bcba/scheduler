@@ -1514,6 +1514,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
 <!-- MY SCHEDULE TAB -->
 <div class="tp" id="tp-mysched">
   <div id="mys-auth-alerts" style="margin-bottom:12px"></div>
+  <div id="mys-sup-card" style="margin-bottom:12px"></div>
   <div class="sh2" style="margin-bottom:14px" id="mys-hdr">
     <h2>🙋 My Schedule</h2>
     <div id="mys-sched-btns" style="display:flex;gap:6px">
@@ -4064,8 +4065,24 @@ function updSess(id){
     s.notes=newNotes;
     s.location=newLocation;
     s._mod=Date.now();
-    if(newSupervised){ s.supervised=true; s.supMinutes=newSupMins||null; s.supervisorStid=viewerStid||''; }
-    else if(document.getElementById('sd-sup')){ delete s.supervised; delete s.supMinutes; delete s.supervisorStid; }
+    if(newSupervised){
+      const _was=!!s.supervised, _wasMin=s.supMinutes||null, _now=new Date().toISOString();
+      const _changed=!_was || _wasMin!==(newSupMins||null);
+      if(!_was) s.supRecordedAt=_now;
+      s.supervised=true; s.supMinutes=newSupMins||null;
+      if(!s.supervisorStid||_changed) s.supervisorStid=viewerStid||s.supervisorStid||'';
+      if(_changed){
+        s.supAudit=(s.supAudit||[]).concat({at:_now,by:viewerStid||'scheduler',action:_was?'edited':'recorded',detail:(newSupMins||0)+' min'});
+        if(_was&&s.supAckAt){
+          s.supAudit.push({at:_now,by:viewerStid||'scheduler',action:'ack-reset',detail:'edited after acknowledgment'});
+          delete s.supAckAt; delete s.supAckComment;
+        }
+      }
+    }
+    else if(document.getElementById('sd-sup')){
+      if(s.supervised) s.supAudit=(s.supAudit||[]).concat({at:new Date().toISOString(),by:viewerStid||'scheduler',action:'removed'});
+      delete s.supervised; delete s.supMinutes; delete s.supervisorStid; delete s.supAckAt; delete s.supAckComment;
+    }
     // Group flag: checkbox wins. If user explicitly checked "Group session" in
     // the modal, set true. If they unchecked it, set false (allows un-marking).
     // Conflict-modal "✓ Group Session" can also force true even if checkbox
@@ -5176,6 +5193,30 @@ function initMyS(){
   if(sel.value) rMyS();
 }
 
+// ── SUPERVISION COMPLIANCE (5% of direct hours, per BACB) ────────────────────
+// Computed live from session data — supervision lives on sessions
+// (supervised/supMinutes/supervisorStid), so there is nothing extra to enter.
+function supStats(stid, ym){
+  const direct=(S.sessions||[]).filter(s=>
+    s.stid===stid && (s.date||'').startsWith(ym) && s.status!=='CX' &&
+    !s._autoAdmin && !s._virtual && s.cid && (s.type==='ABA'||s.type==='OT'));
+  const directMin=direct.reduce((t,s)=>t+_dMins(s),0);
+  const supMin=direct.reduce((t,s)=>t+(s.supervised?(s.supMinutes||0):0),0);
+  const pct=directMin>0?(supMin/directMin*100):0;
+  const served=[...new Set(direct.map(s=>s.cid))];
+  const supervisedCids=new Set(direct.filter(s=>s.supervised).map(s=>s.cid));
+  const missing=served.filter(cid=>!supervisedCids.has(cid));
+  return {directMin, supMin, pct, served, missing};
+}
+function supStatus(st){
+  if(st.directMin===0) return {clr:'#9E9E9E', bg:'#F5F5F5', lbl:'No direct hrs'};
+  if(st.pct>=5 && !st.missing.length) return {clr:'#1B5E20', bg:'#E8F5E9', lbl:'Met \u2713'};
+  if(st.pct>=5 && st.missing.length)  return {clr:'#E65100', bg:'#FFF3E0', lbl:'Client gap'};
+  if(st.pct>=4) return {clr:'#E65100', bg:'#FFF3E0', lbl:st.pct.toFixed(1)+'%'};
+  return {clr:'#B71C1C', bg:'#FFEBEE', lbl:st.pct.toFixed(1)+'%'};
+}
+function _h1(min){ return (Math.round(min/6)/10).toFixed(1); }
+
 // Compact auth alerts for My Schedule — only this staff member's clients, expiring within 30d
 function rMySAuthAlerts(stid){
   const wrap=document.getElementById('mys-auth-alerts');
@@ -5205,11 +5246,135 @@ function rMySAuthAlerts(stid){
   </div>`;
 }
 
+// Printable monthly supervision report — pure render from session data,
+// nothing is written to storage. Opens a print-ready window (Save as PDF works).
+function supReport(stid, ym){
+  const st=gs(stid); if(!st) return;
+  const s=supStats(stid, ym);
+  const stat=supStatus(s);
+  const sess=(S.sessions||[]).filter(x=>x.stid===stid&&(x.date||'').startsWith(ym)&&x.supervised&&x.status!=='CX')
+    .sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
+  const supIds=[...new Set(sess.map(x=>x.supervisorStid).filter(Boolean))];
+  const supNames=supIds.map(id=>gs(id)?.name).filter(Boolean).join(', ')||'\u2014';
+  const [yy,mm]=ym.split('-');
+  const monthLbl=new Date(+yy, +mm-1, 1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const rows=sess.map(x=>{
+    const cl=gc(x.cid);
+    const ack=x.supAckAt?('\u2713 '+String(x.supAckAt).slice(0,10)):'<span style="color:#E65100">Pending</span>';
+    return '<tr><td>'+x.date+'</td><td>'+(cl?cDisplayName(cl):'\u2014')+'</td><td>'+
+      (gs(x.supervisorStid)?.name||'\u2014')+'</td><td>'+x.s+'\u2013'+x.e+'</td><td style="text-align:right">'+
+      (x.supMinutes||0)+' min</td><td>'+ack+'</td></tr>';
+  }).join('');
+  const ackComments=sess.filter(x=>x.supAckComment).map(x=>'<li><b>'+x.date+':</b> '+x.supAckComment+'</li>').join('');
+  const missNames=s.missing.map(cid=>{const cl=gc(cid);return cl?cDisplayName(cl):'';}).filter(Boolean).join(', ');
+  const clientList=s.served.map(cid=>{const cl=gc(cid);return cl?cDisplayName(cl):'';}).filter(Boolean).join(', ')||'\u2014';
+  const w=window.open('','_blank','width=800,height=900');
+  if(!w){ alert('Please allow pop-ups to generate the report.'); return; }
+  w.document.write('<!DOCTYPE html><html><head><title>Supervision Report \u2014 '+st.name+' \u2014 '+monthLbl+'</title>'+
+  '<style>body{font-family:Georgia,serif;color:#1a1a1a;max-width:720px;margin:30px auto;padding:0 24px;font-size:13px}'+
+  'h1{font-size:20px;color:#1F3864;margin:0 0 2px}h2{font-size:12px;color:#2E5FA3;text-transform:uppercase;letter-spacing:1px;margin:0 0 18px;font-weight:600}'+
+  '.grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;margin:14px 0;font-size:13px}'+
+  '.grid b{color:#1F3864}'+
+  '.stats{display:flex;gap:34px;margin:16px 0;padding:12px 16px;background:#F4F6FA;border-radius:8px}'+
+  '.stats div{text-align:center}.stats .n{font-size:22px;font-weight:700;color:#1F3864}.stats .l{font-size:9px;text-transform:uppercase;color:#667}'+
+  'table{width:100%;border-collapse:collapse;margin:14px 0;font-size:12px}'+
+  'th{background:#1F3864;color:#fff;padding:5px 8px;text-align:left;font-size:10px;text-transform:uppercase}'+
+  'td{padding:5px 8px;border-bottom:1px solid #DDE3EC}'+
+  '.status{display:inline-block;padding:3px 12px;border-radius:12px;font-weight:700;font-size:12px}'+
+  '.warn{background:#FFF3E0;border-left:3px solid #E65100;padding:8px 12px;margin:12px 0;font-size:12px}'+
+  '.sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:44px}'+
+  '.sig div{border-top:1px solid #333;padding-top:4px;font-size:11px;color:#555}'+
+  '.foot{margin-top:28px;font-size:10px;color:#889;border-top:1px solid #DDE3EC;padding-top:8px}'+
+  '@media print{body{margin:10px auto}}</style></head><body>'+
+  '<h1>Monthly Supervision Report</h1><h2>adaptABILITY Therapie GmbH \u00B7 '+monthLbl+'</h2>'+
+  '<div class="grid">'+
+  '<div><b>Technician:</b> '+st.name+' ('+st.initials+')</div><div><b>Credential:</b> '+st.role+'</div>'+
+  '<div><b>Supervisor(s):</b> '+supNames+'</div><div><b>Report period:</b> '+monthLbl+'</div>'+
+  '<div style="grid-column:1/-1"><b>Clients served this period:</b> '+clientList+'</div>'+
+  '</div>'+
+  '<div class="stats">'+
+  '<div><div class="n">'+_h1(s.directMin)+' h</div><div class="l">Direct Service</div></div>'+
+  '<div><div class="n">'+_h1(s.supMin)+' h</div><div class="l">Supervised</div></div>'+
+  '<div><div class="n" style="color:'+stat.clr+'">'+(s.directMin?s.pct.toFixed(2)+'%':'\u2014')+'</div><div class="l">Of 5% Required</div></div>'+
+  '<div><div class="n"><span class="status" style="background:'+stat.bg+';color:'+stat.clr+'">'+(s.directMin===0?'\u2014':(s.pct>=5&&!s.missing.length?'Requirement Met \u2713':s.pct>=5?'Client Gap':'Below 5%'))+'</span></div><div class="l">Status</div></div>'+
+  '</div>'+
+  (missNames?'<div class="warn"><b>\u26A0 No supervised session this month with:</b> '+missNames+'</div>':'')+
+  '<table><thead><tr><th>Date</th><th>Client</th><th>Supervising BCBA</th><th>Session Time</th><th style="text-align:right">Observed</th><th>Acknowledged</th></tr></thead>'+
+  '<tbody>'+(rows||'<tr><td colspan="6" style="text-align:center;color:#889">No supervised sessions recorded this month</td></tr>')+'</tbody></table>'+
+  '<div style="margin-top:20px;padding:10px 14px;background:#F4F6FA;border-radius:8px;font-size:11px;color:#445">'+'<b>Electronic acknowledgment.</b> Each record above was entered in the adaptABILITY scheduler by the supervising BCBA and acknowledged in-app by the technician; submission and acknowledgment timestamps and all subsequent edits are retained in the record audit trail. No handwritten signatures are required.'+(ackComments?'<div style="margin-top:6px"><b>Technician comments:</b><ul style="margin:4px 0 0 16px">'+ackComments+'</ul></div>':'')+'</div>'+
+  '<div class="foot">Generated '+todayBerlin()+' from the adaptABILITY scheduler \u00B7 Supervision recorded by the supervising BCBA, acknowledged electronically by the technician \u00B7 5% requirement per BACB RBT supervision standards</div>'+
+  '<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>'+
+  '</body></html>');
+  w.document.close();
+}
+
+// Technician acknowledgment of a supervision record. Only the supervised
+// technician (or the unlocked scheduler) can acknowledge; timestamps + any
+// comment go on the session with a full audit trail.
+function ackSup(sessId){
+  const s=(S.sessions||[]).find(x=>x.id===sessId);
+  if(!s||!s.supervised) return;
+  if(isViewOnly && viewerStid!==s.stid){ alert('Only '+(gs(s.stid)?.name||'the supervised technician')+' can acknowledge this record.'); return; }
+  const cEl=document.getElementById('ack-c-'+sessId);
+  const comment=cEl?cEl.value.trim():'';
+  const now=new Date().toISOString();
+  s.supAckAt=now; s.supAckBy=s.stid;
+  if(comment) s.supAckComment=comment; else delete s.supAckComment;
+  s.supAudit=(s.supAudit||[]).concat({at:now,by:s.stid,action:'acknowledged',detail:comment?('comment: '+comment):''});
+  s._mod=Date.now();
+  save(); rMyS();
+  showToast('Supervision record acknowledged \u2713','var(--gn)');
+}
+
+// "My Supervision" card — shown when the selected staff member is an RBT/ABAT
+function rMySSup(stid){
+  const wrap=document.getElementById('mys-sup-card');
+  if(!wrap) return;
+  const st=gs(stid);
+  if(!st||!['RBT','ABAT'].includes(st.role)){ wrap.innerHTML=''; return; }
+  const ym=todayBerlin().slice(0,7);
+  const s=supStats(stid,ym);
+  const stat=supStatus(s);
+  const missChips=s.missing.map(cid=>{const cl=gc(cid);return cl?`<span class="flg" style="background:#FFEBEE;color:#B71C1C" onclick="openClientDetail('${cid}')" title="No supervised session with this client yet this month">${cDisplayName(cl)}</span>`:'';}).join(' ');
+  wrap.innerHTML=`<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh)">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt)">My Supervision \u00B7 ${_ymLbl?_ymLbl(ym):ym}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="background:${stat.bg};color:${stat.clr};font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px">${stat.lbl}</span>
+        <input type="month" id="mys-sup-month" value="${ym}" max="${ym}" style="font-size:11px;padding:3px 6px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
+        <button class="btn bsm" onclick="supReport('${stid}',document.getElementById('mys-sup-month').value||'${ym}')" title="Print / save a monthly supervision report">&#128424; Report</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:22px;margin-top:10px;flex-wrap:wrap">
+      <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif">${_h1(s.directMin)}h</div><div style="font-size:10px;color:var(--mt)">DIRECT</div></div>
+      <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif">${_h1(s.supMin)}h</div><div style="font-size:10px;color:var(--mt)">SUPERVISED</div></div>
+      <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif;color:${stat.clr}">${s.directMin?s.pct.toFixed(1):'\u2014'}%</div><div style="font-size:10px;color:var(--mt)">OF 5% REQUIRED</div></div>
+    </div>
+    ${s.missing.length?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)"><span style="font-size:11px;font-weight:700;color:#B71C1C">\u26A0 No supervision yet this month with:</span> ${missChips}</div>`:''}
+    ${(()=>{
+      const pending=(S.sessions||[]).filter(x=>x.stid===stid&&x.supervised&&!x.supAckAt).sort((a,b)=>b.date.localeCompare(a.date));
+      if(!pending.length) return '';
+      return `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)">
+        <div style="font-size:11px;font-weight:700;color:#E65100;margin-bottom:6px">\u{1F514} ${pending.length} supervision record${pending.length>1?'s':''} awaiting your acknowledgment</div>
+        ${pending.map(x=>{
+          const cl=gc(x.cid);
+          return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;background:#FFF8F0;border:1px solid #FFE0B2;border-radius:8px;margin-bottom:6px;font-size:12px">
+            <div style="flex:1;min-width:180px"><strong>${x.date}</strong> \u00B7 ${cl?cDisplayName(cl):'\u2014'} \u00B7 ${gs(x.supervisorStid)?.initials||'?'} \u00B7 ${x.supMinutes||0} min</div>
+            <input id="ack-c-${x.id}" placeholder="Comment (optional)" style="flex:2;min-width:140px;font-size:11px;padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
+            <button class="btn bp bsm" onclick="ackSup('${x.id}')">Acknowledge</button>
+          </div>`;
+        }).join('')}
+      </div>`;
+    })()}
+  </div>`;
+}
+
 function rMyS(){
   const sel=document.getElementById('mys-who');
   if(!sel) return;
   mySchedStid=sel.value;
   rMySAuthAlerts(mySchedStid);
+  rMySSup(mySchedStid);
   // Show/hide note posting based on role
   // My Schedule header button visibility
   const noteBtns=document.getElementById('mys-note-btns');
@@ -7460,6 +7625,35 @@ function rDash(){
       ${cxSess.length?`<div style="font-size:11px;color:var(--t2);margin-top:4px">Billable hours lost to cancellations this month: <strong style="color:var(--rd)">${Math.round(cxLostH*10)/10}h</strong></div>`:''}
     </div>
     <div id="dash-auth-alerts-slot"></div>
+    ${(()=>{
+      const ym=todayBerlin().slice(0,7);
+      const techs=_byLastName(S.staff.filter(x=>['RBT','ABAT'].includes(x.role)));
+      if(!techs.length) return '';
+      const rows=techs.map(t=>{
+        const st=supStats(t.id,ym);
+        const stat=supStatus(st);
+        const sups=[...new Set((S.sessions||[]).filter(x=>x.stid===t.id&&(x.date||'').startsWith(ym)&&x.supervised&&x.supervisorStid).map(x=>gs(x.supervisorStid)?.initials).filter(Boolean))].join(', ')||'\u2014';
+        const miss=st.missing.map(cid=>{const cl=gc(cid);return cl?cDisplayName(cl):'';}).filter(Boolean).join(', ');
+        return `<tr>
+          <td style="padding:5px 8px;font-weight:600">${t.initials} \u2013 ${t.name}</td>
+          <td style="padding:5px 8px">${t.role}</td>
+          <td style="padding:5px 8px">${sups}</td>
+          <td style="padding:5px 8px;text-align:right">${_h1(st.directMin)}h</td>
+          <td style="padding:5px 8px;text-align:right">${_h1(st.supMin)}h</td>
+          <td style="padding:5px 8px;text-align:right;font-weight:700;color:${stat.clr}">${st.directMin?st.pct.toFixed(1)+'%':'\u2014'}</td>
+          <td style="padding:5px 8px"><span style="background:${stat.bg};color:${stat.clr};font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap">${stat.lbl}</span>${miss?`<div style="font-size:10px;color:#B71C1C;margin-top:2px">\u26A0 ${miss}</div>`:''}</td>
+          <td style="padding:5px 4px"><button class="btn bxs" onclick="supReport('${t.id}','${ym}')" title="Print monthly report">&#128424;</button></td>
+        </tr>`;
+      }).join('');
+      return `<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Supervision Compliance \u2014 ${_ymLbl?_ymLbl(ym):ym} \u00B7 5% of direct hours \u00B7 \u26A0 = client with no supervised session this month</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
+            <th style="padding:4px 8px">Therapist</th><th style="padding:4px 8px">Cred</th><th style="padding:4px 8px">Supervisor(s)</th><th style="padding:4px 8px;text-align:right">Direct</th><th style="padding:4px 8px;text-align:right">Supervised</th><th style="padding:4px 8px;text-align:right">%</th><th style="padding:4px 8px">Status</th><th></th>
+          </tr></thead><tbody>${rows}</tbody>
+        </table>
+      </div>`;
+    })()}
     <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);overflow-x:auto">
       <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin-bottom:8px">Auth Units — Projected Exhaustion${unitRisk.length?` · <span style="color:var(--rd)">${unitRisk.length} at risk</span>`:''}</div>
       ${unitRows.length?`<table style="width:100%;border-collapse:collapse;font-size:12px">
