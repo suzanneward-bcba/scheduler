@@ -1515,6 +1515,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
 <div class="tp" id="tp-mysched">
   <div id="mys-auth-alerts" style="margin-bottom:12px"></div>
   <div id="mys-sup-card" style="margin-bottom:12px"></div>
+  <div id="mys-ts-card" style="margin-bottom:12px"></div>
   <div class="sh2" style="margin-bottom:14px" id="mys-hdr">
     <h2>🙋 My Schedule</h2>
     <div id="mys-sched-btns" style="display:flex;gap:6px">
@@ -1555,6 +1556,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
       <button class="rpt-btn" id="rbt-badmin" onclick="setReport('badmin',this)">🧾 Indirect Services</button>
       <button class="rpt-btn" id="rbt-leave" onclick="setReport('leave',this)">🏖 Leave &amp; Absence</button>
       <button class="rpt-btn" id="rbt-supervision" onclick="setReport('supervision',this)">🎓 Supervision</button>
+      <button class="rpt-btn" id="rbt-timesheets" style="display:none" onclick="setReport('timesheets',this)">🕒 Timesheet Confirmations</button>
       <div class="rpt-filters">
         <span class="rfl">Date From</span>
         <input type="date" id="rpt-from" class="rft">
@@ -1949,7 +1951,7 @@ function setSyncStatus(state, msg){
 // The legacy scheduler/data doc is left untouched as a rollback backup.
 // save() only writes docs whose content actually changed (dirty tracking).
 
-const FS_META_EXTRA = ['_leaveReqHoursMigrated']; // top-level flags stored in meta
+const FS_META_EXTRA = ['_leaveReqHoursMigrated','tsConfirms']; // top-level flags + timesheet confirmations stored in meta
 let _fsCache = {};                                       // docPath → last JSON written/read
 let _fsMonths = {sessions:new Set(), logs:new Set()};    // month docs known to exist
 
@@ -5309,6 +5311,112 @@ function supReport(stid, ym){
   w.document.close();
 }
 
+// ── MONTHLY TIMESHEET REVIEW & CONFIRMATION ─────────────────────────────────
+// Sessions remain the single source of truth; this view is computed live.
+// What gets STORED is only the confirmation snapshot (S.tsConfirms in meta):
+// {id, stid, ym, at, comment, totals} — reviewed by SW/SB only.
+const TIMESHEET_REVIEWERS = ['SW','SB'];
+function canReviewTimesheets(){ return !isViewOnly || TIMESHEET_REVIEWERS.includes(viewerStid); }
+
+function tsEntries(stid, ym){
+  const sess=(S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&!s._autoAdmin&&!s._virtual)
+    .sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
+  const rows=sess.map(s=>{
+    const cx=s.status==='CX';
+    const mins=cx?0:_dMins(s);
+    const isDirect=!cx&&s.cid&&(s.type==='ABA'||s.type==='OT');
+    return {s, cx, mins, isDirect};
+  });
+  const directMin=rows.filter(r=>r.isDirect).reduce((t,r)=>t+r.mins,0);
+  const otherMin=rows.filter(r=>!r.isDirect&&!r.cx).reduce((t,r)=>t+r.mins,0);
+  const st=gs(stid);
+  const dayHrs=((st?.hrs)||40)/5;
+  let leaveDays=0;
+  (S.leaveRequests||[]).filter(l=>l.stid===stid&&l.status==='approved').forEach(l=>{
+    (l.days||[]).forEach(d=>{ if((d||'').startsWith(ym)) leaveDays++; });
+  });
+  return {rows, directMin, otherMin, leaveMin:Math.round(leaveDays*dayHrs*60), leaveDays};
+}
+function tsConfirmOf(stid, ym){ return (S.tsConfirms||[]).find(x=>x.stid===stid&&x.ym===ym); }
+
+function tsConfirm(stid, ym){
+  if(isViewOnly && viewerStid!==stid){ alert('Only '+(gs(stid)?.name||'the employee')+' can confirm their own timesheet.'); return; }
+  if(tsConfirmOf(stid,ym)) return;
+  const e=tsEntries(stid,ym);
+  const cEl=document.getElementById('ts-comment-'+stid);
+  const comment=cEl?cEl.value.trim():'';
+  S.tsConfirms=(S.tsConfirms||[]).concat({
+    id:'tc'+uid(), stid, ym, at:new Date().toISOString(),
+    comment: comment||'',
+    totals:{directMin:e.directMin, otherMin:e.otherMin, leaveMin:e.leaveMin, sessN:e.rows.filter(r=>!r.cx).length}
+  });
+  save(); rMyS();
+  showToast('Timesheet for '+ym+' confirmed \u2713','var(--gn)');
+}
+
+// "My Timesheet" card — every payroll role reviews & confirms monthly
+function rMySTimesheet(stid){
+  const wrap=document.getElementById('mys-ts-card');
+  if(!wrap) return;
+  const st=gs(stid);
+  if(!st||st.role==='Billing'||(st.role||'').toLowerCase()==='display'){ wrap.innerHTML=''; return; }
+  const curYm=todayBerlin().slice(0,7);
+  const ym=window._mysTsYm||curYm;
+  const e=tsEntries(stid,ym);
+  const conf=tsConfirmOf(stid,ym);
+  const monthLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  // Reminder: unconfirmed months with hours, where the month has ended or today is its last day
+  const lastOfCur=(()=>{const d=pd(curYm+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
+  const dueMonths=[];
+  const monthsWithData=[...new Set((S.sessions||[]).filter(s=>s.stid===stid&&!s._autoAdmin&&s.status!=='CX').map(s=>(s.date||'').slice(0,7)))].sort();
+  monthsWithData.forEach(m=>{
+    if(m>curYm) return;
+    if(m===curYm && todayBerlin()!==lastOfCur) return;
+    if(!tsConfirmOf(stid,m)) dueMonths.push(m);
+  });
+  const banner=dueMonths.length?`<div style="background:#FFF3E0;border:1px solid #FFB74D;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:600;color:#E65100">\u23F0 Please review and confirm your timesheet for: ${dueMonths.map(m=>pd(m+'-01').toLocaleDateString('en-US',{month:'short',year:'numeric'})).join(', ')}</div>`:'';
+  const entryRows=e.rows.map(r=>{
+    const cl=r.s.cid?gc(r.s.cid):null;
+    const label=cl?cDisplayName(cl):sTypeLabel(r.s.type);
+    const noteCell=(r.s.cid&&!r.cx&&r.s.date<=todayBerlin())?(r.s.noteWritten?'\u2713':'<span style="color:#E65100">\u2717</span>'):'';
+    return `<tr style="${r.cx?'opacity:.45;text-decoration:line-through':''}">
+      <td style="padding:3px 6px">${r.s.date.slice(5)}</td>
+      <td style="padding:3px 6px">${label}${r.cx?' <span style="font-size:9px">(CX'+(r.s.cx?' '+r.s.cx:'')+')</span>':''}</td>
+      <td style="padding:3px 6px">${r.s.cptCode||r.s.type}</td>
+      <td style="padding:3px 6px;text-align:right">${r.cx?'\u2014':_h1(r.mins)+'h'}</td>
+      <td style="padding:3px 6px;text-align:center">${noteCell}</td>
+    </tr>`;
+  }).join('');
+  wrap.innerHTML=`${banner}<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh)">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt)">My Timesheet \u00B7 ${monthLbl}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${conf?`<span style="background:#E8F5E9;color:#1B5E20;font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px">Confirmed \u2713 ${String(conf.at).slice(0,10)}</span>`:''}
+        <input type="month" value="${ym}" max="${curYm}" onchange="window._mysTsYm=this.value;rMySTimesheet('${stid}')" style="font-size:11px;padding:3px 6px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
+      </div>
+    </div>
+    <div style="display:flex;gap:22px;margin-top:10px;flex-wrap:wrap">
+      <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.directMin)}h</div><div style="font-size:10px;color:var(--mt)">DIRECT</div></div>
+      <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.otherMin)}h</div><div style="font-size:10px;color:var(--mt)">INDIRECT / ADMIN</div></div>
+      <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${e.leaveDays}d</div><div style="font-size:10px;color:var(--mt)">LEAVE (\u2248${_h1(e.leaveMin)}h)</div></div>
+      <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.directMin+e.otherMin+e.leaveMin)}h</div><div style="font-size:10px;color:var(--mt)">TOTAL</div></div>
+    </div>
+    <details style="margin-top:10px"><summary style="font-size:11px;font-weight:700;color:var(--pu);cursor:pointer">Show ${e.rows.length} entries</summary>
+      <div style="max-height:260px;overflow-y:auto;margin-top:6px"><table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead><tr style="color:var(--mt);font-size:9px;text-transform:uppercase;text-align:left;border-bottom:1px solid var(--bd)"><th style="padding:3px 6px">Date</th><th style="padding:3px 6px">Client / Activity</th><th style="padding:3px 6px">Code</th><th style="padding:3px 6px;text-align:right">Hrs</th><th style="padding:3px 6px;text-align:center">Note</th></tr></thead>
+        <tbody>${entryRows||'<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--mt)">No entries this month</td></tr>'}</tbody>
+      </table></div>
+    </details>
+    ${conf
+      ?(conf.comment?`<div style="margin-top:8px;font-size:11px;color:var(--t2)"><b>Your comment:</b> ${conf.comment}</div>`:'')
+      :`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="ts-comment-${stid}" placeholder="Discrepancy or comment (optional \u2014 goes to Suzanne & Sara)" style="flex:1;min-width:200px;font-size:11px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
+        <button class="btn bp bsm" onclick="tsConfirm('${stid}','${ym}')">Confirm Timesheet \u2713</button>
+      </div>
+      <div style="font-size:10px;color:var(--mt);margin-top:6px">By confirming you verify these hours, cancellations, and session notes are accurate and complete for ${monthLbl}.</div>`}
+  </div>`;
+}
+
 // Technician acknowledgment of a supervision record. Only the supervised
 // technician (or the unlocked scheduler) can acknowledge; timestamps + any
 // comment go on the session with a full audit trail.
@@ -5376,6 +5484,7 @@ function rMyS(){
   mySchedStid=sel.value;
   rMySAuthAlerts(mySchedStid);
   rMySSup(mySchedStid);
+  rMySTimesheet(mySchedStid);
   // Show/hide note posting based on role
   // My Schedule header button visibility
   const noteBtns=document.getElementById('mys-note-btns');
@@ -5907,6 +6016,8 @@ function setReport(type, el){
 }
 
 function initReports(){
+  const tsBtn=document.getElementById('rbt-timesheets');
+  if(tsBtn) tsBtn.style.display=canReviewTimesheets()?'flex':'none';
   const now=new Date();
   const from=new Date(now.getFullYear(),now.getMonth(),1);
   const to=new Date(now.getFullYear(),now.getMonth()+1,0);
@@ -5954,8 +6065,50 @@ function periodLabel(){
 
 function runReport(){
   initReports();
-  const fn={billing:rptBilling,attendance:rptAttendance,cancellations:rptCancellations,hours:rptHours,badmin:rptBillableAdmin,leave:rptLeave,supervision:rptSupervision};
+  const fn={billing:rptBilling,attendance:rptAttendance,cancellations:rptCancellations,hours:rptHours,badmin:rptBillableAdmin,leave:rptLeave,supervision:rptSupervision,timesheets:rptTimesheets};
   (fn[curReport]||rptBilling)();
+}
+
+// ─────────────────────────────────────────
+// TIMESHEET CONFIRMATIONS (SW/SB only)
+// ─────────────────────────────────────────
+function rptTimesheets(){
+  if(!canReviewTimesheets()){
+    document.getElementById('rpt-main').innerHTML='<div class="rpt-empty"><div class="rpt-empty-icon">🔒</div>Timesheet review is available to Suzanne and Sara only.</div>';return;
+  }
+  const ym=window._tsRptYm||todayBerlin().slice(0,7);
+  window._tsRptYm=ym;
+  const monthLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const staff=_byLastName(S.staff.filter(x=>x.role!=='Billing'&&(x.role||'').toLowerCase()!=='display'));
+  const rows=staff.map(t=>{
+    const e=tsEntries(t.id,ym);
+    const conf=tsConfirmOf(t.id,ym);
+    const hasData=e.rows.length>0||e.leaveDays>0;
+    return `<tr>
+      <td style="padding:6px 8px;font-weight:600">${t.initials} – ${t.name}</td>
+      <td style="padding:6px 8px">${t.role}</td>
+      <td style="padding:6px 8px;text-align:right">${_h1(e.directMin)}h</td>
+      <td style="padding:6px 8px;text-align:right">${_h1(e.otherMin)}h</td>
+      <td style="padding:6px 8px;text-align:right">${e.leaveDays}d</td>
+      <td style="padding:6px 8px;text-align:right;font-weight:700">${_h1(e.directMin+e.otherMin+e.leaveMin)}h</td>
+      <td style="padding:6px 8px">${conf
+        ?`<span style="background:#E8F5E9;color:#1B5E20;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap">\u2713 ${String(conf.at).slice(0,10)}</span>`
+        :(hasData?'<span style="background:#FFF3E0;color:#E65100;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px">Not confirmed</span>':'<span style="color:var(--mt);font-size:10px">\u2014</span>')}</td>
+      <td style="padding:6px 8px;font-size:11px;color:#B71C1C">${conf&&conf.comment?('\u{1F4AC} '+conf.comment):''}</td>
+    </tr>`;
+  }).join('');
+  const confirmedN=staff.filter(t=>tsConfirmOf(t.id,ym)).length;
+  document.getElementById('rpt-main').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div style="font-size:14px;font-weight:700">Timesheet Confirmations \u00B7 ${monthLbl} \u00B7 ${confirmedN}/${staff.length} confirmed</div>
+      <input type="month" value="${ym}" max="${todayBerlin().slice(0,7)}" onchange="window._tsRptYm=this.value;rptTimesheets()" style="font-size:12px;padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
+    </div>
+    <div style="font-size:11px;color:var(--mt);margin-bottom:10px">Hours computed live from the schedule \u00B7 confirmation snapshots stored with timestamps \u00B7 \u{1F4AC} = discrepancy comment from the employee</div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
+        <th style="padding:5px 8px">Employee</th><th style="padding:5px 8px">Role</th><th style="padding:5px 8px;text-align:right">Direct</th><th style="padding:5px 8px;text-align:right">Indirect</th><th style="padding:5px 8px;text-align:right">Leave</th><th style="padding:5px 8px;text-align:right">Total</th><th style="padding:5px 8px">Confirmed</th><th style="padding:5px 8px">Comment</th>
+      </tr></thead><tbody>${rows}</tbody>
+    </table></div>`;
 }
 
 // ─────────────────────────────────────────
