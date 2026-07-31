@@ -5196,7 +5196,7 @@ function initMyS(){
   if(sel.value) rMyS();
 }
 
-// ── SUPERVISION COMPLIANCE (5% of direct hours, per BACB) ────────────────────
+// ── SUPERVISION COMPLIANCE (5% of direct hours — BACB for RBTs, QABA for ABATs) ──
 // Computed live from session data — supervision lives on sessions
 // (supervised/supMinutes/supervisorStid), so there is nothing extra to enter.
 function supStats(stid, ym){
@@ -5305,7 +5305,7 @@ function supReport(stid, ym){
   '<table><thead><tr><th>Date</th><th>Client</th><th>Supervising BCBA</th><th>Session Time</th><th style="text-align:right">Observed</th><th>Acknowledged</th></tr></thead>'+
   '<tbody>'+(rows||'<tr><td colspan="6" style="text-align:center;color:#889">No supervised sessions recorded this month</td></tr>')+'</tbody></table>'+
   '<div style="margin-top:20px;padding:10px 14px;background:#F4F6FA;border-radius:8px;font-size:11px;color:#445">'+'<b>Electronic acknowledgment.</b> Each record above was entered in the adaptABILITY scheduler by the supervising BCBA and acknowledged in-app by the technician; submission and acknowledgment timestamps and all subsequent edits are retained in the record audit trail. No handwritten signatures are required.'+(ackComments?'<div style="margin-top:6px"><b>Technician comments:</b><ul style="margin:4px 0 0 16px">'+ackComments+'</ul></div>':'')+'</div>'+
-  '<div class="foot">Generated '+todayBerlin()+' from the adaptABILITY scheduler \u00B7 Supervision recorded by the supervising BCBA, acknowledged electronically by the technician \u00B7 5% requirement per BACB RBT supervision standards</div>'+
+  '<div class="foot">Generated '+todayBerlin()+' from the adaptABILITY scheduler \u00B7 Supervision recorded by the supervising BCBA, acknowledged electronically by the technician \u00B7 '+(st.role==='ABAT'?'5% supervision requirement per QABA ABAT certification standards':'5% supervision requirement per BACB RBT supervision standards')+'</div>'+
   '<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>'+
   '</body></html>');
   w.document.close();
@@ -5368,8 +5368,10 @@ function rMySTimesheet(stid){
   // Reminder: unconfirmed months with hours, where the month has ended or today is its last day
   const lastOfCur=(()=>{const d=pd(curYm+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
   const dueMonths=[];
+  const TS_CONFIRM_START='2026-07'; // feature launch — earlier months are never nagged
   const monthsWithData=[...new Set((S.sessions||[]).filter(s=>s.stid===stid&&!s._autoAdmin&&s.status!=='CX').map(s=>(s.date||'').slice(0,7)))].sort();
   monthsWithData.forEach(m=>{
+    if(m<TS_CONFIRM_START) return;
     if(m>curYm) return;
     if(m===curYm && todayBerlin()!==lastOfCur) return;
     if(!tsConfirmOf(stid,m)) dueMonths.push(m);
@@ -6143,7 +6145,7 @@ function rptSupervision(){
         <button class="btn bsm bp" onclick="supReportAll(window._supRptYm)">🖨 Print All (${techs.length})</button>
       </div>
     </div>
-    <div style="font-size:11px;color:var(--mt);margin-bottom:10px">5% of direct hours per BACB · ⚠ = client served with no supervised session this month · Ack = technician acknowledgment status</div>
+    <div style="font-size:11px;color:var(--mt);margin-bottom:10px">5% of direct hours per BACB (RBT) / QABA (ABAT) standards · ⚠ = client served with no supervised session this month · Ack = technician acknowledgment status</div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
         <th style="padding:5px 8px">Therapist</th><th style="padding:5px 8px">Cred</th><th style="padding:5px 8px;text-align:right">Direct</th><th style="padding:5px 8px;text-align:right">Supervised</th><th style="padding:5px 8px;text-align:right">%</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px;text-align:center">Ack</th><th></th>
@@ -6175,7 +6177,8 @@ function supReportAll(ym){
       '<div><b>Supervisor(s):</b> '+supNames+'</div><div><b>Direct:</b> '+_h1(s.directMin)+' h · <b>Supervised:</b> '+_h1(s.supMin)+' h · <b style="color:'+stat.clr+'">'+(s.directMin?s.pct.toFixed(2)+'%':'—')+'</b></div></div>'+
       (missNames?'<div class="warn">⚠ No supervised session this month with: '+missNames+'</div>':'')+
       '<table><thead><tr><th>Date</th><th>Client</th><th>Supervising BCBA</th><th>Time</th><th style="text-align:right">Observed</th><th>Acknowledged</th></tr></thead><tbody>'+
-      (rows||'<tr><td colspan="6" style="text-align:center;color:#889">No supervised sessions this month</td></tr>')+'</tbody></table></div>';
+      (rows||'<tr><td colspan="6" style="text-align:center;color:#889">No supervised sessions this month</td></tr>')+'</tbody></table>'+
+      '<div style="font-size:9px;color:#889;margin-top:6px">'+(t.role==='ABAT'?'5% supervision requirement per QABA ABAT certification standards':'5% supervision requirement per BACB RBT supervision standards')+' \u00B7 acknowledged electronically in the adaptABILITY scheduler</div></div>';
   }).join('');
   const w=window.open('','_blank','width=800,height=900');
   if(!w){ alert('Please allow pop-ups to generate the report.'); return; }
