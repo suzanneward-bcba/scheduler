@@ -5435,7 +5435,7 @@ function rMySTimesheet(stid){
       <td style="padding:3px 6px;text-align:center">${noteCell}</td>
     </tr>`;
   }).join('');
-  wrap.innerHTML=`<div class="mys-section-lbl">\u{1F393} My Supervision</div>${banner}<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);margin-bottom:14px">
+  wrap.innerHTML=`<div class="mys-section-lbl">\u{1F552} My Timesheet</div>${banner}<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt)">My Timesheet \u00B7 ${monthLbl}</div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -5533,7 +5533,7 @@ function rMySSup(stid){
   const s=supStats(stid,ym);
   const stat=supStatus(s);
   const missChips=s.missing.map(cid=>{const cl=gc(cid);return cl?`<span class="flg" style="background:#FFEBEE;color:#B71C1C" onclick="openClientDetail('${cid}')" title="No supervised session with this client yet this month">${cDisplayName(cl)}</span>`:'';}).join(' ');
-  wrap.innerHTML=`<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh)">
+  wrap.innerHTML=`<div class="mys-section-lbl">\u{1F393} My Supervision</div><div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt)">My Supervision \u00B7 ${pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div>
       <div style="display:flex;align-items:center;gap:8px">
