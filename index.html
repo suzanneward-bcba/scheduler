@@ -4011,14 +4011,19 @@ function openSess(id){
               <input type="checkbox" id="sd-sup" ${s.supervised?'checked':''} onchange="document.getElementById('sd-sup-mins-wrap').style.display=this.checked?'flex':'none'">
               Supervision provided
             </label>
-            <div id="sd-sup-mins-wrap" style="display:${s.supervised?'flex':'none'};align-items:center;gap:6px;font-size:12px">
+            <div id="sd-sup-mins-wrap" style="display:${s.supervised?'flex':'none'};align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
               <input type="number" id="sd-sup-mins" value="${s.supMinutes||''}" min="5" max="480" step="5" placeholder="min" style="width:64px;padding:3px 7px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:12px">
-              <span style="color:var(--mt)">minutes of supervision</span>
+              <span style="color:var(--mt)">min of</span>
+              <select id="sd-sup-type" style="font-size:12px;padding:3px 7px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
+                <option value="individual" ${(s.supType||'individual')==='individual'?'selected':''}>Individual (1:1)</option>
+                <option value="group" ${s.supType==='group'?'selected':''}>Group (2\u201310)</option>
+              </select>
+              <span style="color:var(--mt)">supervision</span>
             </div>
           </div>`;
         } else if(s.supervised){
           return `<div style="display:flex;align-items:center;gap:6px;background:#E3F2FD;border:1px solid #90CAF9;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:#1565C0;flex-basis:100%">
-            \u{1F535} Supervised session${s.supMinutes?' ('+s.supMinutes+' min)':''}
+            \u{1F535} Supervised session${s.supMinutes?' ('+s.supMinutes+' min '+(s.supType==='group'?'group':'1:1')+')':''}
           </div>`;
         }
         return '';
@@ -4069,13 +4074,14 @@ function updSess(id){
     s.location=newLocation;
     s._mod=Date.now();
     if(newSupervised){
-      const _was=!!s.supervised, _wasMin=s.supMinutes||null, _now=new Date().toISOString();
-      const _changed=!_was || _wasMin!==(newSupMins||null);
+      const _was=!!s.supervised, _wasMin=s.supMinutes||null, _wasType=s.supType||'individual', _now=new Date().toISOString();
+      const _newType=document.getElementById('sd-sup-type')?.value||'individual';
+      const _changed=!_was || _wasMin!==(newSupMins||null) || _wasType!==_newType;
       if(!_was) s.supRecordedAt=_now;
-      s.supervised=true; s.supMinutes=newSupMins||null;
+      s.supervised=true; s.supMinutes=newSupMins||null; s.supType=_newType;
       if(!s.supervisorStid||_changed) s.supervisorStid=viewerStid||s.supervisorStid||'';
       if(_changed){
-        s.supAudit=(s.supAudit||[]).concat({at:_now,by:viewerStid||'scheduler',action:_was?'edited':'recorded',detail:(newSupMins||0)+' min'});
+        s.supAudit=(s.supAudit||[]).concat({at:_now,by:viewerStid||'scheduler',action:_was?'edited':'recorded',detail:(newSupMins||0)+' min '+_newType});
         if(_was&&s.supAckAt){
           s.supAudit.push({at:_now,by:viewerStid||'scheduler',action:'ack-reset',detail:'edited after acknowledgment'});
           delete s.supAckAt; delete s.supAckComment;
@@ -4084,7 +4090,7 @@ function updSess(id){
     }
     else if(document.getElementById('sd-sup')){
       if(s.supervised) s.supAudit=(s.supAudit||[]).concat({at:new Date().toISOString(),by:viewerStid||'scheduler',action:'removed'});
-      delete s.supervised; delete s.supMinutes; delete s.supervisorStid; delete s.supAckAt; delete s.supAckComment;
+      delete s.supervised; delete s.supMinutes; delete s.supervisorStid; delete s.supType; delete s.supAckAt; delete s.supAckComment;
     }
     // Group flag: checkbox wins. If user explicitly checked "Group session" in
     // the modal, set true. If they unchecked it, set false (allows un-marking).
@@ -5204,12 +5210,20 @@ function supStats(stid, ym){
     s.stid===stid && (s.date||'').startsWith(ym) && s.status!=='CX' &&
     !s._autoAdmin && !s._virtual && s.cid && (s.type==='ABA'||s.type==='OT'));
   const directMin=direct.reduce((t,s)=>t+_dMins(s),0);
-  const supMin=direct.reduce((t,s)=>t+(s.supervised?(s.supMinutes||0):0),0);
+  // Supervision counts wherever it happened — client sessions, group sessions,
+  // or trainings/admin blocks the tech attended (BACB/QABA contacts aren't
+  // limited to billable sessions). The 5% denominator stays direct hours.
+  const allSup=(S.sessions||[]).filter(s=>
+    s.stid===stid && (s.date||'').startsWith(ym) && s.status!=='CX' &&
+    !s._autoAdmin && !s._virtual && s.supervised);
+  const supMin=allSup.reduce((t,s)=>t+(s.supMinutes||0),0);
+  const indMin=allSup.filter(s=>(s.supType||'individual')!=='group').reduce((t,s)=>t+(s.supMinutes||0),0);
+  const grpMin=allSup.filter(s=>s.supType==='group').reduce((t,s)=>t+(s.supMinutes||0),0);
   const pct=directMin>0?(supMin/directMin*100):0;
   const served=[...new Set(direct.map(s=>s.cid))];
   const supervisedCids=new Set(direct.filter(s=>s.supervised).map(s=>s.cid));
   const missing=served.filter(cid=>!supervisedCids.has(cid));
-  return {directMin, supMin, pct, served, missing};
+  return {directMin, supMin, indMin, grpMin, pct, served, missing};
 }
 function supStatus(st){
   if(st.directMin===0) return {clr:'#9E9E9E', bg:'#F5F5F5', lbl:'No direct hrs'};
@@ -5264,8 +5278,9 @@ function supReport(stid, ym){
   const rows=sess.map(x=>{
     const cl=gc(x.cid);
     const ack=x.supAckAt?('\u2713 '+String(x.supAckAt).slice(0,10)):'<span style="color:#E65100">Pending</span>';
+    const typ=x.supType==='group'?'Group':'Individual';
     return '<tr><td>'+x.date+'</td><td>'+(cl?cDisplayName(cl):'\u2014')+'</td><td>'+
-      (gs(x.supervisorStid)?.name||'\u2014')+'</td><td>'+x.s+'\u2013'+x.e+'</td><td style="text-align:right">'+
+      (gs(x.supervisorStid)?.name||'\u2014')+'</td><td>'+x.s+'\u2013'+x.e+'</td><td>'+typ+'</td><td style="text-align:right">'+
       (x.supMinutes||0)+' min</td><td>'+ack+'</td></tr>';
   }).join('');
   const ackComments=sess.filter(x=>x.supAckComment).map(x=>'<li><b>'+x.date+':</b> '+x.supAckComment+'</li>').join('');
@@ -5297,13 +5312,14 @@ function supReport(stid, ym){
   '</div>'+
   '<div class="stats">'+
   '<div><div class="n">'+_h1(s.directMin)+' h</div><div class="l">Direct Service</div></div>'+
-  '<div><div class="n">'+_h1(s.supMin)+' h</div><div class="l">Supervised</div></div>'+
+  '<div><div class="n">'+_h1(s.supMin)+' h</div><div class="l">Supervised ('+_h1(s.indMin)+' 1:1 / '+_h1(s.grpMin)+' grp)</div></div>'+
   '<div><div class="n" style="color:'+stat.clr+'">'+(s.directMin?s.pct.toFixed(2)+'%':'\u2014')+'</div><div class="l">Of 5% Required</div></div>'+
   '<div><div class="n"><span class="status" style="background:'+stat.bg+';color:'+stat.clr+'">'+(s.directMin===0?'\u2014':(s.pct>=5&&!s.missing.length?'Requirement Met \u2713':s.pct>=5?'Client Gap':'Below 5%'))+'</span></div><div class="l">Status</div></div>'+
   '</div>'+
   (missNames?'<div class="warn"><b>\u26A0 No supervised session this month with:</b> '+missNames+'</div>':'')+
-  '<table><thead><tr><th>Date</th><th>Client</th><th>Supervising BCBA</th><th>Session Time</th><th style="text-align:right">Observed</th><th>Acknowledged</th></tr></thead>'+
-  '<tbody>'+(rows||'<tr><td colspan="6" style="text-align:center;color:#889">No supervised sessions recorded this month</td></tr>')+'</tbody></table>'+
+  ((s.supMin>0&&s.indMin===0)?'<div class="warn"><b>\u26A0 All supervision this month was group format</b> \u2014 at least one individual (1:1) contact is required.</div>':'')+
+  '<table><thead><tr><th>Date</th><th>Client</th><th>Supervising BCBA</th><th>Session Time</th><th>Type</th><th style="text-align:right">Observed</th><th>Acknowledged</th></tr></thead>'+
+  '<tbody>'+(rows||'<tr><td colspan="7" style="text-align:center;color:#889">No supervised sessions recorded this month</td></tr>')+'</tbody></table>'+
   '<div style="margin-top:20px;padding:10px 14px;background:#F4F6FA;border-radius:8px;font-size:11px;color:#445">'+'<b>Electronic acknowledgment.</b> Each record above was entered in the adaptABILITY scheduler by the supervising BCBA and acknowledged in-app by the technician; submission and acknowledgment timestamps and all subsequent edits are retained in the record audit trail. No handwritten signatures are required.'+(ackComments?'<div style="margin-top:6px"><b>Technician comments:</b><ul style="margin:4px 0 0 16px">'+ackComments+'</ul></div>':'')+'</div>'+
   '<div class="foot">Generated '+todayBerlin()+' from the adaptABILITY scheduler \u00B7 Supervision recorded by the supervising BCBA, acknowledged electronically by the technician \u00B7 '+(st.role==='ABAT'?'5% supervision requirement per QABA ABAT certification standards':'5% supervision requirement per BACB RBT supervision standards')+'</div>'+
   '<script>window.onload=function(){setTimeout(function(){window.print();},400);};<\/script>'+
@@ -5458,10 +5474,11 @@ function rMySSup(stid){
     </div>
     <div style="display:flex;gap:22px;margin-top:10px;flex-wrap:wrap">
       <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif">${_h1(s.directMin)}h</div><div style="font-size:10px;color:var(--mt)">DIRECT</div></div>
-      <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif">${_h1(s.supMin)}h</div><div style="font-size:10px;color:var(--mt)">SUPERVISED</div></div>
+      <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif">${_h1(s.supMin)}h</div><div style="font-size:10px;color:var(--mt)">SUPERVISED ${s.supMin?`\u00B7 ${_h1(s.indMin)} 1:1 / ${_h1(s.grpMin)} grp`:''}</div></div>
       <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif;color:${stat.clr}">${s.directMin?s.pct.toFixed(1):'\u2014'}%</div><div style="font-size:10px;color:var(--mt)">OF 5% REQUIRED</div></div>
     </div>
     ${s.missing.length?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd)"><span style="font-size:11px;font-weight:700;color:#B71C1C">\u26A0 No supervision yet this month with:</span> ${missChips}</div>`:''}
+    ${(s.supMin>0&&s.indMin===0)?`<div style="margin-top:8px;font-size:11px;color:#E65100;font-weight:600">\u26A0 All supervision so far this month is group \u2014 remember at least one individual (1:1) contact is required.</div>`:''}
     ${(()=>{
       const pending=(S.sessions||[]).filter(x=>x.stid===stid&&x.supervised&&!x.supAckAt).sort((a,b)=>b.date.localeCompare(a.date));
       if(!pending.length) return '';
@@ -5470,7 +5487,7 @@ function rMySSup(stid){
         ${pending.map(x=>{
           const cl=gc(x.cid);
           return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;background:#FFF8F0;border:1px solid #FFE0B2;border-radius:8px;margin-bottom:6px;font-size:12px">
-            <div style="flex:1;min-width:180px"><strong>${x.date}</strong> \u00B7 ${cl?cDisplayName(cl):'\u2014'} \u00B7 ${gs(x.supervisorStid)?.initials||'?'} \u00B7 ${x.supMinutes||0} min</div>
+            <div style="flex:1;min-width:180px"><strong>${x.date}</strong> \u00B7 ${cl?cDisplayName(cl):'\u2014'} \u00B7 ${gs(x.supervisorStid)?.initials||'?'} \u00B7 ${x.supMinutes||0} min ${x.supType==='group'?'group':'1:1'}</div>
             <input id="ack-c-${x.id}" placeholder="Comment (optional)" style="flex:2;min-width:140px;font-size:11px;padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
             <button class="btn bp bsm" onclick="ackSup('${x.id}')">Acknowledge</button>
           </div>`;
@@ -6168,7 +6185,7 @@ function supReportAll(ym){
     const rows=sess.map(x=>{
       const cl=gc(x.cid);
       const ack=x.supAckAt?('✓ '+String(x.supAckAt).slice(0,10)):'<span style="color:#E65100">Pending</span>';
-      return '<tr><td>'+x.date+'</td><td>'+(cl?cDisplayName(cl):'—')+'</td><td>'+(gs(x.supervisorStid)?.name||'—')+'</td><td>'+x.s+'–'+x.e+'</td><td style="text-align:right">'+(x.supMinutes||0)+' min</td><td>'+ack+'</td></tr>';
+      return '<tr><td>'+x.date+'</td><td>'+(cl?cDisplayName(cl):'—')+'</td><td>'+(gs(x.supervisorStid)?.name||'—')+'</td><td>'+x.s+'–'+x.e+'</td><td>'+(x.supType==='group'?'Grp':'Ind')+'</td><td style="text-align:right">'+(x.supMinutes||0)+' min</td><td>'+ack+'</td></tr>';
     }).join('');
     const missNames=s.missing.map(cid=>{const cl=gc(cid);return cl?cDisplayName(cl):'';}).filter(Boolean).join(', ');
     return '<div class="tech">'+
@@ -6176,8 +6193,8 @@ function supReportAll(ym){
       '<div class="grid"><div><b>Technician:</b> '+t.name+' ('+t.initials+')</div><div><b>Credential:</b> '+t.role+'</div>'+
       '<div><b>Supervisor(s):</b> '+supNames+'</div><div><b>Direct:</b> '+_h1(s.directMin)+' h · <b>Supervised:</b> '+_h1(s.supMin)+' h · <b style="color:'+stat.clr+'">'+(s.directMin?s.pct.toFixed(2)+'%':'—')+'</b></div></div>'+
       (missNames?'<div class="warn">⚠ No supervised session this month with: '+missNames+'</div>':'')+
-      '<table><thead><tr><th>Date</th><th>Client</th><th>Supervising BCBA</th><th>Time</th><th style="text-align:right">Observed</th><th>Acknowledged</th></tr></thead><tbody>'+
-      (rows||'<tr><td colspan="6" style="text-align:center;color:#889">No supervised sessions this month</td></tr>')+'</tbody></table>'+
+      '<table><thead><tr><th>Date</th><th>Client</th><th>Supervising BCBA</th><th>Time</th><th>Type</th><th style="text-align:right">Observed</th><th>Acknowledged</th></tr></thead><tbody>'+
+      (rows||'<tr><td colspan="7" style="text-align:center;color:#889">No supervised sessions this month</td></tr>')+'</tbody></table>'+
       '<div style="font-size:9px;color:#889;margin-top:6px">'+(t.role==='ABAT'?'5% supervision requirement per QABA ABAT certification standards':'5% supervision requirement per BACB RBT supervision standards')+' \u00B7 acknowledged electronically in the adaptABILITY scheduler</div></div>';
   }).join('');
   const w=window.open('','_blank','width=800,height=900');
