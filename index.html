@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-05-13T22:30Z-lvemail">
+<meta name="app-version" content="2026-07-31T15:00Z-supts">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -5352,7 +5352,11 @@ const TIMESHEET_REVIEWERS = ['SW','SB'];
 function canReviewTimesheets(){ return !isViewOnly || TIMESHEET_REVIEWERS.includes(viewerStid); }
 
 function tsEntries(stid, ym){
-  const sess=(S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&!s._autoAdmin&&!s._virtual)
+  // A timesheet reflects work PERFORMED: the schedule is generated in advance,
+  // so without this cap the current month would show the whole month's planned
+  // sessions as if already worked. Future dates stay off until their day comes.
+  const _cap=todayBerlin();
+  const sess=(S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&s.date<=_cap&&!s._autoAdmin&&!s._virtual)
     .sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
   const rows=sess.map(s=>{
     const cx=s.status==='CX';
@@ -5369,7 +5373,7 @@ function tsEntries(stid, ym){
   // entered or imported PTO/Sick days live ONLY there, so reading requests
   // alone missed them. Legacy string entries default to PTO.
   const ptoEntries=((st&&st.pto)||[]).map(x=>typeof x==='string'?{date:x,type:'PTO'}:x)
-    .filter(e=>e&&(e.date||'').startsWith(ym))
+    .filter(e=>e&&(e.date||'').startsWith(ym)&&e.date<=_cap)
     .sort((a,b)=>a.date.localeCompare(b.date));
   const leaveDays=ptoEntries.length;
   const ptoDays=ptoEntries.filter(e=>e.type!=='SICK').length;
@@ -5437,7 +5441,7 @@ function rMySTimesheet(stid){
   }).join('');
   wrap.innerHTML=`<div class="mys-section-lbl">\u{1F552} My Timesheet</div>${banner}<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt)">My Timesheet \u00B7 ${monthLbl}</div>
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt)">My Timesheet \u00B7 ${monthLbl}${ym===curYm&&todayBerlin().slice(8)!==(()=>{const d=pd(curYm+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d).slice(8);})()?` \u00B7 through ${pd(todayBerlin()).toLocaleDateString('en-US',{month:'short',day:'numeric'})}`:''}</div>
       <div style="display:flex;align-items:center;gap:8px">
         ${conf?`<span style="background:#E8F5E9;color:#1B5E20;font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px">Confirmed \u2713 ${String(conf.at).slice(0,10)}</span>`:''}
         <input type="month" value="${ym}" max="${curYm}" onchange="window._mysTsYm=this.value;rMySTimesheet('${stid}')" style="font-size:11px;padding:3px 6px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
@@ -11523,6 +11527,9 @@ init();
   var meta = document.querySelector('meta[name="app-version"]');
   if(!meta) return;
   var current = meta.getAttribute('content');
+  // Footer stamp reads from the meta tag — one place to bump, impossible to drift
+  var vEl = document.getElementById('app-version');
+  if(vEl) vEl.textContent = 'v' + current;
   function check(opts){
     var manual = !!(opts && opts.manual);
     try {
@@ -11554,6 +11561,6 @@ init();
 })();
 </script>
 <!-- Version indicator — helps identify which build a user is running for troubleshooting. Click to manually check for a newer version (otherwise auto-checks every 60s). -->
-<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer">v2026-05-13T22:30Z-lvemail</div>
+<div id="app-version" title="App version — click to check for updates" onclick="if(window._manualVersionCheck) window._manualVersionCheck()" style="cursor:pointer"></div>
 </body>
 </html>
