@@ -5358,14 +5358,23 @@ function tsEntries(stid, ym){
   const _cap=todayBerlin();
   const sess=(S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&s.date<=_cap&&!s._autoAdmin&&!s._virtual)
     .sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
+  const _leaveDates=new Set((( (gs(stid)||{}).pto)||[]).map(x=>typeof x==='string'?x:(x&&x.date)).filter(Boolean));
   const rows=sess.map(s=>{
     const cx=s.status==='CX';
     const mins=cx?0:_dMins(s);
     const isDirect=!cx&&s.cid&&(s.type==='ABA'||s.type==='OT');
-    return {s, cx, mins, isDirect};
+    const onLeave=!cx&&_leaveDates.has(s.date); // non-CX session on an approved leave day = data error
+    return {s, cx, mins, isDirect, onLeave};
   });
+  const leaveConflicts=rows.filter(r=>r.onLeave).length;
   const directMin=rows.filter(r=>r.isDirect).reduce((t,r)=>t+r.mins,0);
-  const otherMin=rows.filter(r=>!r.isDirect&&!r.cx).reduce((t,r)=>t+r.mins,0);
+  // Billable indirect (INDIRECT type WITH a CPT code — same rule as the
+  // Indirect Services report: 97151/97155/97156, OT 97167/97168) must stay
+  // separate from unbillable admin time for billing/payroll purposes.
+  const _isBillInd=r=>!r.cx&&!r.isDirect&&r.s.type==='INDIRECT'&&r.s.cptCode;
+  const indirectMin=rows.filter(_isBillInd).reduce((t,r)=>t+r.mins,0);
+  const adminMin=rows.filter(r=>!r.isDirect&&!r.cx&&!_isBillInd(r)).reduce((t,r)=>t+r.mins,0);
+  const otherMin=indirectMin+adminMin;
   const st=gs(stid);
   const dayHrs=((st?.hrs)||40)/5;
   // Leave comes from st.pto[] — the operational array the schedule itself uses
@@ -5378,7 +5387,7 @@ function tsEntries(stid, ym){
   const leaveDays=ptoEntries.length;
   const ptoDays=ptoEntries.filter(e=>e.type!=='SICK').length;
   const sickDays=ptoEntries.filter(e=>e.type==='SICK').length;
-  return {rows, directMin, otherMin, leaveMin:Math.round(leaveDays*dayHrs*60), leaveDays, ptoDays, sickDays, ptoEntries, dayHrs};
+  return {rows, directMin, otherMin, indirectMin, adminMin, leaveMin:Math.round(leaveDays*dayHrs*60), leaveDays, ptoDays, sickDays, ptoEntries, dayHrs, leaveConflicts};
 }
 function tsConfirmOf(stid, ym){ return (S.tsConfirms||[]).find(x=>x.stid===stid&&x.ym===ym); }
 
@@ -5391,7 +5400,7 @@ function tsConfirm(stid, ym){
   S.tsConfirms=(S.tsConfirms||[]).concat({
     id:'tc'+uid(), stid, ym, at:new Date().toISOString(),
     comment: comment||'',
-    totals:{directMin:e.directMin, otherMin:e.otherMin, leaveMin:e.leaveMin, sessN:e.rows.filter(r=>!r.cx).length}
+    totals:{directMin:e.directMin, indirectMin:e.indirectMin, adminMin:e.adminMin, otherMin:e.otherMin, leaveMin:e.leaveMin, sessN:e.rows.filter(r=>!r.cx).length}
   });
   save(); rMyS();
   showToast('Timesheet for '+ym+' confirmed \u2713','var(--gn)');
@@ -5431,15 +5440,16 @@ function rMySTimesheet(stid){
     const cl=r.s.cid?gc(r.s.cid):null;
     const label=cl?cDisplayName(cl):sTypeLabel(r.s.type);
     const noteCell=(r.s.cid&&!r.cx&&r.s.date<=todayBerlin())?(r.s.noteWritten?'\u2713':'<span style="color:#E65100">\u2717</span>'):'';
-    return `<tr style="${r.cx?'opacity:.45;text-decoration:line-through':''}">
+    return `<tr style="${r.cx?'opacity:.45;text-decoration:line-through':(r.onLeave?'background:#FFEBEE':'')}">
       <td style="padding:3px 6px">${r.s.date.slice(5)}</td>
-      <td style="padding:3px 6px">${label}${r.cx?' <span style="font-size:9px">(CX'+(r.s.cx?' '+r.s.cx:'')+')</span>':''}</td>
+      <td style="padding:3px 6px">${label}${r.cx?' <span style="font-size:9px">(CX'+(r.s.cx?' '+r.s.cx:'')+')</span>':''}${r.onLeave?' <span style="font-size:9px;font-weight:800;color:#B71C1C">\u26A0 DURING LEAVE</span>':''}</td>
       <td style="padding:3px 6px">${r.s.cptCode||r.s.type}</td>
       <td style="padding:3px 6px;text-align:right">${r.cx?'\u2014':_h1(r.mins)+'h'}</td>
       <td style="padding:3px 6px;text-align:center">${noteCell}</td>
     </tr>`;
   }).join('');
-  wrap.innerHTML=`<div class="mys-section-lbl">\u{1F552} My Timesheet</div>${banner}<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);margin-bottom:14px">
+  const conflictBanner=e.leaveConflicts?`<div style="background:#FFEBEE;border:1px solid #EF9A9A;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:600;color:#B71C1C">\u26A0 ${e.leaveConflicts} session${e.leaveConflicts>1?'s':''} on this timesheet fall${e.leaveConflicts>1?'':'s'} on a day you were on approved leave \u2014 please note it in the comment before confirming so it can be corrected.</div>`:'';
+  wrap.innerHTML=`<div class="mys-section-lbl">\u{1F552} My Timesheet</div>${banner}${conflictBanner}<div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt)">My Timesheet \u00B7 ${monthLbl}${ym===curYm&&todayBerlin().slice(8)!==(()=>{const d=pd(curYm+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d).slice(8);})()?` \u00B7 through ${pd(todayBerlin()).toLocaleDateString('en-US',{month:'short',day:'numeric'})}`:''}</div>
       <div style="display:flex;align-items:center;gap:8px">
@@ -5449,7 +5459,8 @@ function rMySTimesheet(stid){
     </div>
     <div style="display:flex;gap:22px;margin-top:10px;flex-wrap:wrap">
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.directMin)}h</div><div style="font-size:10px;color:var(--mt)">DIRECT</div></div>
-      <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.otherMin)}h</div><div style="font-size:10px;color:var(--mt)">INDIRECT / ADMIN</div></div>
+      <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.indirectMin)}h</div><div style="font-size:10px;color:var(--mt)">INDIRECT (BILLABLE)</div></div>
+      <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.adminMin)}h</div><div style="font-size:10px;color:var(--mt)">ADMIN</div></div>
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${e.leaveDays}d</div><div style="font-size:10px;color:var(--mt)">LEAVE${e.leaveDays?` \u00B7 ${e.ptoDays}\u{1F3D6} ${e.sickDays}\u{1F912}`:''} (\u2248${_h1(e.leaveMin)}h)</div></div>
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.directMin+e.otherMin+e.leaveMin)}h</div><div style="font-size:10px;color:var(--mt)">TOTAL</div></div>
     </div>
@@ -6204,13 +6215,14 @@ function rptTimesheets(){
       <td style="padding:6px 8px;font-weight:600">${t.initials} – ${t.name}</td>
       <td style="padding:6px 8px">${t.role}</td>
       <td style="padding:6px 8px;text-align:right">${_h1(e.directMin)}h</td>
-      <td style="padding:6px 8px;text-align:right">${_h1(e.otherMin)}h</td>
+      <td style="padding:6px 8px;text-align:right">${_h1(e.indirectMin)}h</td>
+      <td style="padding:6px 8px;text-align:right">${_h1(e.adminMin)}h</td>
       <td style="padding:6px 8px;text-align:right">${e.leaveDays}d</td>
       <td style="padding:6px 8px;text-align:right;font-weight:700">${_h1(e.directMin+e.otherMin+e.leaveMin)}h</td>
       <td style="padding:6px 8px">${conf
         ?`<span style="background:#E8F5E9;color:#1B5E20;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap">\u2713 ${String(conf.at).slice(0,10)}</span>`
         :(hasData?'<span style="background:#FFF3E0;color:#E65100;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px">Not confirmed</span>':'<span style="color:var(--mt);font-size:10px">\u2014</span>')}</td>
-      <td style="padding:6px 8px;font-size:11px;color:#B71C1C">${conf&&conf.comment?('\u{1F4AC} '+conf.comment):''}</td>
+      <td style="padding:6px 8px;font-size:11px;color:#B71C1C">${e.leaveConflicts?`\u26A0 ${e.leaveConflicts} session${e.leaveConflicts>1?'s':''} during leave `:''}${conf&&conf.comment?('\u{1F4AC} '+conf.comment):''}</td>
     </tr>`;
   }).join('');
   const confirmedN=staff.filter(t=>tsConfirmOf(t.id,ym)).length;
@@ -6222,7 +6234,7 @@ function rptTimesheets(){
     <div style="font-size:11px;color:var(--mt);margin-bottom:10px">Hours computed live from the schedule \u00B7 confirmation snapshots stored with timestamps \u00B7 \u{1F4AC} = discrepancy comment from the employee</div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
-        <th style="padding:5px 8px">Employee</th><th style="padding:5px 8px">Role</th><th style="padding:5px 8px;text-align:right">Direct</th><th style="padding:5px 8px;text-align:right">Indirect</th><th style="padding:5px 8px;text-align:right">Leave</th><th style="padding:5px 8px;text-align:right">Total</th><th style="padding:5px 8px">Confirmed</th><th style="padding:5px 8px">Comment</th>
+        <th style="padding:5px 8px">Employee</th><th style="padding:5px 8px">Role</th><th style="padding:5px 8px;text-align:right">Direct</th><th style="padding:5px 8px;text-align:right">Indirect</th><th style="padding:5px 8px;text-align:right">Admin</th><th style="padding:5px 8px;text-align:right">Leave</th><th style="padding:5px 8px;text-align:right">Total</th><th style="padding:5px 8px">Confirmed</th><th style="padding:5px 8px">Comment</th>
       </tr></thead><tbody>${rows}</tbody>
     </table></div>`;
 }
