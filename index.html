@@ -1505,7 +1505,8 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
         <div id="storage-diag" style="font-size:12px"></div>
         <div class="sep"></div>
         <button class="btn bsm" onclick="storageCleanup()">&#129529; Clean Up Old Data</button>
-        <p style="font-size:10px;color:var(--mt);margin-top:6px">Removes: leave requests fully ended &gt;60 days ago &middot; schedule requests &gt;60 days old &middot; expired schedule notes &middot; past auto-admin placeholder blocks. Real session history is never touched.</p>
+        <button class="btn bsm" onclick="restoreLeaveFromBackup()" title="Re-import leave requests from the pre-split migration backup">&#9851; Restore Leave History</button>
+        <p style="font-size:10px;color:var(--mt);margin-top:6px">Clean Up removes: leave requests from previous years &middot; schedule requests &gt;60 days old &middot; expired schedule notes &middot; past auto-admin placeholder blocks. Current-year leave and real session history are never touched.</p>
       </div>
     </div>
   </div>
@@ -3616,6 +3617,26 @@ function addTZ(){
 }
 function rmTZ(i){if(!confirm('Remove this zone? Any clients assigned to it will need updating.'))return;S.cfg.travelZones.splice(i,1);save();rSettings();}
 function updTZMins(i,v){if(!v||v<1)return;S.cfg.travelZones[i].mins=v;save();}
+// One-time recovery: re-import leave requests from the frozen pre-split backup
+// doc (scheduler/data). Merges by id — nothing existing is overwritten.
+async function restoreLeaveFromBackup(){
+  if(!db){ alert('Not connected to Firestore.'); return; }
+  try{
+    const doc=await db.collection('scheduler').doc('data').get();
+    if(!doc.exists||!doc.data().payload){ alert('No migration backup found.'); return; }
+    const L=JSON.parse(doc.data().payload);
+    const backup=L.leaveRequests||[];
+    if(!backup.length){ alert('The backup contains no leave requests.'); return; }
+    const have=new Set((S.leaveRequests||[]).map(r=>r.id));
+    const missing=backup.filter(r=>r&&r.id&&!have.has(r.id));
+    if(!missing.length){ alert('Nothing to restore — all '+backup.length+' backed-up leave requests are already present.'); return; }
+    if(!confirm('Restore '+missing.length+' archived leave request(s) from the migration backup?\n\nExisting requests are untouched; only missing ones are re-added. YTD balances will recalculate immediately.')) return;
+    S.leaveRequests=(S.leaveRequests||[]).concat(missing);
+    save(); renderAll();
+    alert(missing.length+' leave request(s) restored \u2713\n\nCheck a few staff PTO balances to confirm the year now adds up.');
+  }catch(e){ alert('Restore failed: '+e.message); }
+}
+
 // Prune stale data that accumulates forever. Never touches real session history.
 function storageCleanup(){
   const today=todayBerlin();
@@ -3626,9 +3647,13 @@ function storageCleanup(){
     notes:(S.schedNotes||[]).length,
     auto:(S.sessions||[]).filter(s=>s._autoAdmin).length
   };
+  // Leave requests feed the YTD PTO/sick balances all year — NEVER prune the
+  // current year. Only requests that ended before Jan 1 of this year go.
+  // (A 60-day rule here once wiped Jan–May balances mid-year. Lesson learned.)
+  const yearStart=todayBerlin().slice(0,4)+'-01-01';
   S.leaveRequests=(S.leaveRequests||[]).filter(lr=>{
-    const days=lr.days||[]; const last=days.length?days[days.length-1]:'';
-    return !last || last>=cutoff; // keep anything recent or malformed
+    const days=lr.days||[]; const last=days.length?days[days.length-1]:(lr.to||lr.from||'');
+    return !last || last>=yearStart; // keep current year + malformed
   });
   S.schedRequests=(S.schedRequests||[]).filter(r=>!r.createdAt||String(r.createdAt).slice(0,10)>=cutoff);
   S.schedNotes=(S.schedNotes||[]).filter(n=>!n.expires||n.expires>=today);
@@ -5203,15 +5228,18 @@ function initMyS(){
 // Computed live from session data — supervision lives on sessions
 // (supervised/supMinutes/supervisorStid), so there is nothing extra to enter.
 function supStats(stid, ym){
+  // Cap at today: the schedule exists in advance, so without this the current
+  // month counts future sessions as "served" and flags phantom client gaps.
+  const _cap=todayBerlin();
   const direct=(S.sessions||[]).filter(s=>
-    s.stid===stid && (s.date||'').startsWith(ym) && s.status!=='CX' &&
+    s.stid===stid && (s.date||'').startsWith(ym) && s.date<=_cap && s.status!=='CX' &&
     !s._autoAdmin && !s._virtual && s.cid && (s.type==='ABA'||s.type==='OT'));
   const directMin=direct.reduce((t,s)=>t+_dMins(s),0);
   // Supervision counts wherever it happened — client sessions, group sessions,
   // or trainings/admin blocks the tech attended (BACB/QABA contacts aren't
   // limited to billable sessions). The 5% denominator stays direct hours.
   const allSup=(S.sessions||[]).filter(s=>
-    s.stid===stid && (s.date||'').startsWith(ym) && s.status!=='CX' &&
+    s.stid===stid && (s.date||'').startsWith(ym) && s.date<=_cap && s.status!=='CX' &&
     !s._autoAdmin && !s._virtual && s.supervised);
   const supMin=allSup.reduce((t,s)=>t+(s.supMinutes||0),0);
   const indMin=allSup.filter(s=>(s.supType||'individual')!=='group').reduce((t,s)=>t+(s.supMinutes||0),0);
