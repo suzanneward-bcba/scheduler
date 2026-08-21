@@ -233,6 +233,8 @@ input[type="color"]{border:none;padding:0;cursor:pointer;border-radius:4px;heigh
 .tpl-slot-hdr{display:grid;grid-template-columns:70px 200px 1fr 1fr 92px 20px;gap:7px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt);margin-bottom:5px}
 .tpl-rm{background:none;border:none;cursor:pointer;color:var(--rd);font-size:16px;line-height:1;padding:0;font-weight:700}
 .tpl-rm:hover{color:#8B0000}
+.supcl-chip{opacity:.55;border:1.5px solid transparent}
+.supcl-chip.on{opacity:1;border-color:#1565C0;background:#E3F2FD!important;color:#1565C0!important;font-weight:700}
 .gen-btn{background:linear-gradient(135deg,#3949AB,#5C6BC0);color:#fff;border:none;padding:8px 16px;border-radius:7px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;font-weight:700;width:100%;margin-top:10px;transition:opacity .15s;display:flex;align-items:center;justify-content:center;gap:6px}
 .gen-btn:hover{opacity:.88}
 .gen-preview{background:#E8EAF6;border-radius:6px;padding:8px 11px;font-size:11px;color:#283593;margin-top:8px;display:none}
@@ -4032,7 +4034,7 @@ function openSess(id){
         if(viewerIsBCBA){
           return `<div style="display:flex;align-items:center;gap:12px;flex-basis:100%;flex-wrap:wrap;margin-top:2px">
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-              <input type="checkbox" id="sd-sup" ${s.supervised?'checked':''} onchange="document.getElementById('sd-sup-mins-wrap').style.display=this.checked?'flex':'none'">
+              <input type="checkbox" id="sd-sup" ${s.supervised?'checked':''} onchange="document.getElementById('sd-sup-mins-wrap').style.display=this.checked?'flex':'none';document.getElementById('sd-sup-clients-wrap').style.display=this.checked?'block':'none'">
               Supervision provided
             </label>
             <div id="sd-sup-mins-wrap" style="display:${s.supervised?'flex':'none'};align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
@@ -4043,6 +4045,23 @@ function openSess(id){
                 <option value="group" ${s.supType==='group'?'selected':''}>Group (2\u201310)</option>
               </select>
               <span style="color:var(--mt)">supervision</span>
+            </div>
+            <div id="sd-sup-clients-wrap" style="display:${s.supervised?'block':'none'};margin-top:6px">
+              <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Clients discussed <span style="font-weight:400;text-transform:none">— counts toward supervision contact for each selected client</span></div>
+              <div style="display:flex;flex-wrap:wrap;gap:4px">
+                ${(()=>{
+                  const techId=s.stid;
+                  const ym=(s.date||todayBerlin()).slice(0,7);
+                  const cids=new Set();
+                  (S.sessions||[]).forEach(x=>{ if(x.stid===techId&&(x.date||'').startsWith(ym)&&x.cid&&!x._autoAdmin) cids.add(x.cid); });
+                  (S.clients||[]).forEach(cl=>{ if(cl.status!=='discharged'&&(cl.team||[]).includes(techId)) cids.add(cl.id); });
+                  if(s.cid) cids.delete(s.cid); // the session's own client counts automatically
+                  const sel=new Set(s.supClients||[]);
+                  return [...cids].map(cid=>{const cl=gc(cid);if(!cl)return '';
+                    return `<span class="flg supcl-chip ${sel.has(cid)?'on':''}" data-cid="${cid}" onclick="this.classList.toggle('on')" style="cursor:pointer;user-select:none">${cDisplayName(cl)}</span>`;
+                  }).join('')||'<span style="font-size:10px;color:var(--mt)">No other clients found for this therapist</span>';
+                })()}
+              </div>
             </div>
           </div>`;
         } else if(s.supervised){
@@ -4100,9 +4119,12 @@ function updSess(id){
     if(newSupervised){
       const _was=!!s.supervised, _wasMin=s.supMinutes||null, _wasType=s.supType||'individual', _now=new Date().toISOString();
       const _newType=document.getElementById('sd-sup-type')?.value||'individual';
-      const _changed=!_was || _wasMin!==(newSupMins||null) || _wasType!==_newType;
+      const _newCls=[...document.querySelectorAll('#sd-sup-clients-wrap .supcl-chip.on')].map(el=>el.dataset.cid).sort();
+      const _wasCls=(s.supClients||[]).slice().sort();
+      const _changed=!_was || _wasMin!==(newSupMins||null) || _wasType!==_newType || JSON.stringify(_newCls)!==JSON.stringify(_wasCls);
       if(!_was) s.supRecordedAt=_now;
       s.supervised=true; s.supMinutes=newSupMins||null; s.supType=_newType;
+      if(_newCls.length) s.supClients=_newCls; else delete s.supClients;
       if(!s.supervisorStid||_changed) s.supervisorStid=viewerStid||s.supervisorStid||'';
       if(_changed){
         s.supAudit=(s.supAudit||[]).concat({at:_now,by:viewerStid||'scheduler',action:_was?'edited':'recorded',detail:(newSupMins||0)+' min '+_newType});
@@ -4114,7 +4136,7 @@ function updSess(id){
     }
     else if(document.getElementById('sd-sup')){
       if(s.supervised) s.supAudit=(s.supAudit||[]).concat({at:new Date().toISOString(),by:viewerStid||'scheduler',action:'removed'});
-      delete s.supervised; delete s.supMinutes; delete s.supervisorStid; delete s.supType; delete s.supAckAt; delete s.supAckComment;
+      delete s.supervised; delete s.supMinutes; delete s.supervisorStid; delete s.supType; delete s.supClients; delete s.supAckAt; delete s.supAckComment;
     }
     // Group flag: checkbox wins. If user explicitly checked "Group session" in
     // the modal, set true. If they unchecked it, set false (allows un-marking).
@@ -5249,6 +5271,8 @@ function supStats(stid, ym){
   const pct=directMin>0?(supMin/directMin*100):0;
   const served=[...new Set(direct.map(s=>s.cid))];
   const supervisedCids=new Set(direct.filter(s=>s.supervised).map(s=>s.cid));
+  // Clients discussed during group/indirect supervision count as contact too
+  allSup.forEach(s=>{ (s.supClients||[]).forEach(cid=>supervisedCids.add(cid)); });
   const missing=served.filter(cid=>!supervisedCids.has(cid));
   return {directMin, supMin, indMin, grpMin, pct, served, missing};
 }
@@ -5326,7 +5350,9 @@ function supReport(stid, ym){
     const cl=gc(x.cid);
     const ack=x.supAckAt?('\u2713 '+String(x.supAckAt).slice(0,10)):'<span style="color:#E65100">Pending</span>';
     const typ=x.supType==='group'?'Group':'Individual';
-    return '<tr><td>'+x.date+'</td><td>'+(cl?cDisplayName(cl):'\u2014')+'</td><td>'+
+    const discussed=(x.supClients||[]).map(id=>{const dc=gc(id);return dc?cDisplayName(dc):'';}).filter(Boolean).join(', ');
+    const clCell=(cl?cDisplayName(cl):'')+(discussed?((cl?' + ':'')+'discussed: '+discussed):'')||'\u2014';
+    return '<tr><td>'+x.date+'</td><td>'+clCell+'</td><td>'+
       (gs(x.supervisorStid)?.name||'\u2014')+'</td><td>'+x.s+'\u2013'+x.e+'</td><td>'+typ+'</td><td style="text-align:right">'+
       (x.supMinutes||0)+' min</td><td>'+ack+'</td></tr>';
   }).join('');
@@ -5602,7 +5628,7 @@ function rMySSup(stid){
         ${pending.map(x=>{
           const cl=gc(x.cid);
           return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 10px;background:#FFF8F0;border:1px solid #FFE0B2;border-radius:8px;margin-bottom:6px;font-size:12px">
-            <div style="flex:1;min-width:180px"><strong>${x.date}</strong> \u00B7 ${cl?cDisplayName(cl):'\u2014'} \u00B7 ${gs(x.supervisorStid)?.initials||'?'} \u00B7 ${x.supMinutes||0} min ${x.supType==='group'?'group':'1:1'}</div>
+            <div style="flex:1;min-width:180px"><strong>${x.date}</strong> \u00B7 ${cl?cDisplayName(cl):((x.supClients||[]).length?('re: '+(x.supClients||[]).map(id=>{const dc=gc(id);return dc?cDisplayName(dc):'';}).filter(Boolean).join(', ')):'\u2014')} \u00B7 ${gs(x.supervisorStid)?.initials||'?'} \u00B7 ${x.supMinutes||0} min ${x.supType==='group'?'group':'1:1'}</div>
             <input id="ack-c-${x.id}" placeholder="Comment (optional)" style="flex:2;min-width:140px;font-size:11px;padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
             <button class="btn bp bsm" onclick="ackSup('${x.id}')">Acknowledge</button>
           </div>`;
@@ -6324,7 +6350,8 @@ function supReportAll(ym){
     const rows=sess.map(x=>{
       const cl=gc(x.cid);
       const ack=x.supAckAt?('✓ '+String(x.supAckAt).slice(0,10)):'<span style="color:#E65100">Pending</span>';
-      return '<tr><td>'+x.date+'</td><td>'+(cl?cDisplayName(cl):'—')+'</td><td>'+(gs(x.supervisorStid)?.name||'—')+'</td><td>'+x.s+'–'+x.e+'</td><td>'+(x.supType==='group'?'Grp':'Ind')+'</td><td style="text-align:right">'+(x.supMinutes||0)+' min</td><td>'+ack+'</td></tr>';
+      const _disc=(x.supClients||[]).map(id=>{const dc=gc(id);return dc?cDisplayName(dc):'';}).filter(Boolean).join(', ');
+      return '<tr><td>'+x.date+'</td><td>'+(((cl?cDisplayName(cl):'')+(_disc?((cl?' + ':'')+'disc: '+_disc):''))||'—')+'</td><td>'+(gs(x.supervisorStid)?.name||'—')+'</td><td>'+x.s+'–'+x.e+'</td><td>'+(x.supType==='group'?'Grp':'Ind')+'</td><td style="text-align:right">'+(x.supMinutes||0)+' min</td><td>'+ack+'</td></tr>';
     }).join('');
     const missNames=s.missing.map(cid=>{const cl=gc(cid);return cl?cDisplayName(cl):'';}).filter(Boolean).join(', ');
     return '<div class="tech">'+
