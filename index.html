@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-07-31T15:00Z-supts">
+<meta name="app-version" content="2026-08-22T15:30Z-holpol">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -11658,9 +11658,16 @@ init();
   var meta = document.querySelector('meta[name="app-version"]');
   if(!meta) return;
   var current = meta.getAttribute('content');
-  // Footer stamp reads from the meta tag — one place to bump, impossible to drift
-  var vEl = document.getElementById('app-version');
-  if(vEl) vEl.textContent = 'v' + current;
+  // Footer stamp reads from the meta tag — one place to bump, impossible to
+  // drift. The div sits AFTER this script in the file, so it doesn't exist yet
+  // at execution time — write now (no-op) AND once the DOM is ready.
+  function stampVersion(){
+    var vEl = document.getElementById('app-version');
+    if(vEl) vEl.textContent = 'v' + current;
+  }
+  stampVersion();
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', stampVersion);
+  else stampVersion();
   function check(opts){
     var manual = !!(opts && opts.manual);
     try {
