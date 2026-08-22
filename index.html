@@ -5455,10 +5455,22 @@ function tsEntries(stid, ym){
   const ptoEntries=((st&&st.pto)||[]).map(x=>typeof x==='string'?{date:x,type:'PTO'}:x)
     .filter(e=>e&&(e.date||'').startsWith(ym)&&e.date<=_cap)
     .sort((a,b)=>a.date.localeCompare(b.date));
+  // Clinic holidays (Settings list): a paid HOL day for anyone who works that
+  // weekday, at scaled hours (weekly hrs / 5 — 20h/wk contract = 4h). Skipped
+  // when a PTO/Sick entry already covers the date.
+  const _ptoDates=new Set(ptoEntries.map(e=>e.date));
+  (S.holidays||[]).forEach(h=>{
+    if(!h||!h.date||!(h.date||'').startsWith(ym)||h.date>_cap) return;
+    if(_ptoDates.has(h.date)) return;
+    if(!isStaffWorkday(st,h.date)) return;
+    ptoEntries.push({date:h.date,type:'HOL',name:h.name||''});
+  });
+  ptoEntries.sort((a,b)=>a.date.localeCompare(b.date));
   const leaveDays=ptoEntries.length;
-  const ptoDays=ptoEntries.filter(e=>e.type!=='SICK').length;
+  const ptoDays=ptoEntries.filter(e=>e.type!=='SICK'&&e.type!=='HOL').length;
   const sickDays=ptoEntries.filter(e=>e.type==='SICK').length;
-  return {rows, directMin, otherMin, indirectMin, adminMin, leaveMin:Math.round(leaveDays*dayHrs*60), leaveDays, ptoDays, sickDays, ptoEntries, dayHrs, leaveConflicts};
+  const holDays=ptoEntries.filter(e=>e.type==='HOL').length;
+  return {rows, directMin, otherMin, indirectMin, adminMin, leaveMin:Math.round(leaveDays*dayHrs*60), leaveDays, ptoDays, sickDays, holDays, ptoEntries, dayHrs, leaveConflicts};
 }
 function tsConfirmOf(stid, ym){ return (S.tsConfirms||[]).find(x=>x.stid===stid&&x.ym===ym); }
 
@@ -5511,10 +5523,10 @@ function rMySTimesheet(stid){
     if(!tsConfirmOf(stid,m)) dueMonths.push(m);
   });
   const banner=dueMonths.length?`<div style="background:#FFF3E0;border:1px solid #FFB74D;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:600;color:#E65100">\u23F0 Please review and confirm your timesheet for: ${dueMonths.map(m=>pd(m+'-01').toLocaleDateString('en-US',{month:'short',year:'numeric'})).join(', ')}</div>`:'';
-  const leaveRows=e.ptoEntries.map(p=>`<tr style="background:${p.type==='SICK'?'#FFF5F5':'#FFFDF2'}">
+  const leaveRows=e.ptoEntries.map(p=>`<tr style="background:${p.type==='SICK'?'#FFF5F5':p.type==='HOL'?'#F0F7FF':'#FFFDF2'}">
       <td style="padding:3px 6px">${p.date.slice(5)}</td>
-      <td style="padding:3px 6px">${p.type==='SICK'?'\u{1F912} Sick leave':'\u{1F3D6} PTO / Vacation'}</td>
-      <td style="padding:3px 6px">${p.type==='SICK'?'SICK':'PTO'}</td>
+      <td style="padding:3px 6px">${p.type==='SICK'?'\u{1F912} Sick leave':p.type==='HOL'?('\u{1F387} Holiday'+(p.name?' \u00B7 '+p.name:'')):'\u{1F3D6} PTO / Vacation'}</td>
+      <td style="padding:3px 6px">${p.type==='SICK'?'SICK':p.type==='HOL'?'HOL':'PTO'}</td>
       <td style="padding:3px 6px;text-align:right">${_h1(e.dayHrs*60)}h</td>
       <td style="padding:3px 6px;text-align:center"></td>
     </tr>`).join('');
@@ -5543,7 +5555,7 @@ function rMySTimesheet(stid){
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.directMin)}h</div><div style="font-size:10px;color:var(--mt)">DIRECT</div></div>
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.indirectMin)}h</div><div style="font-size:10px;color:var(--mt)">INDIRECT (BILLABLE)</div></div>
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.adminMin)}h</div><div style="font-size:10px;color:var(--mt)">ADMIN</div></div>
-      <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${e.leaveDays}d</div><div style="font-size:10px;color:var(--mt)">LEAVE${e.leaveDays?` \u00B7 ${e.ptoDays}\u{1F3D6} ${e.sickDays}\u{1F912}`:''} (\u2248${_h1(e.leaveMin)}h)</div></div>
+      <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${e.leaveDays}d</div><div style="font-size:10px;color:var(--mt)">LEAVE${e.leaveDays?` \u00B7 ${e.ptoDays}\u{1F3D6} ${e.sickDays}\u{1F912}${e.holDays?` ${e.holDays}\u{1F387}`:''}`:''} (\u2248${_h1(e.leaveMin)}h)</div></div>
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.directMin+e.otherMin+e.leaveMin)}h</div><div style="font-size:10px;color:var(--mt)">TOTAL</div></div>
     </div>
     <details style="margin-top:10px"><summary style="font-size:11px;font-weight:700;color:var(--pu);cursor:pointer">Show ${e.rows.length+e.leaveDays} entries</summary>
@@ -9802,7 +9814,7 @@ function addPtoDate(stid){
   if(!dates.length){alert('No dates to add (check weekday filter).');return;}
   let added=0;
   dates.forEach(dt=>{
-    if(!ptoOnDate(st,dt)){
+    if(!ptoOnDate(st,dt)&&!isHol(dt)){
       st.pto.push({date:dt,type});
       added++;
     }
@@ -10733,11 +10745,12 @@ function updateLrPreview(){
   // Count weekdays — for half-day this is always 1
   let count=0;
   if(halfActive){
+    if(isHol(from)){ alert('That\u2019s a clinic holiday ('+(isHol(from).name||'')+') \u2014 you\u2019re paid for it automatically, no time off needed.'); return; }
     // Half-day: From should equal To, count is 1
     count = (pd(from).getDay()>=1 && pd(from).getDay()<=5) ? 1 : 0;
   } else {
     const cur=pd(from);const end=pd(to||from);
-    while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5)count++;cur.setDate(cur.getDate()+1);}
+    while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5&&!isHol(fd(new Date(cur))))count++;cur.setDate(cur.getDate()+1);}
   }
   // Build the preview text. For half-day: show hours requested.
   // For flex: show "X hours flexed (AM/PM)" — same shape as half-day.
@@ -10850,9 +10863,24 @@ async function submitLeaveRequest(){
   if(to<from){alert('End date must be on or after start date.');return;}
 
   // Generate weekday dates
-  const days=[];
+  const days=[];const _holSkipped=[];
   const cur=pd(from);const end=pd(to);
-  while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5)days.push(fd(new Date(cur)));cur.setDate(cur.getDate()+1);}
+  while(cur<=end){
+    if(cur.getDay()>=1&&cur.getDay()<=5){
+      const ds=fd(new Date(cur));
+      const h=isHol(ds);
+      if(h) _holSkipped.push((h.name||'Holiday')+' ('+ds+')');
+      else days.push(ds);
+    }
+    cur.setDate(cur.getDate()+1);
+  }
+  if(_holSkipped.length && !days.length){
+    alert('No time off needed \u2014 '+_holSkipped.join(' and ')+' '+(_holSkipped.length>1?'are clinic holidays':'is a clinic holiday')+'. You\u2019re paid for '+(_holSkipped.length>1?'these days':'this day')+' automatically.');
+    return;
+  }
+  if(_holSkipped.length){
+    if(!confirm('Heads up: '+_holSkipped.join(', ')+' \u2014 clinic holiday'+(_holSkipped.length>1?'s':'')+', already paid, excluded from this request.\n\nSubmit the remaining '+days.length+' day(s)?')) return;
+  }
 
   const st=gs(mySchedStid);
   // Check half-day mode + validate
@@ -11048,6 +11076,7 @@ async function submitManualLeaveEntry(){
   const days=[];
   const cur=pd(from);const end=pd(to);
   while(cur<=end){
+    if(isHol(fd(new Date(cur)))){cur.setDate(cur.getDate()+1);continue;} // clinic holidays are paid automatically — never leave
     const dow=cur.getDay();
     if(!wkOnly || (dow>=1 && dow<=5)) days.push(fd(new Date(cur)));
     cur.setDate(cur.getDate()+1);
@@ -11080,7 +11109,7 @@ async function submitManualLeaveEntry(){
     migratePto(st);
     migratePtoToHours(st);
     days.forEach(dt=>{
-      if(!ptoOnDate(st,dt)){
+      if(!ptoOnDate(st,dt)&&!isHol(dt)){
         st.pto.push({date:dt, type:type==='SICK'?'SICK':'PTO', hours: isStaffWorkday(st,dt) ? hpd : 0});
       }
     });
@@ -11172,7 +11201,7 @@ async function approveLeaveRequest(id){
       }
     } else {
       r.days.forEach(dt=>{
-        if(!ptoOnDate(st,dt)){
+        if(!ptoOnDate(st,dt)&&!isHol(dt)){
           st.pto.push({date:dt, type:r.type==='SICK'?'SICK':'PTO', hours: isStaffWorkday(st,dt) ? hpd : 0});
         }
       });
@@ -11326,7 +11355,7 @@ function saveEditLeaveReq(id){
   // Regenerate days
   const days=[];
   const cur=pd(newFrom);const end=pd(newTo);
-  while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5)days.push(fd(new Date(cur)));cur.setDate(cur.getDate()+1);}
+  while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5&&!isHol(fd(new Date(cur))))days.push(fd(new Date(cur)));cur.setDate(cur.getDate()+1);}
 
   r.from=newFrom;r.to=newTo;r.type=newType;r.status=newStatus;r.notes=newNotes;r.days=days;
 
@@ -11334,7 +11363,7 @@ function saveEditLeaveReq(id){
   const targetSt=newSt||st;
   if(newStatus==='approved'&&targetSt){
     migratePto(targetSt);
-    days.forEach(dt=>{if(!ptoOnDate(targetSt,dt))targetSt.pto.push({date:dt,type:newType==='SICK'?'SICK':'PTO'});});
+    days.forEach(dt=>{if(!ptoOnDate(targetSt,dt)&&!isHol(dt))targetSt.pto.push({date:dt,type:newType==='SICK'?'SICK':'PTO'});});
     targetSt.pto.sort((a,b)=>a.date.localeCompare(b.date));
   }
 
@@ -11409,7 +11438,7 @@ function importLeaveCSV(input){
       const days=[];
       try{
         const cur=pd(fromDate);const end=pd(toDate);
-        while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5)days.push(fd(new Date(cur)));cur.setDate(cur.getDate()+1);}
+        while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5&&!isHol(fd(new Date(cur))))days.push(fd(new Date(cur)));cur.setDate(cur.getDate()+1);}
       }catch(e){return;}
 
       // Skip duplicates — same staff + from date
