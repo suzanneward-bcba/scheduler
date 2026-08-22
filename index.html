@@ -1510,6 +1510,11 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
         <div class="sep"></div>
         <button class="btn bsm" onclick="storageCleanup()">&#129529; Clean Up Old Data</button>
         <button class="btn bsm" onclick="restoreLeaveFromBackup()" title="Re-import leave requests from the pre-split migration backup">&#9851; Restore Leave History</button>
+        <div class="sep"></div>
+        <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Confirm-triggered sync webhook <span style="font-weight:400;text-transform:none">— optional; see sync script for set-up</span></div>
+        <input id="cfg-sync-hook" placeholder="Apps Script web app URL" value="" style="width:100%;font-size:11px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:monospace;margin-bottom:4px">
+        <input id="cfg-sync-token" placeholder="Shared token (must match SYNC_HOOK_TOKEN)" value="" style="width:100%;font-size:11px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:monospace;margin-bottom:4px">
+        <button class="btn bsm" onclick="S.cfg.syncWebhookUrl=document.getElementById('cfg-sync-hook').value.trim();S.cfg.syncWebhookToken=document.getElementById('cfg-sync-token').value.trim();save();showToast('Sync webhook saved \u2713','var(--gn)')">Save Webhook</button>
         <p style="font-size:10px;color:var(--mt);margin-top:6px">Clean Up removes: leave requests from previous years &middot; schedule requests &gt;60 days old &middot; expired schedule notes &middot; past auto-admin placeholder blocks. Current-year leave and real session history are never touched.</p>
       </div>
     </div>
@@ -3520,6 +3525,8 @@ function rSettings(){
 
 
   document.getElementById('cxlist').innerHTML=S.cfg.cxCodes.map((c,i)=>`<div class="cdi"><div><div class="cda">${c.code}</div><div class="cdd">${c.label}</div></div><button class="btn bxs bd" onclick="rmCX(${i})">Remove</button></div>`).join('');
+  const _hk=document.getElementById('cfg-sync-hook'); if(_hk) _hk.value=(S.cfg&&S.cfg.syncWebhookUrl)||'';
+  const _tk=document.getElementById('cfg-sync-token'); if(_tk) _tk.value=(S.cfg&&S.cfg.syncWebhookToken)||'';
   const sdEl=document.getElementById('storage-diag');
   if(sdEl){
     try{
@@ -5460,6 +5467,15 @@ function tsConfirm(stid, ym){
   });
   save(); rMyS();
   showToast('Timesheet for '+ym+' confirmed \u2713','var(--gn)');
+  // Fire the confirm-triggered sync webhook (if configured). Fire-and-forget:
+  // the daily Apps Script run remains the safety net, both are idempotent.
+  try{
+    const url=(S.cfg&&S.cfg.syncWebhookUrl)||'';
+    if(url){
+      fetch(url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
+        body:JSON.stringify({token:(S.cfg.syncWebhookToken||''),stid,ym})});
+    }
+  }catch(e){}
 }
 
 // "My Timesheet" card — every payroll role reviews & confirms monthly
