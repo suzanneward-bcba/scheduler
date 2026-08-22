@@ -5412,6 +5412,14 @@ function supReport(stid, ym){
 // What gets STORED is only the confirmation snapshot (S.tsConfirms in meta):
 // {id, stid, ym, at, comment, totals} — reviewed by SW/SB only.
 const TIMESHEET_REVIEWERS = ['SW','SB'];
+function tsUnconfirm(confId){
+  if(!canReviewTimesheets()) return;
+  const conf=(S.tsConfirms||[]).find(x=>x.id===confId); if(!conf) return;
+  const who=gs(conf.stid)?.name||conf.stid;
+  if(!confirm('Remove '+who+'\u2019s confirmation for '+conf.ym+'?\n\nThey will see the review banner again and must re-confirm. Rows already synced to their sheet stay (duplicates are skipped on re-sync).')) return;
+  S.tsConfirms=(S.tsConfirms||[]).filter(x=>x.id!==confId);
+  save(); rptTimesheets();
+}
 function canReviewTimesheets(){ return !isViewOnly || TIMESHEET_REVIEWERS.includes(viewerStid); }
 
 function tsEntries(stid, ym){
@@ -5456,6 +5464,8 @@ function tsConfirmOf(stid, ym){ return (S.tsConfirms||[]).find(x=>x.stid===stid&
 
 function tsConfirm(stid, ym){
   if(isViewOnly && viewerStid!==stid){ alert('Only '+(gs(stid)?.name||'the employee')+' can confirm their own timesheet.'); return; }
+  const _ld=(()=>{const d=pd(ym+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
+  if(!(ym<todayBerlin().slice(0,7) || todayBerlin()===_ld)){ alert('This month isn\u2019t over yet \u2014 confirmation opens on its last day.'); return; }
   if(tsConfirmOf(stid,ym)) return;
   const e=tsEntries(stid,ym);
   const cEl=document.getElementById('ts-comment-'+stid);
@@ -5542,13 +5552,20 @@ function rMySTimesheet(stid){
         <tbody>${(entryRows+leaveRows)||'<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--mt)">No entries this month</td></tr>'}</tbody>
       </table></div>
     </details>
+    ${(()=>{ // Confirmable only once the month is over (or on its last day) — a
+      // timesheet attests to work performed, and mid-month the month isn't done.
+      const _lastDay=(()=>{const d=pd(ym+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
+      window._tsConfirmable = ym<curYm || todayBerlin()===_lastDay;
+      return '';})()}
     ${conf
       ?(conf.comment?`<div style="margin-top:8px;font-size:11px;color:var(--t2)"><b>Your comment:</b> ${conf.comment}</div>`:'')
-      :`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      :(!window._tsConfirmable
+        ?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd);font-size:11px;color:var(--mt)">\u{1F512} Confirmation opens on the last day of the month, once all sessions are in. Keep an eye on your entries until then.</div>`
+        :`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input id="ts-comment-${stid}" placeholder="Discrepancy or comment (optional \u2014 goes to Suzanne & Sara)" style="flex:1;min-width:200px;font-size:11px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
         <button class="btn bp bsm" onclick="tsConfirm('${stid}','${ym}')">Confirm Timesheet \u2713</button>
       </div>
-      <div style="font-size:10px;color:var(--mt);margin-top:6px">By confirming you verify these hours, cancellations, and session notes are accurate and complete for ${monthLbl}.</div>`}
+      <div style="font-size:10px;color:var(--mt);margin-top:6px">By confirming you verify these hours, cancellations, and session notes are accurate and complete for ${monthLbl}.</div>`)}
   </div>`;
 }
 
@@ -6292,7 +6309,7 @@ function rptTimesheets(){
       <td style="padding:6px 8px;text-align:right">${e.leaveDays}d</td>
       <td style="padding:6px 8px;text-align:right;font-weight:700">${_h1(e.directMin+e.otherMin+e.leaveMin)}h</td>
       <td style="padding:6px 8px">${conf
-        ?`<span style="background:#E8F5E9;color:#1B5E20;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap">\u2713 ${String(conf.at).slice(0,10)}</span>`
+        ?`<span style="background:#E8F5E9;color:#1B5E20;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap">\u2713 ${String(conf.at).slice(0,10)}</span> <span onclick="tsUnconfirm('${conf.id}')" title="Remove this confirmation (e.g. confirmed prematurely) — the employee will review and confirm again" style="cursor:pointer;color:var(--rd);font-weight:800;font-size:11px">\u2715</span>`
         :(hasData?'<span style="background:#FFF3E0;color:#E65100;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px">Not confirmed</span>':'<span style="color:var(--mt);font-size:10px">\u2014</span>')}</td>
       <td style="padding:6px 8px;font-size:11px;color:#B71C1C">${e.leaveConflicts?`\u26A0 ${e.leaveConflicts} session${e.leaveConflicts>1?'s':''} during leave `:''}${conf&&conf.comment?('\u{1F4AC} '+conf.comment):''}</td>
     </tr>`;
