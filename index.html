@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-08-22T17:45Z-billing">
+<meta name="app-version" content="2026-08-23T02:15Z-inlinehours">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1207,7 +1207,9 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
     <button class="mob-nt" onclick="sw('daily')" data-mt="daily"><span class="mi">📋</span>Daily</button>
     <button class="mob-nt edit-only" onclick="sw('reports')" data-mt="reports"><span class="mi">📊</span>Reports</button>
     <button class="mob-nt" id="mnav-dash" style="display:none" onclick="sw('dash')" data-mt="dash"><span class="mi">📈</span>Dash</button>
-    <button class="mob-nt" id="mnav-billing" style="display:none" onclick="sw('billing')" data-mt="billing"><span class="mi">💰</span>Billing</button>
+    <button class="mob-nt" id="mnav-claims" style="display:none" onclick="sw('claims')" data-mt="claims"><span class="mi">💳</span>Claims</button>
+    <button class="mob-nt" id="mnav-authcode" style="display:none" onclick="sw('authcode')" data-mt="authcode"><span class="mi">📋</span>Auth</button>
+    <button class="mob-nt" id="mnav-sessreview" style="display:none" onclick="sw('sessreview')" data-mt="sessreview"><span class="mi">📄</span>Sessions</button>
     <button class="mob-nt edit-only" onclick="sw('settings')" data-mt="settings"><span class="mi">⚙️</span>Settings</button>
   </div>
 </div>
@@ -1230,7 +1232,9 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
   <div class="nt edit-only" onclick="sw('daily')" data-t="daily">📋 Daily Log</div>
   <div class="nt edit-only" onclick="sw('reports')" data-t="reports">📊 Reports</div>
   <div class="nt" id="nav-dash" style="display:none" onclick="sw('dash')" data-t="dash">📈 Dashboard</div>
-  <div class="nt" id="nav-billing" style="display:none" onclick="sw('billing')" data-t="billing">💰 Billing</div>
+  <div class="nt" id="nav-claims" style="display:none" onclick="sw('claims')" data-t="claims">💳 Claim Tracking</div>
+  <div class="nt" id="nav-authcode" style="display:none" onclick="sw('authcode')" data-t="authcode">📋 Auth & Codes</div>
+  <div class="nt" id="nav-sessreview" style="display:none" onclick="sw('sessreview')" data-t="sessreview">📄 Session List</div>
   <div class="nt edit-only" onclick="sw('settings')" data-t="settings">⚙️ Settings</div>
 </nav>
 <main class="mn">
@@ -1552,7 +1556,9 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
 
 <!-- REPORTS TAB -->
 <div class="tp" id="tp-dash"><div id="dash-content"></div></div>
-<div class="tp" id="tp-billing"><div id="billing-content"></div></div>
+<div class="tp" id="tp-claims"><div id="claims-content"></div></div>
+<div class="tp" id="tp-authcode"><div id="authcode-content"></div></div>
+<div class="tp" id="tp-sessreview"><div id="sessreview-content"></div></div>
 
 <div class="tp" id="tp-reports">
   <div class="rpt-wrap">
@@ -1829,7 +1835,7 @@ function serviceKeyFromSession(s){
 }
 
 // ── STATE ──
-let S={clients:[],staff:[],sessions:[],logs:{},holidays:[],waitlist:[],schedNotes:[],schedRequests:[],cfg:{cxCodes:defCX(),travelZones:defTravelZones()}};
+let S={clients:[],staff:[],sessions:[],logs:{},invoices:[],holidays:[],waitlist:[],schedNotes:[],schedRequests:[],cfg:{cxCodes:defCX(),travelZones:defTravelZones()}};
 let curView='week';
 let schedSvcFilter='ABA'; // service-type filter for schedule view: 'ABA' | 'OT' | 'ALL'
 function setSchedSvc(v){
@@ -1960,9 +1966,9 @@ function setSyncStatus(state, msg){
 // The legacy scheduler/data doc is left untouched as a rollback backup.
 // save() only writes docs whose content actually changed (dirty tracking).
 
-const FS_META_EXTRA = ['_leaveReqHoursMigrated','tsConfirms']; // top-level flags + timesheet confirmations stored in meta
+const FS_META_EXTRA = ['_leaveReqHoursMigrated','tsConfirms','billingConfirms','sessionListConfirms']; // top-level flags + timesheet confirmations stored in meta
 let _fsCache = {};                                       // docPath → last JSON written/read
-let _fsMonths = {sessions:new Set(), logs:new Set()};    // month docs known to exist
+let _fsMonths = {sessions:new Set(), logs:new Set(), invoices:new Set()};    // month docs known to exist
 
 function _fsMonthOf(d){ return (typeof d==='string' && d.length>=7) ? d.slice(0,7) : 'no-date'; }
 
@@ -1986,6 +1992,13 @@ function _fsBuildDocs(){
   (S.sessions||[]).forEach(s=>{ const m=_fsMonthOf(s.date); (sb[m]=sb[m]||[]).push(s); });
   Object.keys(sb).forEach(m=>{ docs['sessions/'+m]={data:{sessions:sb[m]}}; _fsMonths.sessions.add(m); });
   _fsMonths.sessions.forEach(m=>{ if(!docs['sessions/'+m]) docs['sessions/'+m]={data:{sessions:[]}}; }); // emptied months
+  // Invoices: PREVIEW feature, split by month exactly like sessions so it can
+  // never grow into a single unbounded doc and cannot threaten the storage
+  // headroom sessions/supervision/timesheets depend on.
+  const ib = {};
+  (S.invoices||[]).forEach(inv=>{ const m=(inv.wk||'').slice(0,7)||'unk'; (ib[m]=ib[m]||[]).push(inv); });
+  Object.keys(ib).forEach(m=>{ docs['invoices/'+m]={data:{invoices:ib[m]}}; _fsMonths.invoices.add(m); });
+  _fsMonths.invoices.forEach(m=>{ if(!docs['invoices/'+m]) docs['invoices/'+m]={data:{invoices:[]}}; });
   const lb = {};
   Object.keys(S.logs||{}).forEach(k=>{ const m=_fsMonthOf(k); (lb[m]=lb[m]||{})[k]=S.logs[k]; });
   Object.keys(lb).forEach(m=>{ docs['logs/'+m]={data:{logs:lb[m]}}; _fsMonths.logs.add(m); });
@@ -2262,12 +2275,13 @@ function _fsPostLoadFixups(){
 async function _fsLoadV2(){
   const meta = await db.collection('scheduler').doc('meta').get();
   if(!meta.exists) return false;
-  const [staff, clients, leave, sess, logs] = await Promise.all([
+  const [staff, clients, leave, sess, logs, invs] = await Promise.all([
     db.collection('scheduler').doc('staff').get(),
     db.collection('scheduler').doc('clients').get(),
     db.collection('scheduler').doc('leave').get(),
     db.collection('scheduler').doc('sessions').collection('months').get(),
     db.collection('scheduler').doc('logs').collection('months').get(),
+    db.collection('scheduler').doc('invoices').collection('months').get().catch(()=>({forEach:()=>{}})), // PREVIEW: absent until first save, never fatal
   ]);
   const md = meta.data()||{};
   S.cfg=md.cfg||{}; S.holidays=md.holidays||[]; S.schedNotes=md.schedNotes||[]; S.schedRequests=md.schedRequests||[];
@@ -2282,6 +2296,9 @@ async function _fsLoadV2(){
   const L={};
   logs.forEach(d=>{ _fsMonths.logs.add(d.id); Object.assign(L,(d.data()||{}).logs||{}); });
   S.logs=L;
+  let invoices=[];
+  invs.forEach(d=>{ _fsMonths.invoices.add(d.id); invoices=invoices.concat((d.data()||{}).invoices||[]); });
+  S.invoices=invoices;
   return true;
 }
 
@@ -2512,6 +2529,19 @@ function cDisplayName(c){
 function cFullName(c){ return c?.name||'—'; }
 // ── UTILS ──
 function fd(d){return d.getFullYear()+'-'+p2(d.getMonth()+1)+'-'+p2(d.getDate());}
+// ISO 8601 week number (Mon-start, week 1 = week containing the year's first
+// Thursday) — the German/European standard, matching how the clinic already
+// thinks about "Week N" for billing.
+function isoWeekOf(d){
+  const dt=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const dow=(dt.getUTCDay()+6)%7; // Mon=0..Sun=6
+  dt.setUTCDate(dt.getUTCDate()-dow+3); // nearest Thursday
+  const firstThu=new Date(Date.UTC(dt.getUTCFullYear(),0,4));
+  const firstDow=(firstThu.getUTCDay()+6)%7;
+  firstThu.setUTCDate(firstThu.getUTCDate()-firstDow+3);
+  const wk=1+Math.round((dt-firstThu)/(7*864e5));
+  return {week:wk, year:dt.getUTCFullYear()};
+}
 function p2(n){return String(n).padStart(2,'0');}
 function pd(s){if(!s)return new Date();const[y,m,d]=s.split('-').map(Number);return new Date(y,m-1,d);}
 function wkOf(d){const dt=new Date(d),dw=dt.getDay();dt.setDate(dt.getDate()+(dw===0?-6:1-dw));dt.setHours(0,0,0,0);return dt;}
@@ -2621,7 +2651,9 @@ function sw(t){
   if(t==='discharged'){rDischarged();}
   if(t==='sched'){rSchedRequests();}
   if(t==='dash'){if(!canViewDash()){sw('sched');return;}rDash();rAuthAlerts();}
-  if(t==='billing'){if(!canViewBilling()){sw('sched');return;}rBilling();}
+  if(t==='claims'){if(!canViewBilling()){sw('sched');return;}rClaimTracking();}
+  if(t==='authcode'){if(!canViewBilling()){sw('sched');return;}rAuthCodeTracking();}
+  if(t==='sessreview'){if(!canViewSessReview()){sw('sched');return;}rSessReview();}
   // Update URL hash without triggering scroll (silently ignored in iframe contexts)
   try{ if(history.replaceState) history.replaceState(null,'','#'+t); }catch(e){}
 }
@@ -4175,6 +4207,15 @@ function updSess(id){
     } else {
       delete s.cptCode;
     }
+    // Catch a wrong-code assignment at the source: an OT-credentialed staff
+    // member should never be billing an ABA CPT code -- flag it immediately
+    // rather than let it reach a claim.
+    if(s.cptCode && ABA_CPT_CODES.includes(s.cptCode)){
+      const _st=gs(s.stid);
+      if(_st && _st.role==='OT'){
+        alert('\u26A0 Heads up: '+_st.name+' is an OT, but CPT '+s.cptCode+' is an ABA code.\n\nThis session was saved as entered \u2014 please double-check the code or the assigned therapist before this reaches a claim.');
+      }
+    }
     // serviceNote field is deprecated — cleanup any stale value
     delete s.serviceNote;
     S.sessions.forEach(x=>{ if(x._autoAdmin&&x._fromCx===id) window._sessDel.add(x.id); });
@@ -4315,7 +4356,8 @@ function openClientDetail(id){
     <div class="fg"><label>Schedule Display Name <span style="font-weight:400;color:var(--mt);font-size:10px">— shown on session blocks · leave blank to auto-generate</span></label><input id="cd-short" value="${c.shortName||''}" placeholder="e.g. MaJa2 or LenKl" maxlength="8" style="font-family:monospace;font-size:13px;letter-spacing:.5px"></div>
     <div class="fr2"><div class="fg"><label>DOB</label><input type="date" id="cd-dob" value="${c.dob||''}"></div><div class="fg"><label>Insurance</label><select id="cd-ins">${insOpts(c.ins)}</select></div></div>
     <div class="fr2"><div class="fg"><label>Case Manager</label><select id="cd-bcba">${bo}</select></div><div class="fg"><label>Authorized Visits <span style="font-weight:400;color:var(--mt);font-size:10px">default 40</span></label><input type="number" id="cd-visits" value="${c.authVisits||40}" min="1"></div></div>
-    <div class="fr2"><div class="fg"><label>Auth Number</label><input id="cd-authnum" value="${c.authNumber||''}" placeholder="e.g. AT-0001623626" style="font-family:monospace;font-size:12px"></div><div class="fg"></div></div>
+    <div class="fr2"><div class="fg"><label>Auth Number</label><input id="cd-authnum" value="${c.authNumber||''}" placeholder="e.g. AT-0001623626" style="font-family:monospace;font-size:12px"></div><div class="fg"><label>Co-pay per Session</label><input type="number" id="cd-copay" min="0" step="0.01" value="${c.copayAmount??''}" placeholder="e.g. 25.00"></div></div>
+    <div class="fr2"><div class="fg"><label>Diagnosis Code(s)</label><input id="cd-dx" value="${c.dxCode||''}" placeholder="e.g. F84.0" style="font-family:monospace;font-size:12px"></div><div class="fg"></div></div>
     <div class="fr2"><div class="fg"><label>Visits Used <span style="font-weight:400;color:var(--mt);font-size:10px">manually maintained</span></label><input type="number" id="cd-visits-used" value="${c.visitsUsed??''}" min="0" placeholder="e.g. 12"></div><div class="fg"><label>Alert Threshold <span style="font-weight:400;color:var(--mt);font-size:10px">% remaining · default 20</span></label><input type="number" id="cd-visit-alert" value="${c.visitAlertThreshold??20}" min="1" max="100"></div></div>
     ${(()=>{const used=c.visitsUsed,auth=c.authVisits||40;if(used==null)return `<div style="background:#FFF3E0;border:1px solid #FFB300;border-radius:6px;padding:7px 10px;font-size:11px;color:#E65100;margin:-4px 0 10px">📝 Enter \"Visits Used\" to enable visit tracking alerts</div>`;const rem=auth-used;const pct=Math.max(0,Math.min(100,(used/auth)*100));const clr=rem<=0?'var(--rd)':pct>=80?'var(--am)':'var(--gn)';return `<div style="background:var(--bg);border-radius:6px;padding:8px 11px;margin:-4px 0 10px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--mt)">Visit utilization</span><span style="font-weight:700;color:${clr}">${used}/${auth} used · ${Math.max(0,rem)} remaining</span></div><div style="height:6px;background:#E0E0E0;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${clr}"></div></div></div>`;})()}
     <div class="fr2"><div class="fg"><label>Auth Start Date</label><input type="date" id="cd-auth-start" value="${c.authStart||''}"></div><div class="fg"><label>Auth End Date</label><input type="date" id="cd-auth" value="${c.authEnd||''}"></div></div>
@@ -4375,6 +4417,7 @@ function openClientDetail(id){
     <div class="fr2"><div class="fg"><label>DOB</label><input type="date" id="cd-dob" value="${c.dob||''}"></div><div class="fg"><label>Insurance</label><select id="cd-ins">${insOpts(c.ins)}</select></div></div>
     <div class="fr2"><div class="fg"><label>Rec. Hrs/Wk</label><input type="number" id="cd-rec" value="${c.rec}"></div><div class="fg"><label>Sched. Hrs/Wk</label><input type="number" id="cd-sch" value="${c.sch}"></div></div>
     <div class="fr2"><div class="fg"><label>Case Manager</label><select id="cd-bcba">${bo}</select></div><div class="fg"><label>Auth Number</label><input id="cd-authnum" value="${c.authNumber||''}" placeholder="e.g. AT-0001623626" style="font-family:monospace;font-size:12px"></div></div>
+    <div class="fr2"><div class="fg"><label>Co-pay per Session</label><input type="number" id="cd-copay" min="0" step="0.01" value="${c.copayAmount??''}" placeholder="e.g. 25.00"></div><div class="fg"><label>Diagnosis Code(s)</label><input id="cd-dx" value="${c.dxCode||''}" placeholder="e.g. F84.0" style="font-family:monospace;font-size:12px"></div></div>
     <div class="fr2"><div class="fg"><label>Auth Start</label><input type="date" id="cd-auth-start" value="${c.authStart||''}"></div><div class="fg"><label>Auth End Date</label><input type="date" id="cd-auth" value="${c.authEnd||''}"></div></div>
     <div class="fg"><label>Authorization Pipeline</label>
       <div class="pipe-steps" id="pipe-steps">${pipeHtml}</div>
@@ -4569,6 +4612,8 @@ function updClient(id){
   c.medAlerts=MED_ALERTS.map(m=>m.id).filter(id=>document.getElementById('med-'+id)?.checked);
   c.authPipeline=window._pipeStatus||c.authPipeline||'NONE';
   if(document.getElementById('cd-authnum')) c.authNumber=document.getElementById('cd-authnum').value.trim();
+  if(document.getElementById('cd-copay')){ const v=document.getElementById('cd-copay').value; c.copayAmount=(v===''?null:+v); }
+  if(document.getElementById('cd-dx')) c.dxCode=document.getElementById('cd-dx').value.trim();
   // Authorized units by CPT (ABA card). Total mirrors into authVisits so the
   // dashboard's exhaustion projection works without per-CPT awareness.
   if(document.getElementById('cd-units-97153')){
@@ -7839,155 +7884,547 @@ function promoteWL(id){
   setTimeout(()=>openClientDetail(newC.id),300);
 }
 
-// ═══════════ BILLING DASHBOARD (Jill) ═══════════
+// ═══════════ CPT RATE TABLE ═══════════════════════════════════════════════
+// Source: adaptABILITY's CPT & Absence Codes reference sheet. Seeded ONCE
+// (base/TRICARE/GeoBlue) so the table isn't empty on first use -- every cell
+// is Jill's to edit afterward. 1 unit = 15 minutes, matching how the app
+// already computes billable units everywhere else.
+const CPT_RATE_SEED = {
+  '97151': {desc:'Behavior Identification Assessment',              base:50,  tricare:50,    geoblue:59.50},
+  '97153': {desc:'Adaptive Behavior Treatment (Direct)',             base:35,  tricare:40,    geoblue:41.65},
+  '97155': {desc:'Adaptive Behavior Treatment Protocol Modification',base:35,  tricare:40,    geoblue:41.65},
+  '97156': {desc:'Family Adaptive Behavior Treatment Guidance',      base:35,  tricare:40,    geoblue:41.65},
+  '0373T': {desc:'Adaptive Behavior Treatment, Multiple Therapists', base:70,  tricare:null,  geoblue:83.30},
+  '97157': {desc:'Mult. Family Group Behavior Treatment Guidance',   base:70,  tricare:17.50, geoblue:83.30},
+  '97158': {desc:'Group Adaptive Behavior Treatment Protocol Mod',   base:70,  tricare:17.50, geoblue:83.30},
+  '99366': {desc:'Medical Team Conference with Patient',             base:25,  tricare:25,    geoblue:null},
+  '99368': {desc:'Medical Team Conference without Patient',          base:25,  tricare:25,    geoblue:null},
+  '97530': {desc:'Therapeutic Activities (OT)',                      base:50,  tricare:50,    geoblue:null},
+  '97167': {desc:'OT Evaluation',                                    base:400, tricare:400,   geoblue:null},
+  '97168': {desc:'OT Reevaluation',                                  base:400, tricare:400,   geoblue:null},
+  '97750': {desc:'Physical Performance Test/Measurement',            base:60,  tricare:60,    geoblue:null},
+};
+const TRICARE_RATE_IDS=['ECHO','TC_PRIME','TC_SELECT'];
+const OT_CPT_CODES=['97530','97167','97168','97750'];
+const ABA_CPT_CODES=Object.keys(CPT_RATE_SEED).filter(c=>!OT_CPT_CODES.includes(c));
+function cptSeedFor(cpt, insId){
+  const s=CPT_RATE_SEED[cpt]; if(!s) return null;
+  if(insId==='GEOBLUE') return s.geoblue??s.base??null;
+  if(TRICARE_RATE_IDS.includes(insId)) return s.tricare??s.base??null;
+  return s.base??null;
+}
+function seedCptRatesIfEmpty(){
+  if(S.cfg.cptRates && Object.keys(S.cfg.cptRates).length) return;
+  const t={};
+  Object.keys(CPT_RATE_SEED).forEach(cpt=>{
+    t[cpt]={};
+    INS.forEach(i=>{ const v=cptSeedFor(cpt,i.id); if(v!=null) t[cpt][i.id]=v; });
+  });
+  S.cfg.cptRates=t;
+}
+function cptRateFor(cpt, insId){
+  const r=(S.cfg.cptRates||{})[cpt];
+  return (r && r[insId]!=null) ? r[insId] : null;
+}
+function setCptRate(cpt, insId, val){
+  if(!S.cfg.cptRates) S.cfg.cptRates={};
+  if(!S.cfg.cptRates[cpt]) S.cfg.cptRates[cpt]={};
+  S.cfg.cptRates[cpt][insId]=(val===''||val==null)?null:+val;
+  save();
+}
+// Dollar value of one session, or null if the code/insurance combo has no
+// rate set yet (surfaced as a flag rather than silently computed as $0).
+function sessBillable(s){
+  if(!s.cptCode||s.status==='CX'||!s.cid) return null;
+  if(!s.noteWritten) return null; // documentation drives billing — not billable until the note is complete
+  const cl=gc(s.cid); if(!cl) return null;
+  const rate=cptRateFor(s.cptCode, cl.ins);
+  if(rate==null) return null;
+  return rate*(_dMins(s)/15);
+}
+
+// ═══════════ BILLING CONFIRMATION (Sara/Suzanne) ═══════════════════════════
+// Mirrors the monthly timesheet-confirmation pattern exactly: Jill's numbers
+// are computed live from real data; a reviewer confirms with a timestamped
+// snapshot + optional comment. Nothing about Jill's own review is required
+// here -- she enters/verifies the underlying data; SW/SB attest to the totals.
+const BILLING_REVIEWERS=['SW','JW','ToS']; // only those who can see the $ figures can confirm them
+function canConfirmBilling(){
+  if(!isViewOnly) return true;
+  return BILLING_REVIEWERS.includes(viewerStid||'');
+}
+function billingConfirmOf(ym){ return (S.billingConfirms||[]).find(x=>x.ym===ym); }
+function billingConfirm(ym, totals){
+  if(!canConfirmBilling()){ alert('Only Suzanne or Sara can confirm monthly billing totals.'); return; }
+  const comment=document.getElementById('bc-comment')?.value.trim()||'';
+  S.billingConfirms=(S.billingConfirms||[]).concat({id:'bc'+uid(), ym, at:new Date().toISOString(), by:viewerStid||'scheduler', comment, totals});
+  save(); rClaimTracking();
+}
+function billingUnconfirm(id){
+  if(!canConfirmBilling()) return;
+  if(!confirm('Remove this billing confirmation? The month will need to be reviewed and confirmed again.')) return;
+  S.billingConfirms=(S.billingConfirms||[]).filter(x=>x.id!==id);
+  save(); rClaimTracking();
+}
+
+function copayMark(sessId, collected){
+  const s=(S.sessions||[]).find(x=>x.id===sessId); if(!s) return;
+  s.copayCollected=collected;
+  s.copayCollectedAt=collected?new Date().toISOString():null;
+  save(); rClaimTracking();
+}
 function nsMarkFee(sessId, collected){
   const s=(S.sessions||[]).find(x=>x.id===sessId); if(!s) return;
   s.nsFeeCollected=collected;
   s.nsFeeCollectedAt=collected?new Date().toISOString():null;
   s.nsFeeCollectedBy=collected?(viewerStid||'scheduler'):null;
-  save(); rBilling();
+  save(); rClaimTracking();
 }
 
-function rBilling(){
-  const wrap=document.getElementById('billing-content');
+// ═══════════ WEEKLY INVOICES ═══════════════════════════════════════════════
+// Split by month in storage (scheduler/invoices/months/{YYYY-MM}) exactly
+// like sessions, so this can never threaten the storage headroom the core
+// schedule, supervision, and timesheet data depend on.
+// Combine back-to-back same-day, same-CPT-code sessions into one claim line
+// with summed units -- payers expect one line for contiguous service, not
+// several. Only merges when the end of one session equals the start of the
+// next (true back-to-back, no gap) and the CPT code matches exactly.
+function mergeConsecutiveClaimLines(sess){
+  const sorted=(sess||[]).slice().sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
+  const lines=[];
+  sorted.forEach(s=>{
+    const last=lines[lines.length-1];
+    if(last && last.date===s.date && last.cptCode===s.cptCode && last.e===s.s){
+      last.e=s.e; last.units+=Math.round(_dMins(s)/15); last.sessIds.push(s.id); last.noteFlags.push(!!s.noteWritten); last.allNotes=last.allNotes&&!!s.noteWritten;
+    } else {
+      lines.push({date:s.date, s:s.s, e:s.e, cptCode:s.cptCode, location:s.location, type:s.type, stid:s.stid,
+        units:Math.round(_dMins(s)/15), sessIds:[s.id], noteFlags:[!!s.noteWritten], allNotes:!!s.noteWritten, merged:false});
+    }
+  });
+  lines.forEach(l=>{ l.merged=l.sessIds.length>1; });
+  return lines;
+}
+
+function invWeekStart(dateStr){
+  const d=pd(dateStr); const dow=d.getDay()||7; d.setDate(d.getDate()-dow+1); return fd(d);
+}
+// ABA and OT bill as separate claims (often different payers/rendering
+// providers -- case-manager BCBA vs treating OT), so a client with both
+// therapy types gets TWO invoice records per week, keyed by service type.
+function invGet(cid, wk, svcType){ return (S.invoices||[]).find(i=>i.cid===cid&&i.wk===wk&&(i.svcType||'ABA')===svcType); }
+function invGetOrCreate(cid, wk, svcType){
+  let inv=invGet(cid,wk,svcType);
+  if(!inv){ inv={id:'inv'+uid(), cid, wk, svcType, invoiceNumber:'', claimNumber:'', claimAmount:null, dateSubmitted:'', paymentAmount:null, paymentDate:'', completed:false, notes:''}; S.invoices=(S.invoices||[]).concat(inv); }
+  return inv;
+}
+function invSetField(cid, wk, svcType, field, rawVal){
+  const inv=invGetOrCreate(cid,wk,svcType);
+  if(field==='completed') inv[field]=!!rawVal;
+  else if(['claimAmount','paymentAmount'].includes(field)) inv[field]=(rawVal===''||rawVal==null)?null:+rawVal;
+  else inv[field]=rawVal;
+  save();
+}
+
+// ═══════════ SESSION LIST CONFIRMATION (Sara) ══════════════════════════════
+// Same underlying session data as the claim-line detail Jill/Suzanne/Tobias
+// see -- dates, times, codes, units, documentation -- with NO dollar figures.
+// Sara reviews for accuracy and confirms on her own schedule, separate from
+// the financial Confirm Month workflow.
+function sessionListConfirmOf(wk){ return (S.sessionListConfirms||[]).find(x=>x.wk===wk); }
+function sessionListConfirm(wk){
+  if(!canViewSessReview()){ alert('Only Suzanne or Sara can confirm the session list.'); return; }
+  const comment=document.getElementById('slc-comment')?.value.trim()||'';
+  S.sessionListConfirms=(S.sessionListConfirms||[]).concat({id:'slc'+uid(), wk, at:new Date().toISOString(), by:viewerStid||'scheduler', comment});
+  save(); rSessReview();
+}
+function sessionListUnconfirm(id){
+  if(!canViewSessReview()) return;
+  if(!confirm('Remove this week\'s session list confirmation? It will need to be reviewed and confirmed again.')) return;
+  S.sessionListConfirms=(S.sessionListConfirms||[]).filter(x=>x.id!==id);
+  save(); rSessReview();
+}
+
+function rSessReview(){
+  const wrap=document.getElementById('sessreview-content');
   if(!wrap) return;
+  const today=todayBerlin();
+  const activeClients=(S.clients||[]).filter(cl=>cl.status!=='discharged');
+  const wk=window._srWk||invWeekStart(today);
+  window._srWk=wk;
+  const wkEndD=pd(wk); wkEndD.setDate(wkEndD.getDate()+6); const wkEnd=fd(wkEndD);
+  const iw=isoWeekOf(pd(wk));
+  const wkLbl='Week '+iw.week+', '+iw.year+' \u00B7 '+pd(wk).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' \u2013 '+pd(wkEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+  const conf=sessionListConfirmOf(wk);
+
+  const rows=[];
+  activeClients.forEach(cl=>{
+    ['ABA','OT'].forEach(svcType=>{
+      const sess=(S.sessions||[]).filter(s=>s.cid===cl.id&&s.date>=wk&&s.date<=wkEnd&&s.status!=='CX'&&!s._autoAdmin&&s.type===svcType).sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
+      if(!sess.length) return;
+      const units=Math.round(sess.reduce((t,s)=>t+_dMins(s),0)/15);
+      rows.push({cl,svcType,sess,units});
+    });
+  });
+
+  wrap.innerHTML = `
+    <div class="sh2" style="margin-bottom:14px"><h2>\u{1F4C4} Session List</h2>
+    </div>
+    <div class="dash-grid">
+
+    <div class="scard" style="grid-column:1/-1">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <button class="btn bxs" onclick="const d=pd(window._srWk||'${wk}');d.setDate(d.getDate()-7);window._srWk=fd(d);rSessReview()">\u2190 Prev week</button>
+        <strong style="font-size:13px">${wkLbl}</strong>
+        <button class="btn bxs" onclick="const d=pd(window._srWk||'${wk}');d.setDate(d.getDate()+7);window._srWk=fd(d);rSessReview()">Next week \u2192</button>
+        ${conf?`<span style="background:#E8F5E9;color:#1B5E20;font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px;margin-left:auto">Confirmed \u2713 ${String(conf.at).slice(0,10)} by ${gs(conf.by)?.initials||conf.by}</span> <span onclick="sessionListUnconfirm('${conf.id}')" style="cursor:pointer;color:var(--rd);font-weight:800;font-size:12px" title="Remove confirmation">\u2715</span>`:''}
+      </div>
+      ${!conf?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+        <input id="slc-comment" placeholder="Comment (optional)" style="flex:1;min-width:200px;font-size:12px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px">
+        <button class="btn bp bsm" onclick="sessionListConfirm('${wk}')">Confirm This Week \u2713</button>
+      </div>`:(conf.comment?`<div style="font-size:11px;color:var(--t2);margin-bottom:10px"><b>Comment:</b> ${conf.comment}</div>`:'')}
+      </div>
+      ${rows.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">
+        <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:9.5px;text-transform:uppercase;text-align:left">
+          <th style="padding:4px 6px">Client</th><th style="padding:4px 6px">Type</th><th style="padding:4px 6px;text-align:right">Units</th><th style="padding:4px 6px">Notes Complete</th>
+        </tr></thead><tbody>
+        ${rows.map(r=>{const rk=r.cl.id+'-'+r.svcType;
+          const allDone=r.sess.every(s=>s.noteWritten);
+          return `<tr>
+            <td style="padding:3px 6px;font-weight:600"><span style="cursor:pointer;color:var(--pu)" onclick="const el=document.getElementById('srdet-${rk}');el.style.display=el.style.display==='none'?'table-row':'none';">${cDisplayName(r.cl)} \u25BE</span></td>
+            <td style="padding:3px 6px"><span class="flg" style="background:${r.svcType==='OT'?'#E0F2F1':'#E3F2FD'};color:${r.svcType==='OT'?'#004D40':'#0D47A1'};font-size:10px">${r.svcType}</span></td>
+            <td style="padding:3px 6px;text-align:right;color:var(--mt)">${r.units}</td>
+            <td style="padding:3px 6px">${allDone?'<span style="color:#1B5E20;font-weight:700">\u2713 All complete</span>':'<span style="color:#B71C1C;font-weight:700">\u26A0 Missing notes</span>'}</td>
+          </tr>
+          <tr id="srdet-${rk}" style="display:none;background:#FAFAFC">
+            <td colspan="4" style="padding:6px 6px 10px 20px">
+              <table style="width:100%;border-collapse:collapse;font-size:10.5px">
+                <thead><tr style="color:var(--mt);font-size:9px;text-transform:uppercase;text-align:left;border-bottom:1px solid var(--bd)">
+                  <th style="padding:2px 6px">Date</th><th style="padding:2px 6px">Start</th><th style="padding:2px 6px">Stop</th><th style="padding:2px 6px">Location</th><th style="padding:2px 6px">CPT</th><th style="padding:2px 6px;text-align:right">Units</th><th style="padding:2px 6px">Rendering Provider</th><th style="padding:2px 6px;text-align:center">Note</th>
+                </tr></thead><tbody>
+                ${mergeConsecutiveClaimLines(r.sess).map(s=>{
+                  const loc=(SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'))||{label:'Clinic'}).label;
+                  const isOtSess=s.type==='OT';
+                  const rp=isOtSess?gs(s.stid):gs(r.cl.bcba);
+                  const rpLbl=rp?rp.name+' ('+rp.initials+')':(isOtSess?'\u2014':'<span style="color:#B71C1C">No case manager set</span>');
+                  return `<tr style="border-bottom:1px solid #EEE;cursor:pointer" onclick="openSess('${s.sessIds[0]}')" title="${s.merged?'Merged from '+s.sessIds.length+' back-to-back sessions \u2014 click to edit the first':'Click to edit this session'}">
+                    <td style="padding:3px 6px">${s.date} <span class="edit-only" style="color:var(--pu)">\u270E</span>${s.merged?` <span style="font-size:9px;color:#7B1FA2;font-weight:700">\u21C6 merged \u00D7${s.sessIds.length}</span>`:''}</td><td style="padding:3px 6px">${ftm(s.s)}</td><td style="padding:3px 6px">${ftm(s.e)}</td>
+                    <td style="padding:3px 6px">${loc}</td><td style="padding:3px 6px;font-family:monospace">${s.cptCode||'<span style="color:#B71C1C">missing</span>'}</td>
+                    <td style="padding:3px 6px;text-align:right">${s.units}</td><td style="padding:3px 6px">${rpLbl}</td>
+                    <td style="padding:3px 6px;text-align:center">${s.sessIds.map((id,i)=>`<span onclick="event.stopPropagation();openSess('${id}')" style="cursor:pointer;padding:0 2px" title="${s.merged?'Session '+(i+1)+' of '+s.sessIds.length+' \u2014 click to open':'Click to open'}">${s.noteFlags[i]?'\u2713':'<span style=\"color:#B71C1C;font-weight:700\">\u2717</span>'}</span>`).join(' ')}</td>
+                  </tr>`;
+                }).join('')}
+                </tbody>
+                <tfoot><tr style="border-top:1.5px solid var(--bd);font-weight:700"><td colspan="5" style="padding:3px 6px;text-align:right">Total units:</td><td style="padding:3px 6px;text-align:right">${r.units}</td><td colspan="2"></td></tr></tfoot>
+              </table>
+              <div class="edit-only" style="font-size:9.5px;color:var(--mt);margin-top:4px">\u270E Click any row to correct its date or time</div>
+            </td>
+          </tr>`;}).join('')}
+        </tbody></table></div>`:'<div style="font-size:12px;color:var(--mt)">No sessions for any active client that week.</div>'}
+    </div>
+
+    </div>`;
+}
+
+// ═══════════ TAB 1: CLAIM TRACKING (Jill) ═══════════════════════════════════
+// Invoices, no-show fees, co-pays, and every data-hygiene item that blocks a
+// clean claim -- everything with a dollar sign or a claim number lives here.
+function rClaimTracking(){
+  const wrap=document.getElementById('claims-content');
+  if(!wrap) return;
+  seedCptRatesIfEmpty();
   const today=todayBerlin();
   const ym=today.slice(0,7);
   const monthStart=ym+'-01';
   const weekStart=(()=>{const d=pd(today);const dow=d.getDay()||7;d.setDate(d.getDate()-dow+1);return fd(d);})();
   const weekEnd=(()=>{const d=pd(weekStart);d.setDate(d.getDate()+6);return fd(d);})();
   const activeClients=(S.clients||[]).filter(cl=>cl.status!=='discharged');
+  const money=n=>n==null?'\u2014':'\u20AC'+n.toFixed(2);
+
+  // ── Monthly Billable / Claimed / Received (auto-calculated) ────────────
+  const monthSess=(S.sessions||[]).filter(s=>(s.date||'').startsWith(ym)&&s.date<=today&&s.status!=='CX'&&s.cid);
+  let billableTotal=0, unpriced=[], undocumented=[];
+  monthSess.forEach(s=>{
+    if(!s.cptCode) return; // no code at all — tracked separately in "missing CPT code"
+    if(!s.noteWritten){ undocumented.push(s); return; }
+    const b=sessBillable(s);
+    if(b==null) unpriced.push(s); else billableTotal+=b;
+  });
+  const monthInvoices=(S.invoices||[]).filter(inv=>(inv.wk||'').startsWith(ym)||((inv.wk||'')<monthStart===false && inv.wk<=weekEnd && inv.wk>=monthStart));
+  const claimedTotal=monthInvoices.reduce((t,i)=>t+(i.claimAmount||0),0);
+  const receivedTotal=monthInvoices.reduce((t,i)=>t+(i.paymentAmount||0),0);
+  const outstanding=claimedTotal-receivedTotal;
+  const conf=billingConfirmOf(ym);
+  const monthLbl=pd(monthStart).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+
+  // ── OT staff assigned an ABA CPT code (data-entry error pattern) ──────
+  const codeMismatches=(S.sessions||[]).filter(s=>{
+    if(s.status==='CX'||!s.cid||!s.cptCode||(s.date||'')<monthStart||s.date>today) return false;
+    if(!ABA_CPT_CODES.includes(s.cptCode)) return false;
+    const st=gs(s.stid); return st&&st.role==='OT';
+  });
 
   // ── No-Show Fees ──────────────────────────────────────────────────────
   const nsAll=(S.sessions||[]).filter(s=>s.cx==='NS').sort((a,b)=>b.date.localeCompare(a.date));
   const nsOutstanding=nsAll.filter(s=>!s.nsFeeCollected);
-  const nsRecent=nsAll.slice(0,40); // recent + all outstanding, capped for render sanity
+  const nsRecent=nsAll.slice(0,40);
 
-  // ── Missing Session Notes (this week) ────────────────────────────────
+  // ── Co-pays this month ───────────────────────────────────────────────
+  const copayClients=activeClients.filter(cl=>cl.copayAmount>0);
+  const copayCids=new Set(copayClients.map(cl=>cl.id));
+  const copaySess=(S.sessions||[]).filter(s=>copayCids.has(s.cid)&&s.status!=='CX'&&!s._autoAdmin&&s.date>=monthStart&&s.date<=today&&(s.type==='ABA'||s.type==='OT')).sort((a,b)=>b.date.localeCompare(a.date));
+  const copayOutstanding=copaySess.filter(s=>!s.copayCollected);
+  const copayCollectedTotal=copaySess.filter(s=>s.copayCollected).reduce((t,s)=>t+(gc(s.cid)?.copayAmount||0),0);
+  const copayOutstandingTotal=copayOutstanding.reduce((t,s)=>t+(gc(s.cid)?.copayAmount||0),0);
+
+  // ── Missing session notes (this week) ────────────────────────────────
   const weekSess=(S.sessions||[]).filter(s=>s.date>=weekStart&&s.date<=weekEnd&&s.date<=today&&(s.cid||s.cptCode)&&s.status!=='CX'&&!s.noteWritten);
 
-  // ── Upcoming Auth Expirations (60-day horizon, org-wide) ─────────────
-  const authExp=activeClients.filter(cl=>cl.authEnd).map(cl=>({cl,days:Math.ceil((pd(cl.authEnd)-pd(today))/864e5)}))
-    .filter(x=>x.days<=60).sort((a,b)=>a.days-b.days);
-  const otAuthExp=activeClients.filter(cl=>cl.otAuth&&cl.otAuth.end).map(cl=>({cl,days:Math.ceil((pd(cl.otAuth.end)-pd(today))/864e5),isOt:true}))
-    .filter(x=>x.days<=60).sort((a,b)=>a.days-b.days);
-
-  // ── Sessions missing a CPT code (unbillable as-is) ───────────────────
-  const noCpt=(S.sessions||[]).filter(s=>s.cid&&s.status!=='CX'&&!s._autoAdmin&&s.date<=today&&s.date>=monthStart&&!s.cptCode);
-
-  // ── Possible duplicate sessions (same therapist+client+date+start) ───
+  // ── Duplicates ────────────────────────────────────────────────────────
   const dupMap={};
-  (S.sessions||[]).forEach(s=>{
-    if(!s.cid||s.status==='CX'||s._autoAdmin) return;
-    const k=s.stid+'|'+s.cid+'|'+s.date+'|'+s.s;
-    (dupMap[k]=dupMap[k]||[]).push(s);
-  });
+  (S.sessions||[]).forEach(s=>{ if(!s.cid||s.status==='CX'||s._autoAdmin) return; const k=s.stid+'|'+s.cid+'|'+s.date+'|'+s.s; (dupMap[k]=dupMap[k]||[]).push(s); });
   const dups=Object.values(dupMap).filter(g=>g.length>1);
 
-  // ── CPT Utilization this month (by code, by provider) ────────────────
-  const cptRows={};
-  (S.sessions||[]).forEach(s=>{
-    if(!s.cptCode||s.status==='CX'||!(s.date||'').startsWith(ym)||s.date>today) return;
-    const k=s.cptCode+'|'+s.stid;
-    if(!cptRows[k]) cptRows[k]={cpt:s.cptCode,stid:s.stid,sessions:0,mins:0};
-    cptRows[k].sessions++; cptRows[k].mins+=_dMins(s);
-  });
-  const cptList=Object.values(cptRows).sort((a,b)=>a.cpt.localeCompare(b.cpt)||(gs(a.stid)?.name||'').localeCompare(gs(b.stid)?.name||''));
-
-  // ── Monthly 97155/97156 requirement per active ABA/BOTH client ───────
-  const reqCodes=['97155','97156'];
-  const reqClients=activeClients.filter(cl=>{const tt=cl.therapyType||(cl.hasOT?'BOTH':'ABA');return tt==='ABA'||tt==='BOTH';});
-  const reqRows=reqClients.map(cl=>{
-    const counts={};
-    reqCodes.forEach(cp=>{
-      counts[cp]=(S.sessions||[]).filter(s=>s.cid===cl.id&&s.cptCode===cp&&s.status!=='CX'&&(s.date||'').startsWith(ym)&&s.date<=today).length;
-    });
-    return {cl,counts};
-  });
-  const lastOfMonth=(()=>{const d=pd(ym+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
-  const daysLeftInMonth=Math.ceil((pd(lastOfMonth)-pd(today))/864e5);
-
-  // ── Auth unit utilization (ABA units by CPT vs authorized total) ─────
-  const unitRows=[];
-  activeClients.forEach(cl=>{
-    if(!cl.authUnits) return;
-    Object.keys(cl.authUnits).forEach(cp=>{
-      const authU=cl.authUnits[cp]; if(!authU) return;
-      const usedMin=(S.sessions||[]).filter(s=>s.cid===cl.id&&s.cptCode===cp&&s.status!=='CX'&&s.date<=today&&(!cl.authStart||s.date>=cl.authStart)&&(!cl.authEnd||s.date<=cl.authEnd)).reduce((t,s)=>t+_dMins(s),0);
-      const usedU=Math.round(usedMin/15);
-      const pctUsed=authU>0?(usedU/authU*100):0;
-      unitRows.push({cl,cp,authU,usedU,pctUsed,remU:authU-usedU});
-    });
-  });
-  const unitAlert=unitRows.filter(r=>r.pctUsed>=80).sort((a,b)=>b.pctUsed-a.pctUsed);
-
-  const money=n=>'$'+(n||0).toFixed(2);
-
   wrap.innerHTML = `
-    <div class="sh2" style="margin-bottom:14px"><h2>\u{1F4B0} Billing</h2>
+    <div class="sh2" style="margin-bottom:14px"><h2>\u{1F4B3} Claim Tracking</h2>
       <div style="font-size:11px;color:var(--mt)">Live view for billing \u00B7 ${pd(today).toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'})}</div>
     </div>
-
     <div class="dash-grid">
 
     <div class="scard" style="grid-column:1/-1">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <h3>\u{1F4B0} Monthly Billable & Receivable \u2014 ${monthLbl}</h3>
+        ${conf?`<span style="background:#E8F5E9;color:#1B5E20;font-size:11px;font-weight:800;padding:3px 10px;border-radius:12px">Confirmed \u2713 ${String(conf.at).slice(0,10)} by ${gs(conf.by)?.initials||conf.by}</span> <span onclick="billingUnconfirm('${conf.id}')" style="cursor:pointer;color:var(--rd);font-weight:800;font-size:12px" title="Remove confirmation">\u2715</span>`:''}
+      </div>
+      <p style="font-size:11px;color:var(--mt);margin-bottom:10px">Billable = rate \u00D7 units for every coded session this month <strong>with a completed session note</strong> (through today) \u00B7 documentation drives billing \u00B7 Claimed/Received pull from Weekly Invoices below</p>
+      <div style="display:flex;gap:26px;flex-wrap:wrap;margin-bottom:10px">
+        <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif">${money(billableTotal)}</div><div style="font-size:10px;color:var(--mt)">BILLABLE</div></div>
+        <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif">${money(claimedTotal)}</div><div style="font-size:10px;color:var(--mt)">CLAIMED</div></div>
+        <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:#1B5E20">${money(receivedTotal)}</div><div style="font-size:10px;color:var(--mt)">RECEIVED</div></div>
+        <div><div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:${outstanding>0?'#E65100':'var(--mt)'}">${money(outstanding)}</div><div style="font-size:10px;color:var(--mt)">OUTSTANDING (claimed, unpaid)</div></div>
+      </div>
+      ${undocumented.length?`<div style="background:#FFEBEE;border:1px solid #EF9A9A;border-radius:6px;padding:7px 10px;font-size:11px;color:#B71C1C;margin-bottom:8px;cursor:pointer" onclick="document.getElementById('missing-notes-card')?.scrollIntoView({behavior:'smooth'})">\u26A0 ${undocumented.length} session(s) this month are coded but awaiting a session note \u2014 not counted in Billable until documented. See Missing Session Notes below \u2193</div>`:''}
+      ${unpriced.length?`<div style="background:#FFF3E0;border:1px solid #FFB300;border-radius:6px;padding:7px 10px;font-size:11px;color:#E65100;margin-bottom:10px">\u26A0 ${unpriced.length} session(s) have a completed note and a CPT code, but no rate set for that client's insurance \u2014 not included in Billable. See the CPT Rate Table in Auth & Code Tracking.</div>`:''}
+      ${!conf?`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input id="bc-comment" placeholder="Comment (optional)" style="flex:1;min-width:200px;font-size:12px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px">
+        <button class="btn bp bsm" onclick="billingConfirm('${ym}',{billableTotal,claimedTotal,receivedTotal})" ${canConfirmBilling()?'':'disabled title="Suzanne or Sara only"'}>Confirm Month \u2713</button>
+      </div>`:(conf.comment?`<div style="font-size:11px;color:var(--t2)"><b>Comment:</b> ${conf.comment}</div>`:'')}
+    </div>
+
+    <div class="scard" style="grid-column:1/-1">
+      <h3>\u26A0\uFE0F OT Staff on ABA CPT Codes ${codeMismatches.length?`<span style="background:#FFEBEE;color:#B71C1C;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">${codeMismatches.length}</span>`:'<span style="background:#E8F5E9;color:#1B5E20;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">None \u2713</span>'}</h3>
+      <p style="font-size:11px;color:var(--mt);margin-bottom:8px">An OT-credentialed staff member is assigned to a session billed with an ABA code \u2014 usually a wrong-code entry. Now also caught automatically at save time.</p>
+      ${codeMismatches.length?codeMismatches.map(s=>{const cl=gc(s.cid);const st=gs(s.stid);return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;background:#FFF8F0;border:1px solid #FFE0B2;border-radius:8px;margin-bottom:6px;font-size:12px;cursor:pointer" onclick="openSess('${s.id}')">
+        <strong>${s.date}</strong> \u00B7 ${cl?cDisplayName(cl):'\u2014'} \u00B7 ${st?st.name+' ('+st.initials+')':'\u2014'} \u00B7 CPT <span style="font-family:monospace;color:#B71C1C;font-weight:700">${s.cptCode}</span>
+      </div>`;}).join(''):'<div style="font-size:12px;color:#1B5E20;font-weight:600">No mismatches found this month \u2713</div>'}
+    </div>
+
+    <div class="scard" style="grid-column:1/-1">
+      ${(()=>{
+        const wk=window._invWk||invWeekStart(today);
+        window._invWk=wk;
+        const wkEndD=pd(wk); wkEndD.setDate(wkEndD.getDate()+6); const wkEnd2=fd(wkEndD);
+        const _iw=isoWeekOf(pd(wk));
+        const wkLbl='Week '+_iw.week+', '+_iw.year+' \u00B7 '+pd(wk).toLocaleDateString('en-US',{month:'short',day:'numeric'})+' \u2013 '+pd(wkEnd2).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+        const rows=[];
+        activeClients.forEach(cl=>{
+          ['ABA','OT'].forEach(svcType=>{
+            const sess=(S.sessions||[]).filter(s=>s.cid===cl.id&&s.date>=wk&&s.date<=wkEnd2&&s.status!=='CX'&&!s._autoAdmin&&s.type===svcType).sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
+            if(!sess.length) return;
+            const units=Math.round(sess.reduce((t,s)=>t+_dMins(s),0)/15);
+            const inv=invGetOrCreate(cl.id,wk,svcType);
+            rows.push({cl,svcType,sess,units,inv});
+          });
+        });
+        return `<h3>\u{1F4CB} Weekly Invoices</h3>
+        <p style="font-size:11px;color:var(--mt);margin-bottom:10px">One claim bundle per client, per service type, per week \u2014 ABA and OT are billed as separate claims. Expand a row to see the individual service lines (date, time, location, CPT, units) a funder requires.</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <button class="btn bxs" onclick="const d=pd(window._invWk||'${wk}');d.setDate(d.getDate()-7);window._invWk=fd(d);rClaimTracking()">\u2190 Prev week</button>
+          <strong style="font-size:13px">${wkLbl}</strong>
+          <button class="btn bxs" onclick="const d=pd(window._invWk||'${wk}');d.setDate(d.getDate()+7);window._invWk=fd(d);rClaimTracking()">Next week \u2192</button>
+        </div>
+        ${rows.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">
+          <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:9.5px;text-transform:uppercase;text-align:left">
+            <th style="padding:4px 6px">Client</th><th style="padding:4px 6px">Type</th><th style="padding:4px 6px;text-align:right">Units</th><th style="padding:4px 6px">Invoice #</th><th style="padding:4px 6px">Claim #</th><th style="padding:4px 6px;text-align:right">Claim Amt</th><th style="padding:4px 6px">Submitted</th><th style="padding:4px 6px;text-align:right">Payment</th><th style="padding:4px 6px">Paid Date</th><th style="padding:4px 6px;text-align:center">Done</th>
+          </tr></thead><tbody>
+          ${rows.map(r=>{const rk=r.cl.id+'-'+r.svcType; return `<tr>
+            <td style="padding:3px 6px;font-weight:600"><span style="cursor:pointer;color:var(--pu)" onclick="const el=document.getElementById('invdet-${rk}');el.style.display=el.style.display==='none'?'table-row':'none';">${cDisplayName(r.cl)} \u25BE</span></td>
+            <td style="padding:3px 6px"><span class="flg" style="background:${r.svcType==='OT'?'#E0F2F1':'#E3F2FD'};color:${r.svcType==='OT'?'#004D40':'#0D47A1'};font-size:10px">${r.svcType}</span></td>
+            <td style="padding:3px 6px;text-align:right;color:var(--mt)">${r.units}</td>
+            <td style="padding:3px 6px"><input value="${r.inv.invoiceNumber||''}" onchange="invSetField('${r.cl.id}','${wk}','${r.svcType}','invoiceNumber',this.value)" style="width:80px;font-size:11px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-family:monospace"></td>
+            <td style="padding:3px 6px"><input value="${r.inv.claimNumber||''}" onchange="invSetField('${r.cl.id}','${wk}','${r.svcType}','claimNumber',this.value)" style="width:90px;font-size:11px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;font-family:monospace"></td>
+            <td style="padding:3px 6px"><input type="number" step="0.01" value="${r.inv.claimAmount??''}" onchange="invSetField('${r.cl.id}','${wk}','${r.svcType}','claimAmount',this.value)" style="width:64px;font-size:11px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;text-align:right"></td>
+            <td style="padding:3px 6px"><input type="date" value="${r.inv.dateSubmitted||''}" onchange="invSetField('${r.cl.id}','${wk}','${r.svcType}','dateSubmitted',this.value)" style="font-size:10.5px;padding:2px 3px;border:1px solid var(--bd);border-radius:4px"></td>
+            <td style="padding:3px 6px"><input type="number" step="0.01" value="${r.inv.paymentAmount??''}" onchange="invSetField('${r.cl.id}','${wk}','${r.svcType}','paymentAmount',this.value)" style="width:64px;font-size:11px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;text-align:right"></td>
+            <td style="padding:3px 6px"><input type="date" value="${r.inv.paymentDate||''}" onchange="invSetField('${r.cl.id}','${wk}','${r.svcType}','paymentDate',this.value)" style="font-size:10.5px;padding:2px 3px;border:1px solid var(--bd);border-radius:4px"></td>
+            <td style="padding:3px 6px;text-align:center"><input type="checkbox" ${r.inv.completed?'checked':''} onchange="invSetField('${r.cl.id}','${wk}','${r.svcType}','completed',this.checked)"></td>
+          </tr>
+          <tr id="invdet-${rk}" style="display:none;background:#FAFAFC">
+            <td colspan="10" style="padding:6px 6px 10px 20px">
+              <table style="width:100%;border-collapse:collapse;font-size:10.5px">
+                <thead><tr style="color:var(--mt);font-size:9px;text-transform:uppercase;text-align:left;border-bottom:1px solid var(--bd)">
+                  <th style="padding:2px 6px">Date of Service</th><th style="padding:2px 6px">Start</th><th style="padding:2px 6px">Stop</th><th style="padding:2px 6px">Location</th><th style="padding:2px 6px">CPT</th><th style="padding:2px 6px;text-align:right">Units</th><th style="padding:2px 6px" title="ABA bills under the case-manager BCBA; OT bills under the treating OT">Rendering Provider</th><th style="padding:2px 6px;text-align:center">Note</th>
+                </tr></thead><tbody>
+                ${mergeConsecutiveClaimLines(r.sess).map(s=>{
+                  const loc=(SESSION_LOCATIONS.find(l=>l.id===(s.location||'clinic'))||{label:'Clinic'}).label;
+                  // Rendering provider: OT bills under the treating OT directly (independently
+                  // licensed). ABA bills under the client's case-manager BCBA, who holds end
+                  // oversight of the case, regardless of which RBT/ABAT delivered the session.
+                  const isOtSess=s.type==='OT';
+                  const rp=isOtSess?gs(s.stid):gs(r.cl.bcba);
+                  const rpLbl=rp?rp.name+' ('+rp.initials+')':(isOtSess?'\u2014':'<span style=\"color:#B71C1C\">No case manager set</span>');
+                  return `<tr style="border-bottom:1px solid #EEE;cursor:pointer" onclick="openSess('${s.sessIds[0]}')" title="${s.merged?'Merged from '+s.sessIds.length+' back-to-back sessions \u2014 click to edit the first':'Click to edit this session'}">
+                    <td style="padding:3px 6px">${s.date}${s.merged?` <span style="font-size:9px;color:#7B1FA2;font-weight:700">\u21C6 merged \u00D7${s.sessIds.length}</span>`:''}</td>
+                    <td style="padding:3px 6px">${ftm(s.s)}</td>
+                    <td style="padding:3px 6px">${ftm(s.e)}</td>
+                    <td style="padding:3px 6px">${loc}</td>
+                    <td style="padding:3px 6px;font-family:monospace">${s.cptCode||'<span style=\"color:#B71C1C\">missing</span>'}</td>
+                    <td style="padding:3px 6px;text-align:right">${s.units}</td>
+                    <td style="padding:3px 6px">${rpLbl}</td>
+                    <td style="padding:3px 6px;text-align:center">${s.allNotes?'\u2713':'<span style=\"color:#B71C1C\">\u2717</span>'}</td>
+                  </tr>`;
+                }).join('')}
+                </tbody>
+                <tfoot><tr style="border-top:1.5px solid var(--bd);font-weight:700">
+                  <td colspan="5" style="padding:3px 6px;text-align:right">Total units:</td>
+                  <td style="padding:3px 6px;text-align:right">${r.units}</td>
+                  <td colspan="2"></td>
+                </tr></tfoot>
+              </table>
+            </td>
+          </tr>`;}).join('')}
+          </tbody></table></div>`:'<div style="font-size:12px;color:var(--mt)">No sessions for any active client that week.</div>'}`;
+      })()}
+    </div>
+
+    <div class="scard" style="grid-column:1/-1">
       <h3>\u{1F4B3} No-Show Fees ${nsOutstanding.length?`<span style="background:#FFEBEE;color:#B71C1C;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">${nsOutstanding.length} outstanding</span>`:'<span style="background:#E8F5E9;color:#1B5E20;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">All collected \u2713</span>'}</h3>
-      <p style="font-size:11px;color:var(--mt);margin-bottom:10px">Policy: fee must be collected before the client's next session. An alert posts to #schedule the moment a session is marked No Show.</p>
+      <p style="font-size:11px;color:var(--mt);margin-bottom:10px">Policy: fee must be collected before the client's next session \u2014 alert posts to #schedule the moment a session is marked No Show.</p>
       ${nsRecent.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
           <th style="padding:5px 8px">Date</th><th style="padding:5px 8px">Client</th><th style="padding:5px 8px">Therapist</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px"></th>
         </tr></thead><tbody>
-        ${nsRecent.map(s=>{
-          const cl=gc(s.cid); const st=gs(s.stid);
-          return `<tr style="${s.nsFeeCollected?'opacity:.5':''}">
-            <td style="padding:5px 8px">${s.date}</td>
-            <td style="padding:5px 8px;font-weight:600">${cl?cDisplayName(cl):'\u2014'}</td>
-            <td style="padding:5px 8px">${st?st.initials:'\u2014'}</td>
-            <td style="padding:5px 8px">${s.nsFeeCollected?`<span style="color:#1B5E20;font-weight:700">\u2713 Collected ${s.nsFeeCollectedAt?String(s.nsFeeCollectedAt).slice(0,10):''}</span>`:'<span style="color:#B71C1C;font-weight:700">Outstanding</span>'}</td>
-            <td style="padding:5px 8px">${s.nsFeeCollected?`<button class="btn bxs" onclick="nsMarkFee('${s.id}',false)">Undo</button>`:`<button class="btn bxs bp" onclick="nsMarkFee('${s.id}',true)">Mark Collected</button>`}</td>
-          </tr>`;
-        }).join('')}
+        ${nsRecent.map(s=>{const cl=gc(s.cid); const st=gs(s.stid); return `<tr style="${s.nsFeeCollected?'opacity:.5':''}">
+          <td style="padding:5px 8px">${s.date}</td><td style="padding:5px 8px;font-weight:600">${cl?cDisplayName(cl):'\u2014'}</td><td style="padding:5px 8px">${st?st.initials:'\u2014'}</td>
+          <td style="padding:5px 8px">${s.nsFeeCollected?`<span style="color:#1B5E20;font-weight:700">\u2713 Collected</span>`:'<span style="color:#B71C1C;font-weight:700">Outstanding</span>'}</td>
+          <td style="padding:5px 8px">${s.nsFeeCollected?`<button class="btn bxs" onclick="nsMarkFee('${s.id}',false)">Undo</button>`:`<button class="btn bxs bp" onclick="nsMarkFee('${s.id}',true)">Mark Collected</button>`}</td>
+        </tr>`;}).join('')}
         </tbody></table></div>`:'<div style="font-size:12px;color:var(--mt);padding:8px 0">No no-shows recorded.</div>'}
     </div>
 
-    <div class="scard">
+    <div class="scard" style="grid-column:1/-1">
+      <h3>\u{1F4B5} Co-pays \u2014 ${monthLbl} ${copayOutstanding.length?`<span style="background:#FFEBEE;color:#B71C1C;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">${copayOutstanding.length} outstanding \u00B7 ${money(copayOutstandingTotal)}</span>`:'<span style="background:#E8F5E9;color:#1B5E20;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">All collected \u2713</span>'}</h3>
+      <p style="font-size:11px;color:var(--mt);margin-bottom:10px">${copayClients.length} client(s) with a co-pay on file \u00B7 collected this month: <strong style="color:#1B5E20">${money(copayCollectedTotal)}</strong></p>
+      ${copaySess.length?`<div style="max-height:280px;overflow-y:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead style="position:sticky;top:0;background:#fff"><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
+          <th style="padding:5px 8px">Date</th><th style="padding:5px 8px">Client</th><th style="padding:5px 8px;text-align:right">Amount</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px"></th>
+        </tr></thead><tbody>
+        ${copaySess.map(s=>{const cl=gc(s.cid);return `<tr style="${s.copayCollected?'opacity:.5':''}">
+          <td style="padding:5px 8px">${s.date}</td><td style="padding:5px 8px;font-weight:600">${cl?cDisplayName(cl):'\u2014'}</td><td style="padding:5px 8px;text-align:right">${money(cl?.copayAmount)}</td>
+          <td style="padding:5px 8px">${s.copayCollected?`<span style="color:#1B5E20;font-weight:700">\u2713 Collected</span>`:'<span style="color:#B71C1C;font-weight:700">Outstanding</span>'}</td>
+          <td style="padding:5px 8px">${s.copayCollected?`<button class="btn bxs" onclick="copayMark('${s.id}',false)">Undo</button>`:`<button class="btn bxs bp" onclick="copayMark('${s.id}',true)">Mark Collected</button>`}</td>
+        </tr>`;}).join('')}
+        </tbody></table></div>`:'<div style="font-size:12px;color:var(--mt)">No sessions this month for clients with a co-pay on file.</div>'}
+    </div>
+
+    <div class="scard" id="missing-notes-card">
       <h3>\u{1F4DD} Missing Session Notes \u2014 This Week</h3>
+      ${undocumented.length>weekSess.length?`<p style="font-size:10px;color:#B71C1C;margin-bottom:6px">${undocumented.length} coded session(s) are missing notes across the full month \u2014 all of them block this month's Billable total, not just this week's</p>`:''}
       ${weekSess.length?`<div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:#B71C1C;margin-bottom:6px">${weekSess.length}</div>
         <div style="max-height:220px;overflow-y:auto">${weekSess.map(s=>{const cl=gc(s.cid);const st=gs(s.stid);return `<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--bd)">${s.date} \u00B7 ${cl?cDisplayName(cl):sTypeLabel(s.type)} \u00B7 ${st?st.initials:'\u2014'}</div>`;}).join('')}</div>`
-        :'<div style="font-size:12px;color:#1B5E20;font-weight:600">All caught up \u2713</div>'}
+        :'<div style="font-size:12px;color:#1B5E20;font-weight:600">All caught up this week \u2713</div>'}
     </div>
 
     <div class="scard">
-      <h3>\u{1F4C4} Sessions Missing a CPT Code</h3>
-      <p style="font-size:10px;color:var(--mt);margin-bottom:6px">Unbillable until fixed \u00B7 this month, through today</p>
-      ${noCpt.length?`<div style="font-size:22px;font-weight:700;font-family:'Playfair Display',serif;color:#E65100;margin-bottom:6px">${noCpt.length}</div>
-        <div style="max-height:220px;overflow-y:auto">${noCpt.map(s=>{const cl=gc(s.cid);const st=gs(s.stid);return `<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--bd);cursor:pointer" onclick="openSess('${s.id}')">${s.date} \u00B7 ${cl?cDisplayName(cl):'\u2014'} \u00B7 ${st?st.initials:'\u2014'}</div>`;}).join('')}</div>`
-        :'<div style="font-size:12px;color:#1B5E20;font-weight:600">None \u2014 every session is coded \u2713</div>'}
+      <h3>\u{1F501} Possible Duplicate Sessions</h3>
+      <p style="font-size:10px;color:var(--mt);margin-bottom:6px">Same therapist+client+date+start \u2014 usually a scheduling artifact</p>
+      ${dups.length?`<div style="max-height:220px;overflow-y:auto">${dups.map(g=>`<div style="font-size:12px;padding:5px 0;border-top:1px solid var(--bd)">${g[0].date} ${ftm(g[0].s)} \u00B7 ${cDisplayName(gc(g[0].cid))} \u2014 <span style="color:#B71C1C;font-weight:700">${g.length}\u00D7</span> ${g.map(s=>`<button class="btn bxs" onclick="openSess('${s.id}')" style="margin-left:4px">Open</button>`).join('')}</div>`).join('')}</div>`:'<div style="font-size:12px;color:#1B5E20;font-weight:600">None found \u2713</div>'}
+    </div>
+
+    </div>`;
+}
+
+// ═══════════ TAB 2: AUTH & CODE TRACKING ════════════════════════════════════
+// Authorization status, required-code compliance, and the CPT rate table --
+// the reference/config side, separate from live claim tracking.
+function rAuthCodeTracking(){
+  const wrap=document.getElementById('authcode-content');
+  if(!wrap) return;
+  seedCptRatesIfEmpty();
+  const today=todayBerlin();
+  const ym=today.slice(0,7);
+  const monthStart=ym+'-01';
+  const activeClients=(S.clients||[]).filter(cl=>cl.status!=='discharged');
+  const lastOfMonth=(()=>{const d=pd(ym+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
+  const daysLeftInMonth=Math.ceil((pd(lastOfMonth)-pd(today))/864e5);
+
+  // ── Client cards missing auth info ───────────────────────────────────
+  const authMissing=activeClients.map(cl=>{
+    const missing=[];
+    if(!cl.authEnd) missing.push('Auth End Date');
+    if(!cl.authNumber) missing.push('Auth Number');
+    if(!cl.ins) missing.push('Insurance');
+    if(!cl.caseId&&!cl.extId) missing.push('Case ID');
+    if(!cl.dxCode) missing.push('Diagnosis Code');
+    const tt=cl.therapyType||(cl.hasOT?'BOTH':'ABA');
+    if((tt==='OT'||tt==='BOTH')&&cl.otAuth&&!cl.otAuth.end) missing.push('OT Auth End');
+    return {cl,missing};
+  }).filter(x=>x.missing.length);
+
+  // ── Upcoming auth expirations ────────────────────────────────────────
+  const authExp=activeClients.filter(cl=>cl.authEnd).map(cl=>({cl,days:Math.ceil((pd(cl.authEnd)-pd(today))/864e5)})).filter(x=>x.days<=60).sort((a,b)=>a.days-b.days);
+  const otAuthExp=activeClients.filter(cl=>cl.otAuth&&cl.otAuth.end).map(cl=>({cl,days:Math.ceil((pd(cl.otAuth.end)-pd(today))/864e5),isOt:true})).filter(x=>x.days<=60).sort((a,b)=>a.days-b.days);
+
+  // ── Waitlist billing readiness ───────────────────────────────────────
+  const wl=(S.waitlist||[]).slice();
+  const wlNoIns=wl.filter(w=>!w.ins);
+  const wlNoAuth=wl.filter(w=>w.ins&&!w.authEnd&&!w.authNumber);
+  const wlAuthReady=wl.filter(w=>w.status==='AUTH'||(w.authEnd&&!wlNoAuth.includes(w)));
+
+  // ── Monthly 97155/97156 requirement ──────────────────────────────────
+  const reqCodes=['97155','97156'];
+  const reqClients=activeClients.filter(cl=>{const tt=cl.therapyType||(cl.hasOT?'BOTH':'ABA');return tt==='ABA'||tt==='BOTH';});
+  const reqRows=reqClients.map(cl=>{
+    const counts={};
+    reqCodes.forEach(cp=>{ counts[cp]=(S.sessions||[]).filter(s=>s.cid===cl.id&&s.cptCode===cp&&s.status!=='CX'&&(s.date||'').startsWith(ym)&&s.date<=today).length; });
+    return {cl,counts};
+  });
+
+  // ── CPT rate table: only payers actually in use ──────────────────────
+  const usedIns=[...new Set([...S.clients.map(c=>c.ins),...( S.waitlist||[]).map(w=>w.ins)].filter(Boolean))];
+  const insCols=INS.filter(i=>usedIns.includes(i.id));
+  const cptRows=Object.keys(CPT_RATE_SEED);
+
+  wrap.innerHTML = `
+    <div class="sh2" style="margin-bottom:14px"><h2>\u{1F4CB} Auth & Code Tracking</h2>
+      <div style="font-size:11px;color:var(--mt)">Authorizations, required codes, and billing rates</div>
+    </div>
+    <div class="dash-grid">
+
+    <div class="scard" style="grid-column:1/-1">
+      <h3>\u26A0\uFE0F Client Cards Missing Auth Info ${authMissing.length?`<span style="background:#FFEBEE;color:#B71C1C;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">${authMissing.length}</span>`:'<span style="background:#E8F5E9;color:#1B5E20;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">All complete \u2713</span>'}</h3>
+      <p style="font-size:10px;color:var(--mt);margin-bottom:8px">Click a client to fix it</p>
+      ${authMissing.length?`<div style="display:flex;flex-direction:column;gap:5px">${authMissing.map(x=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 10px;background:#FFF8F0;border:1px solid #FFE0B2;border-radius:8px;cursor:pointer" onclick="openClientDetail('${x.cl.id}')">
+        <span style="font-weight:700;font-size:12px;flex:1;min-width:140px">${cDisplayName(x.cl)}</span>
+        ${x.missing.map(m=>`<span style="background:#FFEBEE;color:#B71C1C;font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px">${m}</span>`).join('')}
+      </div>`).join('')}</div>`:'<div style="font-size:12px;color:#1B5E20;font-weight:600">Every active client card has complete auth info \u2713</div>'}
     </div>
 
     <div class="scard" style="grid-column:1/-1">
       <h3>\u{1F4C5} Upcoming Auth Expirations <span style="font-weight:400;font-size:11px;color:var(--mt)">\u2014 next 60 days</span></h3>
       ${(authExp.length+otAuthExp.length)?`<div style="display:flex;flex-wrap:wrap;gap:8px">
-        ${authExp.map(x=>`<span class="flg" style="background:${x.days<14?'#FFEBEE':'#FFF3E0'};color:${x.days<14?'#B71C1C':'#E65100'};cursor:pointer" onclick="openClientDetail('${x.cl.id}')" title="ABA auth ends ${x.cl.authEnd}">${cDisplayName(x.cl)} \u00B7 ABA ${x.days}d</span>`).join('')}
-        ${otAuthExp.map(x=>`<span class="flg" style="background:${x.days<14?'#FFEBEE':'#FFF3E0'};color:${x.days<14?'#B71C1C':'#E65100'};cursor:pointer" onclick="openClientDetail('${x.cl.id}')" title="OT auth ends ${x.cl.otAuth.end}">${cDisplayName(x.cl)} \u00B7 OT ${x.days}d</span>`).join('')}
+        ${authExp.map(x=>`<span class="flg" style="background:${x.days<14?'#FFEBEE':'#FFF3E0'};color:${x.days<14?'#B71C1C':'#E65100'};cursor:pointer" onclick="openClientDetail('${x.cl.id}')">${cDisplayName(x.cl)} \u00B7 ABA ${x.days}d</span>`).join('')}
+        ${otAuthExp.map(x=>`<span class="flg" style="background:${x.days<14?'#FFEBEE':'#FFF3E0'};color:${x.days<14?'#B71C1C':'#E65100'};cursor:pointer" onclick="openClientDetail('${x.cl.id}')">${cDisplayName(x.cl)} \u00B7 OT ${x.days}d</span>`).join('')}
       </div>`:'<div style="font-size:12px;color:var(--mt)">Nothing expiring in the next 60 days.</div>'}
     </div>
 
     <div class="scard" style="grid-column:1/-1">
-      <h3>\u{1F3AB} Authorized Unit Utilization <span style="font-weight:400;font-size:11px;color:var(--mt)">\u2014 \u226580% used, current auth period</span></h3>
-      ${unitAlert.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
-          <th style="padding:5px 8px">Client</th><th style="padding:5px 8px">CPT</th><th style="padding:5px 8px;text-align:right">Authorized</th><th style="padding:5px 8px;text-align:right">Used</th><th style="padding:5px 8px;text-align:right">Remaining</th><th style="padding:5px 8px;text-align:right">%</th>
-        </tr></thead><tbody>
-        ${unitAlert.map(r=>`<tr style="cursor:pointer" onclick="openClientDetail('${r.cl.id}')">
-          <td style="padding:5px 8px;font-weight:600">${cDisplayName(r.cl)}</td>
-          <td style="padding:5px 8px;font-family:monospace">${r.cp}</td>
-          <td style="padding:5px 8px;text-align:right">${r.authU}</td>
-          <td style="padding:5px 8px;text-align:right">${r.usedU}</td>
-          <td style="padding:5px 8px;text-align:right;font-weight:700;color:${r.remU<=0?'#B71C1C':'#E65100'}">${r.remU}</td>
-          <td style="padding:5px 8px;text-align:right;font-weight:700;color:${r.remU<=0?'#B71C1C':'#E65100'}">${r.pctUsed.toFixed(0)}%</td>
-        </tr>`).join('')}
-        </tbody></table></div>`:'<div style="font-size:12px;color:#1B5E20;font-weight:600">No client is near their unit cap \u2713</div>'}
+      <h3>\u{1F4CB} Waitlist \u2014 Billing Readiness <span style="font-weight:400;font-size:11px;color:var(--mt)">\u2014 ${wl.length} on waitlist \u00B7 <a onclick="sw('waitlist')" style="color:var(--pu);font-weight:600;cursor:pointer">open full Waitlist tab \u2192</a></span></h3>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px">
+        <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif;color:${wlNoIns.length?'#B71C1C':'#1B5E20'}">${wlNoIns.length}</div><div style="font-size:10px;color:var(--mt)">NO INSURANCE</div></div>
+        <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif;color:${wlNoAuth.length?'#E65100':'#1B5E20'}">${wlNoAuth.length}</div><div style="font-size:10px;color:var(--mt)">AWAITING AUTH</div></div>
+        <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif;color:#1B5E20">${wlAuthReady.length}</div><div style="font-size:10px;color:var(--mt)">AUTH READY</div></div>
+      </div>
+      ${(!wl.length)?'<div style="font-size:12px;color:var(--mt)">Waitlist is empty.</div>':''}
     </div>
 
     <div class="scard" style="grid-column:1/-1">
@@ -8004,28 +8441,29 @@ function rBilling(){
     </div>
 
     <div class="scard" style="grid-column:1/-1">
-      <h3>\u{1F501} Possible Duplicate Sessions</h3>
-      <p style="font-size:10px;color:var(--mt);margin-bottom:6px">Same therapist + client + date + start time \u2014 usually a scheduling artifact, not a real double-booking</p>
-      ${dups.length?dups.map(g=>`<div style="font-size:12px;padding:5px 0;border-top:1px solid var(--bd)">${g[0].date} ${ftm(g[0].s)} \u00B7 ${cDisplayName(gc(g[0].cid))} \u00B7 ${gs(g[0].stid)?.initials||''} \u2014 <span style="color:#B71C1C;font-weight:700">${g.length} entries</span> ${g.map(s=>`<button class="btn bxs" onclick="openSess('${s.id}')" style="margin-left:4px">Open</button>`).join('')}</div>`).join(''):'<div style="font-size:12px;color:#1B5E20;font-weight:600">None found \u2713</div>'}
-    </div>
-
-    <div class="scard" style="grid-column:1/-1">
-      <h3>\u{1F4CA} CPT Code Utilization <span style="font-weight:400;font-size:11px;color:var(--mt)">\u2014 ${pd(monthStart).toLocaleDateString('en-US',{month:'long',year:'numeric'})}, through today</span></h3>
-      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
-        <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
-          <th style="padding:5px 8px">CPT</th><th style="padding:5px 8px">Provider</th><th style="padding:5px 8px;text-align:right">Sessions</th><th style="padding:5px 8px;text-align:right">Hours</th><th style="padding:5px 8px;text-align:right">Units (15-min)</th>
+      <h3>\u{1F4B6} CPT Rate Table</h3>
+      <p style="font-size:11px;color:var(--mt);margin-bottom:10px">Seeded from the CPT & Absence Codes reference \u00B7 every cell is editable \u00B7 only payers currently in use are shown \u00B7 1 unit = 15 min</p>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11.5px">
+        <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:9.5px;text-transform:uppercase;text-align:left">
+          <th style="padding:4px 6px">CPT</th><th style="padding:4px 6px">Description</th>
+          ${insCols.map(i=>`<th style="padding:4px 6px;text-align:right">${i.label}</th>`).join('')}
         </tr></thead><tbody>
-        ${cptList.map(r=>`<tr><td style="padding:5px 8px;font-family:monospace;font-weight:700">${r.cpt}</td><td style="padding:5px 8px">${gs(r.stid)?.initials||r.stid}</td><td style="padding:5px 8px;text-align:right">${r.sessions}</td><td style="padding:5px 8px;text-align:right">${_h1(r.mins)}h</td><td style="padding:5px 8px;text-align:right">${Math.round(r.mins/15)}</td></tr>`).join('')||'<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--mt)">No billable sessions yet this month</td></tr>'}
+        ${cptRows.map(cpt=>`<tr>
+          <td style="padding:3px 6px;font-family:monospace;font-weight:700">${cpt}</td>
+          <td style="padding:3px 6px;color:var(--mt);font-size:10.5px">${CPT_RATE_SEED[cpt].desc}</td>
+          ${insCols.map(i=>`<td style="padding:3px 6px;text-align:right"><input type="number" step="0.01" value="${cptRateFor(cpt,i.id)??''}" onchange="setCptRate('${cpt}','${i.id}',this.value)" style="width:60px;font-size:11px;padding:2px 4px;border:1px solid var(--bd);border-radius:4px;text-align:right"></td>`).join('')}
+        </tr>`).join('')}
         </tbody></table></div>
+      ${!insCols.length?'<div style="font-size:12px;color:var(--mt);margin-top:8px">No clients or waitlist entries have an insurance set yet.</div>':''}
     </div>
 
     <div class="scard" style="grid-column:1/-1">
       <h3>\u{1F517} Provider Tools & Resources</h3>
-      <div id="billing-links">${(S.cfg.providerLinks||[]).map((l,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--bd)"><a href="${l.url}" target="_blank" style="font-size:12px;font-weight:600;color:var(--pu);flex:1">\u{1F517} ${l.name}</a><span onclick="S.cfg.providerLinks.splice(${i},1);save();rBilling()" style="cursor:pointer;color:var(--rd);font-size:12px">\u2715</span></div>`).join('')||'<div style="font-size:12px;color:var(--mt);padding:6px 0">No links added yet.</div>'}</div>
+      <div id="billing-links">${(S.cfg.providerLinks||[]).map((l,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--bd)"><a href="${l.url}" target="_blank" style="font-size:12px;font-weight:600;color:var(--pu);flex:1">\u{1F517} ${l.name}</a><span onclick="S.cfg.providerLinks.splice(${i},1);save();rAuthCodeTracking()" style="cursor:pointer;color:var(--rd);font-size:12px">\u2715</span></div>`).join('')||'<div style="font-size:12px;color:var(--mt);padding:6px 0">No links added yet.</div>'}</div>
       <div style="display:flex;gap:6px;margin-top:8px">
         <input id="bl-name" placeholder="Name (e.g. TRICARE West Portal)" style="flex:1;font-size:12px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px">
         <input id="bl-url" placeholder="https://..." style="flex:1;font-size:12px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px">
-        <button class="btn bsm bp" onclick="const n=document.getElementById('bl-name').value.trim(),u=document.getElementById('bl-url').value.trim();if(!n||!u)return;S.cfg.providerLinks=(S.cfg.providerLinks||[]).concat({name:n,url:u});save();rBilling()">Add</button>
+        <button class="btn bsm bp" onclick="const n=document.getElementById('bl-name').value.trim(),u=document.getElementById('bl-url').value.trim();if(!n||!u)return;S.cfg.providerLinks=(S.cfg.providerLinks||[]).concat({name:n,url:u});save();rAuthCodeTracking()">Add</button>
       </div>
     </div>
 
@@ -8039,16 +8477,30 @@ function rBilling(){
 const DASH_VIEWERS = ['SW','SB','JW'];
 // Billing dashboard: Jill's dedicated page. Same admin trio can view (SW/SB
 // for oversight), but it lives as its own tab, separate from the Dashboard.
-const BILLING_VIEWERS = ['SW','SB','JW'];
+const BILLING_VIEWERS = ['SW','JW','ToS']; // accounting/dollar figures: Suzanne, Jill, Tobias (CFO) only
 function canViewBilling(){
   if(!isViewOnly) return true;
   const selfId=viewerStid||mySchedStid;
   return !!selfId && BILLING_VIEWERS.includes(selfId);
 }
+// Session List review: Sara reviews the same session data (dates, times,
+// codes, units, documentation) with NO dollar figures, and confirms
+// separately on her side. Owner can also access as backup.
+const SESSREVIEW_VIEWERS = ['SW','SB'];
+function canViewSessReview(){
+  if(!isViewOnly) return true;
+  const selfId=viewerStid||mySchedStid;
+  return !!selfId && SESSREVIEW_VIEWERS.includes(selfId);
+}
 function updateBillingNav(){
   const show=canViewBilling();
-  const d=document.getElementById('nav-billing'); if(d) d.style.display=show?'':'none';
-  const m=document.getElementById('mnav-billing'); if(m) m.style.display=show?'':'none';
+  const d1=document.getElementById('nav-claims'); if(d1) d1.style.display=show?'':'none';
+  const m1=document.getElementById('mnav-claims'); if(m1) m1.style.display=show?'':'none';
+  const d2=document.getElementById('nav-authcode'); if(d2) d2.style.display=show?'':'none';
+  const m2=document.getElementById('mnav-authcode'); if(m2) m2.style.display=show?'':'none';
+  const showSr=canViewSessReview();
+  const d3=document.getElementById('nav-sessreview'); if(d3) d3.style.display=showSr?'':'none';
+  const m3=document.getElementById('mnav-sessreview'); if(m3) m3.style.display=showSr?'':'none';
 }
 function canViewDash(){
   if(!isViewOnly) return true; // unlocked scheduler session
@@ -11376,13 +11828,18 @@ function rLeaveRequests(){
           <span class="lr-badge lr-pending-b">Pending</span>
           <span style="font-size:10px;color:var(--mt);margin-left:auto">${new Date(r.submittedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span>
         </div>
-        <div class="lr-meta">${dateStr} · ${r.days.length} day${r.days.length!==1?'s':''}</div>
+        <div class="lr-meta">${dateStr} · ${r.halfDay?(r.halfHours+'h '+r.halfWhen+' (partial day)'):(r.type==='FLEX'&&r.flexHours?(r.flexHours+'h '+r.flexWhen+' (flex)'):(r.days.length+' day'+(r.days.length!==1?'s':'')))}</div>
         ${r.notes?`<div style="font-size:11px;color:var(--t2);font-style:italic">"${r.notes}"</div>`:''}
         ${shortNotice?'<div class="lr-notice">⚠ Short notice — less than 2 weeks</div>':''}
+        ${r.from===r.to?`<div style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:4px">
+          <label>Approve for:</label>
+          <input type="number" id="hrs-${r.id}" value="${r.halfDay?r.halfHours:hrsPerDay(st)}" min="0.5" step="0.5" style="width:56px;padding:3px 6px;border:1.5px solid var(--bd);border-radius:6px">
+          <span style="color:var(--mt)">hours (full day = ${hrsPerDay(st)}h)</span>
+        </div>`:''}
         <div class="lr-actions">
           <button class="btn bsm bd" onclick="declineLeaveRequest('${r.id}')">✕ Decline</button>
           <button class="btn bsm" onclick="openEditLeaveReq('${r.id}')">✎ Edit</button>
-          <button class="btn bsm bp" style="background:var(--gn);border-color:var(--gn)" onclick="approveLeaveRequest('${r.id}')">✓ Approve</button>
+          <button class="btn bsm bp" style="background:var(--gn);border-color:var(--gn)" onclick="approveLeaveRequestWithHours('${r.id}')">✓ Approve</button>
         </div>
       </div>`;
     }).join('');
@@ -11399,6 +11856,25 @@ function rLeaveRequests(){
   if(w2) w2.innerHTML=html;
 }
 
+// Reads the exact-hours field on single-day pending requests before
+// approving. Equal to (or over) the full-day rate = approved as a full day.
+// Under the full-day rate = approved as partial hours, deducted precisely.
+async function approveLeaveRequestWithHours(id){
+  const r=(S.leaveRequests||[]).find(x=>x.id===id);if(!r)return;
+  const st=gs(r.stid);if(!st)return;
+  if(r.from===r.to){
+    const inp=document.getElementById('hrs-'+id);
+    if(inp){
+      const cap=hrsPerDay(st);
+      let hh=parseFloat(inp.value);
+      if(isNaN(hh)||hh<=0){ alert('Enter a valid number of hours to approve.'); return; }
+      if(hh>cap) hh=cap;
+      if(hh<cap){ r.halfDay=true; r.halfHours=hh; r.halfWhen=r.halfWhen||'AM'; }
+      else { delete r.halfDay; delete r.halfHours; delete r.halfWhen; }
+    }
+  }
+  return approveLeaveRequest(id);
+}
 async function approveLeaveRequest(id){
   const r=(S.leaveRequests||[]).find(x=>x.id===id);if(!r)return;
   const st=gs(r.stid);if(!st)return;
@@ -11550,6 +12026,15 @@ function openEditLeaveReq(id){
       <div class="fg"><label>To</label><input type="date" id="elr-to" value="${r.to}"></div>
     </div>
     <div class="fg"><label>Status</label><select id="elr-status">${statusOpts}</select></div>
+    <div class="fg" style="border:1.5px solid var(--bd);border-radius:8px;padding:10px">
+      <label style="display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" id="elr-half" ${r.halfDay?'checked':''} onchange="document.getElementById('elr-half-wrap').style.display=this.checked?'flex':'none'"> Partial day (specific hours, not a full day)</label>
+      <div id="elr-half-wrap" style="display:${r.halfDay?'flex':'none'};gap:10px;align-items:center;margin-top:8px;flex-wrap:wrap">
+        <label style="font-size:12px">Hours: <input type="number" id="elr-half-hours" value="${r.halfHours||''}" min="0.5" step="0.5" style="width:70px;margin-left:4px"></label>
+        <label style="font-size:12px"><input type="radio" name="elr-half-when" value="AM" ${(!r.halfWhen||r.halfWhen==='AM')?'checked':''}> AM</label>
+        <label style="font-size:12px"><input type="radio" name="elr-half-when" value="PM" ${r.halfWhen==='PM'?'checked':''}> PM</label>
+      </div>
+      <div style="font-size:10px;color:var(--mt);margin-top:6px">Partial-day requests must be a single date (From = To). Unchecked = full day(s) off, deducted at the standard daily rate.</div>
+    </div>
     <div class="fg"><label>Notes</label><textarea id="elr-notes" rows="2">${r.notes||''}</textarea></div>
     <div class="mact">
       <button class="btn bd" onclick="deleteLeaveReq('${id}');closeM()">Delete</button>
@@ -11568,6 +12053,7 @@ function saveEditLeaveReq(id){
   const newType=document.getElementById('elr-type').value;
   const newStatus=document.getElementById('elr-status').value;
   const newNotes=document.getElementById('elr-notes').value;
+  const isHalf=document.getElementById('elr-half')?.checked||false;
 
   r.stid=newStid||r.stid;
   if(newSt) r.fromName=newSt.name;
@@ -11582,13 +12068,36 @@ function saveEditLeaveReq(id){
   const cur=pd(newFrom);const end=pd(newTo);
   while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5&&!isHol(fd(new Date(cur))))days.push(fd(new Date(cur)));cur.setDate(cur.getDate()+1);}
 
+  const targetSt=newSt||st;
+
+  // Half-day / partial-hours: validate and stamp, or clear if unchecked.
+  if(isHalf){
+    if(newFrom!==newTo||days.length!==1){
+      alert('Partial-day requests must be a single date (From = To).');
+      return;
+    }
+    const cap=hrsPerDay(targetSt);
+    let hh=parseFloat(document.getElementById('elr-half-hours')?.value)||0;
+    const hw=document.querySelector('input[name="elr-half-when"]:checked')?.value||'AM';
+    if(hh<0.5){ alert('Partial-day hours must be at least 0.5.'); return; }
+    if(hh>cap) hh=cap;
+    r.halfDay=true; r.halfHours=hh; r.halfWhen=hw; r.hours=hh;
+  } else {
+    delete r.halfDay; delete r.halfHours; delete r.halfWhen; delete r.hours;
+  }
+
   r.from=newFrom;r.to=newTo;r.type=newType;r.status=newStatus;r.notes=newNotes;r.days=days;
 
-  // Re-add PTO dates if now approved
-  const targetSt=newSt||st;
+  // Re-add PTO dates if now approved — half-day carries its specific hours,
+  // full-day uses the standard daily rate (computed downstream from role/contract).
   if(newStatus==='approved'&&targetSt){
     migratePto(targetSt);
-    days.forEach(dt=>{if(!ptoOnDate(targetSt,dt)&&!isHol(dt))targetSt.pto.push({date:dt,type:newType==='SICK'?'SICK':'PTO'});});
+    days.forEach(dt=>{
+      if(ptoOnDate(targetSt,dt)||isHol(dt)) return;
+      const entry={date:dt,type:newType==='SICK'?'SICK':'PTO'};
+      if(r.halfDay){ entry.hours=r.halfHours; entry.halfDay=true; entry.halfWhen=r.halfWhen; }
+      targetSt.pto.push(entry);
+    });
     targetSt.pto.sort((a,b)=>a.date.localeCompare(b.date));
   }
 
