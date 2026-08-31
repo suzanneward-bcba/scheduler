@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-08-23T05:00Z-loggedadmin">
+<meta name="app-version" content="2026-08-31T13:40Z-tscommentshow">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -6388,7 +6388,7 @@ function rptTimesheets(){
       <td style="padding:6px 8px">${conf
         ?`<span style="background:#E8F5E9;color:#1B5E20;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap">\u2713 ${String(conf.at).slice(0,10)}</span> <span onclick="tsUnconfirm('${conf.id}')" title="Remove this confirmation (e.g. confirmed prematurely) — the employee will review and confirm again" style="cursor:pointer;color:var(--rd);font-weight:800;font-size:11px">\u2715</span>`
         :(hasData?'<span style="background:#FFF3E0;color:#E65100;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px">Not confirmed</span>':'<span style="color:var(--mt);font-size:10px">\u2014</span>')}</td>
-      <td style="padding:6px 8px;font-size:11px;color:#B71C1C">${e.leaveConflicts?`\u26A0 ${e.leaveConflicts} session${e.leaveConflicts>1?'s':''} during leave `:''}${conf&&conf.comment?('\u{1F4AC} '+conf.comment):''}</td>
+      <td style="padding:6px 8px;font-size:11px;color:#B71C1C">${e.leaveConflicts?`\u26A0 ${e.leaveConflicts} session${e.leaveConflicts>1?'s':''} during leave `:''}${conf&&conf.comment?('\u{1F4AC} '+conf.comment):''}${(!conf&&tsCommentOf(t.id,ym))?('\u{1F4AC} '+tsCommentOf(t.id,ym).text):''}</td>
     </tr>`;
   }).join('');
   const confirmedN=staff.filter(t=>tsConfirmOf(t.id,ym)).length;
