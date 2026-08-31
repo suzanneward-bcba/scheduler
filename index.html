@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-08-23T04:00Z-billingrevert">
+<meta name="app-version" content="2026-08-23T05:00Z-loggedadmin">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -2252,6 +2252,17 @@ function _fsPostLoadFixups(){
   // Field consolidation: extId IS the TRICARE Case ID. Fold any legacy
   // caseId values into extId so there's a single canonical field.
   (S.clients||[]).forEach(c=>{ if(!c.extId&&c.caseId)c.extId=c.caseId; });
+  // Fill Day sessions were incorrectly tagged _autoAdmin, which excluded them
+  // from timesheets, the payroll sync, AND made them eligible for storage
+  // cleanup. They are real scheduled work — clear the flag once.
+  if(!S.cfg._fillDayAutoAdminFixed){
+    let _fdFixed=0;
+    (S.sessions||[]).forEach(s=>{
+      if(s._autoAdmin && s.notes==='Filled via Fill Day'){ delete s._autoAdmin; _fdFixed++; }
+    });
+    S.cfg._fillDayAutoAdminFixed=true;
+    if(_fdFixed){ console.log('Fill Day fix: cleared _autoAdmin on '+_fdFixed+' session(s)'); try{ save(); }catch(e){} }
+  }
   if(!S.cfg.adminTasksUrlSeeded){
     S.cfg.adminTasksUrl = S.cfg.adminTasksUrl || 'https://docs.google.com/spreadsheets/d/1QhJ-FSYh7gfP-468WreYAnWxlcHC3mzjD1Vq6RGH_VI/edit';
     S.cfg.adminTasksUrlSeeded = true;
@@ -3687,8 +3698,9 @@ function storageCleanup(){
   });
   S.schedRequests=(S.schedRequests||[]).filter(r=>!r.createdAt||String(r.createdAt).slice(0,10)>=cutoff);
   S.schedNotes=(S.schedNotes||[]).filter(n=>!n.expires||n.expires>=today);
-  (S.sessions||[]).forEach(s=>{ if(s._autoAdmin&&s.date<today) window._sessDel.add(s.id); });
-  S.sessions=(S.sessions||[]).filter(s=>!(s._autoAdmin&&s.date<today));
+  // Never delete an admin block the therapist logged activity on — it's paid time.
+  (S.sessions||[]).forEach(s=>{ if(s._autoAdmin&&s.date<today&&!String(s.sessionLog||'').trim()) window._sessDel.add(s.id); });
+  S.sessions=(S.sessions||[]).filter(s=>!(s._autoAdmin&&s.date<today&&!String(s.sessionLog||'').trim()));
   const after={
     leave:S.leaveRequests.length, reqs:S.schedRequests.length,
     notes:S.schedNotes.length, auto:S.sessions.filter(s=>s._autoAdmin).length
@@ -3852,7 +3864,7 @@ function doFillDay(date){
     S.sessions.push({
       id:'s'+uid(), cid:'', stid:st.id, date, s, e,
       type, status:'OK', cx:'', makeup:false, recurGroup:'',
-      notes:'Filled via Fill Day', _autoAdmin:true
+      notes:'Filled via Fill Day'
     });
     added++;
   });
@@ -5459,7 +5471,11 @@ function tsEntries(stid, ym){
   // so without this cap the current month would show the whole month's planned
   // sessions as if already worked. Future dates stay off until their day comes.
   const _cap=todayBerlin();
-  const sess=(S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&s.date<=_cap&&!s._autoAdmin&&!s._virtual)
+  // Auto-generated admin blocks (from cancellations / Fill Day) count as paid
+  // time ONLY when the therapist logged what they actually did in that slot.
+  // An unlogged block stays an availability placeholder.
+  const _logged=s=>!s._autoAdmin || !!String(s.sessionLog||'').trim();
+  const sess=(S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&s.date<=_cap&&_logged(s)&&!s._virtual)
     .sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
   const _leaveDates=new Set((( (gs(stid)||{}).pto)||[]).map(x=>typeof x==='string'?x:(x&&x.date)).filter(Boolean));
   const rows=sess.map(s=>{
