@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-08-23T02:15Z-inlinehours">
+<meta name="app-version" content="2026-08-23T03:25Z-rmreset">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1966,7 +1966,7 @@ function setSyncStatus(state, msg){
 // The legacy scheduler/data doc is left untouched as a rollback backup.
 // save() only writes docs whose content actually changed (dirty tracking).
 
-const FS_META_EXTRA = ['_leaveReqHoursMigrated','tsConfirms','billingConfirms','sessionListConfirms']; // top-level flags + timesheet confirmations stored in meta
+const FS_META_EXTRA = ['_leaveReqHoursMigrated','tsConfirms','billingConfirms','sessionListConfirms','tsComments']; // top-level flags + timesheet confirmations stored in meta
 let _fsCache = {};                                       // docPath → last JSON written/read
 let _fsMonths = {sessions:new Set(), logs:new Set(), invoices:new Set()};    // month docs known to exist
 
@@ -5538,6 +5538,22 @@ function tsEntries(stid, ym){
 }
 function tsConfirmOf(stid, ym){ return (S.tsConfirms||[]).find(x=>x.stid===stid&&x.ym===ym); }
 
+// A discrepancy comment is its own record, separate from confirming. An
+// employee can flag an issue WITHOUT attesting the timesheet is accurate —
+// confirming and commenting are two different claims and shouldn't be
+// forced into one action.
+function tsCommentOf(stid, ym){ return (S.tsComments||[]).find(x=>x.stid===stid&&x.ym===ym); }
+function tsSubmitComment(stid, ym){
+  if(isViewOnly && viewerStid!==stid){ alert('Only '+(gs(stid)?.name||'the employee')+' can comment on their own timesheet.'); return; }
+  const cEl=document.getElementById('ts-comment-'+stid);
+  const text=cEl?cEl.value.trim():'';
+  if(!text){ alert('Type a comment describing the issue first.'); return; }
+  S.tsComments=(S.tsComments||[]).filter(x=>!(x.stid===stid&&x.ym===ym)).concat({
+    id:'tsc'+uid(), stid, ym, at:new Date().toISOString(), text
+  });
+  save(); rMySTimesheet(stid);
+  showToast('Comment submitted \u2713','var(--gn)');
+}
 function tsConfirm(stid, ym){
   if(isViewOnly && viewerStid!==stid){ alert('Only '+(gs(stid)?.name||'the employee')+' can confirm their own timesheet.'); return; }
   const _ld=(()=>{const d=pd(ym+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
@@ -5545,12 +5561,14 @@ function tsConfirm(stid, ym){
   if(tsConfirmOf(stid,ym)) return;
   const e=tsEntries(stid,ym);
   const cEl=document.getElementById('ts-comment-'+stid);
-  const comment=cEl?cEl.value.trim():'';
+  const existing=tsCommentOf(stid,ym);
+  const comment=(cEl?cEl.value.trim():'')||(existing?existing.text:'');
   S.tsConfirms=(S.tsConfirms||[]).concat({
     id:'tc'+uid(), stid, ym, at:new Date().toISOString(),
     comment: comment||'',
     totals:{directMin:e.directMin, indirectMin:e.indirectMin, adminMin:e.adminMin, otherMin:e.otherMin, leaveMin:e.leaveMin, sessN:e.rows.filter(r=>!r.cx).length}
   });
+  S.tsComments=(S.tsComments||[]).filter(x=>!(x.stid===stid&&x.ym===ym)); // comment now lives on the confirmation record
   save(); rMyS();
   showToast('Timesheet for '+ym+' confirmed \u2713','var(--gn)');
   // Fire the confirm-triggered sync webhook (if configured). Fire-and-forget:
@@ -5635,13 +5653,12 @@ function rMySTimesheet(stid){
       return '';})()}
     ${conf
       ?(conf.comment?`<div style="margin-top:8px;font-size:11px;color:var(--t2)"><b>Your comment:</b> ${conf.comment}</div>`:'')
-      :(!window._tsConfirmable
-        ?`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd);font-size:11px;color:var(--mt)">\u{1F512} Confirmation opens on the last day of the month, once all sessions are in. Keep an eye on your entries until then.</div>`
-        :`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <input id="ts-comment-${stid}" placeholder="Discrepancy or comment (optional \u2014 goes to Suzanne & Sara)" style="flex:1;min-width:200px;font-size:11px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
-        <button class="btn bp bsm" onclick="tsConfirm('${stid}','${ym}')">Confirm Timesheet \u2713</button>
+      :`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bd);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="ts-comment-${stid}" placeholder="Discrepancy or comment \u2014 goes to Suzanne & Sara" style="flex:1;min-width:200px;font-size:11px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
+        <button class="btn bsm" onclick="tsSubmitComment('${stid}','${ym}')">Submit Comment</button>
+        ${window._tsConfirmable?`<button class="btn bp bsm" onclick="tsConfirm('${stid}','${ym}')">Confirm Timesheet \u2713</button>`:''}
       </div>
-      <div style="font-size:10px;color:var(--mt);margin-top:6px">By confirming you verify these hours, cancellations, and session notes are accurate and complete for ${monthLbl}.</div>`)}
+      ${!window._tsConfirmable?`<div style="font-size:10px;color:var(--mt);margin-top:6px">\u{1F512} Confirmation opens on the last day of the month, once all sessions are in.</div>`:''}`}
   </div>`;
 }
 
