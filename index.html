@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-08-31T13:40Z-tscommentshow">
+<meta name="app-version" content="2026-09-02T12:25Z-deletefuture">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1783,6 +1783,12 @@ const SERVICE_OPTIONS=[
   {key:'97156',    label:'97156 – Parent Training',             type:'INDIRECT', cpt:'97156', category:'indirect', roles:['BCBA']},
   {key:'97167',    label:'97167 – OT Evaluation',               type:'INDIRECT', cpt:'97167', category:'indirect', roles:['OT']},
   {key:'97168',    label:'97168 – OT Re-evaluation',            type:'INDIRECT', cpt:'97168', category:'indirect', roles:['OT']},
+  {key:'97750',    label:'97750 – Physical Performance Test',    type:'INDIRECT', cpt:'97750', category:'indirect', roles:['OT']},
+  {key:'0373T',    label:'0373T – ABA, Multiple Therapists',     type:'ABA',      cpt:'0373T', category:'direct',   roles:['BCBA','RBT','ABAT']},
+  {key:'97157',    label:'97157 – Multiple-Family Group Guidance', type:'INDIRECT', cpt:'97157', category:'indirect', roles:['BCBA']},
+  {key:'97158',    label:'97158 – Group Adaptive Behavior Treatment', type:'ABA',  cpt:'97158', category:'direct',   roles:['BCBA','RBT','ABAT']},
+  {key:'99366',    label:'99366 – Team Conference WITH patient', type:'INDIRECT', cpt:'99366', category:'indirect', roles:['BCBA','OT']},
+  {key:'99368',    label:'99368 – Team Conference WITHOUT patient', type:'INDIRECT', cpt:'99368', category:'indirect', roles:['BCBA','OT']},
   {key:'SUP',      label:'Supervision',                         type:'SUP',      cpt:'',      category:'other',    roles:null},
   {key:'ADMIN',    label:'Admin',                               type:'ADMIN',    cpt:'',      category:'other',    roles:null},
 ];
@@ -4072,7 +4078,7 @@ function openSess(id){
         if(viewerIsBCBA){
           return `<div style="display:flex;align-items:center;gap:12px;flex-basis:100%;flex-wrap:wrap;margin-top:2px">
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
-              <input type="checkbox" id="sd-sup" ${s.supervised?'checked':''} onchange="document.getElementById('sd-sup-mins-wrap').style.display=this.checked?'flex':'none';document.getElementById('sd-sup-clients-wrap').style.display=this.checked?'block':'none'">
+              <input type="checkbox" id="sd-sup" ${s.supervised?'checked':''} onchange="document.getElementById('sd-sup-mins-wrap').style.display=this.checked?'flex':'none';var _w=document.getElementById('sd-sup-clients-wrap');if(_w)_w.style.display=this.checked?'block':'none'">
               Supervision provided
             </label>
             <div id="sd-sup-mins-wrap" style="display:${s.supervised?'flex':'none'};align-items:center;gap:6px;font-size:12px;flex-wrap:wrap">
@@ -4084,8 +4090,9 @@ function openSess(id){
               </select>
               <span style="color:var(--mt)">supervision</span>
             </div>
+            ${s.cid?'':`
             <div id="sd-sup-clients-wrap" style="display:${s.supervised?'block':'none'};margin-top:6px">
-              <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Clients discussed <span style="font-weight:400;text-transform:none">— counts toward supervision contact for each selected client</span></div>
+              <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Clients discussed <span style="font-weight:400;text-transform:none">— each one selected counts as this tech's supervision contact for that client</span></div>
               <div style="display:flex;flex-wrap:wrap;gap:4px">
                 ${(()=>{
                   const techId=s.stid;
@@ -4093,14 +4100,14 @@ function openSess(id){
                   const cids=new Set();
                   (S.sessions||[]).forEach(x=>{ if(x.stid===techId&&(x.date||'').startsWith(ym)&&x.cid&&!x._autoAdmin) cids.add(x.cid); });
                   (S.clients||[]).forEach(cl=>{ if(cl.status!=='discharged'&&(cl.team||[]).includes(techId)) cids.add(cl.id); });
-                  if(s.cid) cids.delete(s.cid); // the session's own client counts automatically
                   const sel=new Set(s.supClients||[]);
                   return [...cids].map(cid=>{const cl=gc(cid);if(!cl)return '';
-                    return `<span class="flg supcl-chip ${sel.has(cid)?'on':''}" data-cid="${cid}" onclick="this.classList.toggle('on')" style="cursor:pointer;user-select:none">${cDisplayName(cl)}</span>`;
-                  }).join('')||'<span style="font-size:10px;color:var(--mt)">No other clients found for this therapist</span>';
+                    return `<span class="flg supcl-chip ${sel.has(cid)?'on':''}" data-cid="${cid}" onclick="this.classList.toggle('on');supClientHint()" style="cursor:pointer;user-select:none">${cDisplayName(cl)}</span>`;
+                  }).join('')||'<span style="font-size:10px;color:var(--mt)">No clients found for this therapist</span>';
                 })()}
               </div>
-            </div>
+              <div id="sd-sup-cl-hint" style="display:none;margin-top:6px;background:#FFF3E0;border:1px solid #FFB74D;border-radius:6px;padding:6px 9px;font-size:10.5px;color:#E65100"></div>
+            </div>`}
           </div>`;
         } else if(s.supervised){
           return `<div style="display:flex;align-items:center;gap:6px;background:#E3F2FD;border:1px solid #90CAF9;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;color:#1565C0;flex-basis:100%">
@@ -4116,9 +4123,10 @@ function openSess(id){
       <div style="font-size:10px;font-weight:700;color:#2E7D32;text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">📋 Session Log (from therapist)</div>
       <div style="font-size:13px;color:#1B5E20">${s.sessionLog}</div>
     </div>`:''}
-    ${isRec?`<div style="background:#F9FBE7;border:1px solid #C5E1A5;border-radius:7px;padding:9px;margin-top:6px;font-size:11px;color:#33691E">🔁 This session repeats. <button class="btn bxs" style="background:#C5E1A5;border-color:#A5D6A7;color:#1B5E20" onclick="cancelFuture('${s.recurGroup}','${s.date}')">Cancel all future (${futureSiblings})</button></div>`:''}
+    ${isRec?`<div style="background:#F9FBE7;border:1px solid #C5E1A5;border-radius:7px;padding:9px;margin-top:6px;font-size:11px;color:#33691E">🔁 This session repeats. <button class="btn bxs" style="background:#FFCDD2;border-color:#EF9A9A;color:#B71C1C" onclick="cancelFuture('${s.recurGroup}','${s.date}')" title="Removes future sessions from the schedule entirely — for auth expiry or a schedule rebuild">Delete all future (${futureSiblings})</button></div>`:''}
     ${s.stid==='UNASSIGNED'?'<div style="font-size:11px;color:var(--am);font-weight:600;padding:6px 8px;background:#FFF8E1;border-radius:6px;margin-top:6px">⚠ Unassigned — select a therapist above to assign, or set a cancellation code below.</div>':''}
     <div class="mact"><button class="btn bd" onclick="delSess('${s.id}')">Delete</button><button class="btn" onclick="closeM()">Close</button>${s.stid==='UNASSIGNED'?'<button class="btn" onclick="closeM();quickAssign(\''+ s.id +'\')">Assign →</button>':''}<button class="btn bp" onclick="updSess('${s.id}')">Save</button></div>`);
+  try{ supClientHint(); }catch(e){} // show the multi-client reminder if one is already saved
 }
 function updSess(id){
   const s=S.sessions.find(x=>x.id===id);if(!s)return;
@@ -4157,7 +4165,12 @@ function updSess(id){
     if(newSupervised){
       const _was=!!s.supervised, _wasMin=s.supMinutes||null, _wasType=s.supType||'individual', _now=new Date().toISOString();
       const _newType=document.getElementById('sd-sup-type')?.value||'individual';
-      const _newCls=[...document.querySelectorAll('#sd-sup-clients-wrap .supcl-chip.on')].map(el=>el.dataset.cid).sort();
+      // Chips only render on client-less blocks; on a direct session the wrap is
+      // absent, so keep whatever was already stored rather than clearing it.
+      const _clWrap=document.getElementById('sd-sup-clients-wrap');
+      const _newCls=_clWrap
+        ? [...document.querySelectorAll('#sd-sup-clients-wrap .supcl-chip.on')].map(el=>el.dataset.cid).sort()
+        : (s.supClients||[]).slice().sort();
       const _wasCls=(s.supClients||[]).slice().sort();
       const _changed=!_was || _wasMin!==(newSupMins||null) || _wasType!==_newType || JSON.stringify(_newCls)!==JSON.stringify(_wasCls);
       if(!_was) s.supRecordedAt=_now;
@@ -4240,7 +4253,26 @@ function updSess(id){
   }
 }
 function delSess(id){if(!confirm('Delete this session?'))return;pushUndo('Delete session');window._sessDel.add(id);S.sessions=S.sessions.filter(s=>s.id!==id);save();closeM();rSched();rDaily();}
-function cancelFuture(rg, fromDate){if(!confirm('Cancel all future sessions in this recurring group?'))return;pushUndo('Cancel recurring');S.sessions.filter(s=>s.recurGroup===rg&&s.date>fromDate).forEach(s=>{const wasCX=s.status==='CX';s.status='CX';s.cx='CX-CL';if(!wasCX)stampCxAudit(s);});save();closeM();rSched();}
+// Ending a recurring block is normally an auth expiry or a full schedule
+// rebuild, so the future sessions should come OFF the schedule entirely
+// rather than linger as cancellations (which would otherwise show up in
+// cancellation reports and clutter every future day view).
+// Tombstoned so a stale device can't resurrect them via merge-on-write.
+function cancelFuture(rg, fromDate){
+  const doomed=S.sessions.filter(s=>s.recurGroup===rg&&s.date>fromDate);
+  if(!doomed.length){ alert('No future sessions found in this recurring group.'); return; }
+  const dates=doomed.map(s=>s.date).sort();
+  const cl=gc(doomed[0].cid);
+  if(!confirm('Delete '+doomed.length+' future session'+(doomed.length===1?'':'s')+
+    (cl?' for '+cDisplayName(cl):'')+'?\n\n'+dates[0]+' through '+dates[dates.length-1]+
+    '\n\nThey are removed from the schedule completely \u2014 not marked cancelled. Use this when an authorization ends or the schedule is being rebuilt.\n\nUndo is available immediately after.')) return;
+  pushUndo('Delete future recurring sessions');
+  doomed.forEach(s=>{ window._sessDel.add(s.id); });
+  const ids=new Set(doomed.map(s=>s.id));
+  S.sessions=S.sessions.filter(s=>!ids.has(s.id));
+  save();closeM();rSched();rDaily();
+  showToast(doomed.length+' future session'+(doomed.length===1?'':'s')+' deleted \u2713','var(--gn)');
+}
 
 // ── ADD CLIENT ──
 function openAddClient(){
@@ -5649,6 +5681,19 @@ function rMySTimesheet(stid){
 // Technician acknowledgment of a supervision record. Only the supervised
 // technician (or the unlocked scheduler) can acknowledge; timestamps + any
 // comment go on the session with a full audit trail.
+// Live reminder while a BCBA picks clients on a group/admin supervision block.
+// Selecting several is legitimate for group case review, but each one becomes
+// that tech's documented supervision contact for that client this period —
+// so it should reflect what was actually discussed, not a blanket tick.
+function supClientHint(){
+  const box=document.getElementById('sd-sup-cl-hint');
+  if(!box) return;
+  const n=document.querySelectorAll('#sd-sup-clients-wrap .supcl-chip.on').length;
+  if(n<2){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='block';
+  box.innerHTML='\u26A0 <b>'+n+' clients selected.</b> Each one is recorded as this technician\u2019s supervision contact for that client this period \u2014 so only select clients whose programming was genuinely discussed. If this was a single-client observation, select just that one.';
+}
+
 function ackSup(sessId){
   const s=(S.sessions||[]).find(x=>x.id===sessId);
   if(!s||!s.supervised) return;
