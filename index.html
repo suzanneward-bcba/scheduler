@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-02T12:25Z-deletefuture">
+<meta name="app-version" content="2026-09-02T12:50Z-wlremove">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -558,6 +558,7 @@ body.kiosk-mode .blk-sess.cx .tchip{background:#BDBDBD!important;color:#fff!impo
 .wl-s-pt{background:#EDE7F6;color:#4527A0}
 .wl-s-auth{background:#E8F5E9;color:#1B5E20}
 .wl-s-urgent{background:#FFEBEE;color:#C62828}
+.wl-s-removed{background:#EEEEEE;color:#616161}
 .wl-notes{font-size:11px;color:var(--t2);margin-top:4px;font-style:italic}
 .wl-auth-warn{font-size:10px;font-weight:700;color:var(--rd);margin-top:3px}
 
@@ -3283,7 +3284,7 @@ function rClients(f){
   // Update waitlist pill
   const wlPill=document.getElementById('wl-pill');
   if(wlPill){
-    const wlCount=(S.waitlist||[]).length;
+    const wlCount=(S.waitlist||[]).filter(w=>w.status!=='REMOVED').length;
     if(wlCount>0){wlPill.style.display='';wlPill.textContent='📋 '+wlCount+' on waitlist';}
     else{wlPill.style.display='none';}
   }
@@ -7757,26 +7758,31 @@ function wlFilter(val, el){
   rWaitlist();
 }
 function rWaitlist(){
-  let wl=(S.waitlist||[]).slice();
+  // Removed entries are archived, not deleted — hidden unless explicitly shown
+  let wl=(S.waitlist||[]).filter(w=>_wlShowRemoved ? w.status==='REMOVED' : w.status!=='REMOVED');
   if(_wlFilter==='HOME'){ wl=wl.filter(function(w){ return w.inHome; }); }
   else if(_wlFilter==='ABA'){ wl=wl.filter(function(w){ return (w.therapyType||'ABA')==='ABA'; }); }
   else if(_wlFilter==='OT'){ wl=wl.filter(function(w){ return (w.therapyType||'ABA')==='OT'; }); }
   else if(_wlFilter==='BOTH'){ wl=wl.filter(function(w){ return (w.therapyType||'ABA')==='BOTH'; }); }
   const ct=document.getElementById('wl-count');
-  if(ct) ct.textContent=`(${(S.waitlist||[]).length} total)`;
+  const _activeN=(S.waitlist||[]).filter(w=>w.status!=='REMOVED').length;
+  const _removedN=(S.waitlist||[]).length-_activeN;
+  if(ct) ct.innerHTML=`(${_activeN} waiting)`+(_removedN?` <span onclick="toggleWLRemoved()" style="cursor:pointer;color:var(--pu);font-weight:600;text-decoration:underline">${_wlShowRemoved?'\u2190 back to waitlist':_removedN+' removed'}</span>`:'');
   const con=document.getElementById('wl-content');
   if(!con) return;
   if(!wl.length){
     con.innerHTML='<div style="text-align:center;padding:40px;color:var(--mt)"><div style="font-size:32px;margin-bottom:8px">📋</div><div style="font-weight:600">No waitlist clients</div><div style="font-size:12px;margin-top:4px">Add clients waiting for an opening</div></div>';
     return;
   }
-  const statusLabel={WAITING:'Waiting',PT:'Parent Training Model',AUTH:'Auth Ready',URGENT:'Urgent'};
-  const statusCls={WAITING:'wl-s-waiting',PT:'wl-s-pt',AUTH:'wl-s-auth',URGENT:'wl-s-urgent'};
+  const statusLabel={WAITING:'Waiting',PT:'Parent Training Model',AUTH:'Auth Ready',URGENT:'Urgent',REMOVED:'Removed'};
+  const statusCls={WAITING:'wl-s-waiting',PT:'wl-s-pt',AUTH:'wl-s-auth',URGENT:'wl-s-urgent',REMOVED:'wl-s-removed'};
+  const _reasonLabel=Object.fromEntries(WL_REMOVE_REASONS);
   con.innerHTML=wl.map((w,i)=>{
     const authLeft=w.authEnd?Math.ceil((pd(w.authEnd)-new Date())/864e5):null;
     const authWarn=authLeft!==null&&authLeft<30?`<div class="wl-auth-warn">⚠️ Auth expires in ${authLeft<0?'EXPIRED':authLeft+'d'}</div>`:'';
     const authStr=w.authEnd?`<span style="font-size:10px;color:var(--mt)">Auth: ${pd(w.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</span>`:'';
-    return`<div class="wl-card">
+    const _rm=w.status==='REMOVED';
+    return`<div class="wl-card" style="${_rm?'opacity:.62;background:#FAFAFA':''}">
       <div class="wl-num">${i+1}</div>
       <div class="wl-body">
         <div class="wl-name">${w.name} <span style="font-size:10px;color:var(--mt);font-weight:400">${w.age?'· '+w.age+' yrs':''}</span></div>
@@ -7793,10 +7799,14 @@ function rWaitlist(){
         ${authWarn}
         ${w.schedNotes?`<div class="wl-notes" style="border-left:2px solid var(--pu);padding-left:7px">📅 ${w.schedNotes}</div>`:''}
         ${w.notes?`<div class="wl-notes">${w.notes}</div>`:''}
+        ${_rm?`<div class="wl-notes" style="border-left:2px solid #9E9E9E;padding-left:7px;color:#616161">\u2715 Removed ${w.removedDate||''} \u00B7 <strong>${_reasonLabel[w.removedReason]||'Other'}</strong>${w.removedNotes?' \u2014 '+w.removedNotes:''}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
-        <button class="btn bxs edit-only" onclick="openEditWL('${w.id}')">Edit</button>
-        <button class="btn bxs bp edit-only" onclick="promoteWL('${w.id}')" style="font-size:10px">→ Client</button>
+        ${_rm
+          ?`<button class="btn bxs edit-only" onclick="restoreWL('${w.id}')" style="font-size:10px">\u21BA Restore</button>`
+          :`<button class="btn bxs edit-only" onclick="openEditWL('${w.id}')">Edit</button>
+            <button class="btn bxs bp edit-only" onclick="promoteWL('${w.id}')" style="font-size:10px">\u2192 Client</button>
+            <button class="btn bxs bd edit-only" onclick="removeWL('${w.id}')" style="font-size:10px" title="Family withdrew, chose another provider, moved, etc.">\u2715 Remove</button>`}
       </div>
     </div>`;
   }).join('');
@@ -7892,6 +7902,51 @@ function updWL(id){
 }
 
 function deleteWL(id){if(!confirm('Remove from waitlist?'))return;S.waitlist=(S.waitlist||[]).filter(x=>x.id!==id);save();closeM();rWaitlist();}
+
+// Remove a waitlist entry without deleting it. Mirrors client discharge:
+// the record is kept with a reason and date so the referral history stays
+// intact (useful for reporting on why families leave the waitlist), but the
+// entry drops out of the active list and all waitlist counts.
+const WL_REMOVE_REASONS=[
+  ['PROVIDER','Chose another provider'],
+  ['WAIT','Wait too long / withdrew'],
+  ['MOVED','Moved / PCS'],
+  ['NOSVC','No longer needs services'],
+  ['NORESP','Unreachable / no response'],
+  ['INELIG','Not eligible / insurance'],
+  ['OTHER','Other'],
+];
+function removeWL(id){
+  const w=(S.waitlist||[]).find(x=>x.id===id); if(!w) return;
+  const opts=WL_REMOVE_REASONS.map(([k,l])=>`<option value="${k}">${l}</option>`).join('');
+  _openM(`<h3>Remove from Waitlist</h3>
+    <p style="font-size:12px;color:var(--mt);margin-bottom:10px"><strong>${w.name}</strong> stays on record with the reason below \u2014 nothing is deleted. They drop off the active waitlist and out of all waitlist counts.</p>
+    <div class="fr2">
+      <div class="fg"><label>Reason</label><select id="wlr-reason">${opts}</select></div>
+      <div class="fg"><label>Date</label><input type="date" id="wlr-date" value="${todayBerlin()}"></div>
+    </div>
+    <div class="fg"><label>Notes <span style="font-weight:400;color:var(--mt);font-size:10px">optional</span></label><textarea id="wlr-notes" rows="2" placeholder="e.g. family found an opening at another clinic"></textarea></div>
+    <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bd" onclick="doRemoveWL('${id}')">Remove from Waitlist</button></div>`);
+}
+function doRemoveWL(id){
+  const w=(S.waitlist||[]).find(x=>x.id===id); if(!w) return;
+  w.status='REMOVED';
+  w.removedReason=document.getElementById('wlr-reason')?.value||'OTHER';
+  w.removedDate=document.getElementById('wlr-date')?.value||todayBerlin();
+  w.removedNotes=document.getElementById('wlr-notes')?.value.trim()||'';
+  save(); closeM(); rWaitlist();
+  showToast(w.name+' removed from the waitlist \u2713','var(--gn)');
+}
+function restoreWL(id){
+  const w=(S.waitlist||[]).find(x=>x.id===id); if(!w) return;
+  if(!confirm('Put '+w.name+' back on the active waitlist?')) return;
+  w.status='WAITING';
+  delete w.removedReason; delete w.removedDate; delete w.removedNotes;
+  save(); rWaitlist();
+  showToast(w.name+' restored to the waitlist \u2713','var(--gn)');
+}
+let _wlShowRemoved=false;
+function toggleWLRemoved(){ _wlShowRemoved=!_wlShowRemoved; rWaitlist(); }
 
 function promoteWL(id){
   const w=(S.waitlist||[]).find(x=>x.id===id);if(!w)return;
@@ -8003,7 +8058,7 @@ function rBilling(){
   const otAuthExp=activeClients.filter(cl=>cl.otAuth&&cl.otAuth.end).map(cl=>({cl,days:Math.ceil((pd(cl.otAuth.end)-pd(today))/864e5)})).filter(x=>x.days<=60).sort((a,b)=>a.days-b.days);
 
   // ── Waitlist billing readiness ───────────────────────────────────────
-  const wl=(S.waitlist||[]).slice();
+  const wl=(S.waitlist||[]).filter(w=>w.status!=='REMOVED');
   const wlNoIns=wl.filter(w=>!w.ins);
   const wlNoAuth=wl.filter(w=>w.ins&&!w.authEnd&&!w.authNumber);
   const wlAuthReady=wl.filter(w=>w.status==='AUTH'||(w.authEnd&&!wlNoAuth.includes(w)));
