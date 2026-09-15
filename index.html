@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-02T12:50Z-wlremove">
+<meta name="app-version" content="2026-09-09T13:30Z-otcard-mydocs">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -2262,6 +2262,13 @@ function _fsPostLoadFixups(){
   // Fill Day sessions were incorrectly tagged _autoAdmin, which excluded them
   // from timesheets, the payroll sync, AND made them eligible for storage
   // cleanup. They are real scheduled work — clear the flag once.
+  // Waitlist removal reasons were briefly saved under standalone ids before the
+  // shared vocabulary existed — remap so old and new records report together.
+  if(!S.cfg._exitReasonsUnified){
+    const _remap={INELIG:'INSURANCE', NOSVC:'NO_SVC'};
+    (S.waitlist||[]).forEach(w=>{ if(w.removedReason&&_remap[w.removedReason]) w.removedReason=_remap[w.removedReason]; });
+    S.cfg._exitReasonsUnified=true;
+  }
   if(!S.cfg._fillDayAutoAdminFixed){
     let _fdFixed=0;
     (S.sessions||[]).forEach(s=>{
@@ -3354,7 +3361,17 @@ function cCard(c){
   const team=(c.team||[]).map(id=>gs(id)).filter(Boolean);
   const age=c.dob?Math.floor((Date.now()-new Date(c.dob))/(365.25*864e5)):null;
   const authLeft=c.authEnd?Math.ceil((pd(c.authEnd)-new Date())/864e5):null;
-  return`<div class="ccard" onclick="openClientDetail('${c.id}')"><div class="cctop"><div><div class="ccname">${c.name}</div>${!isViewOnly?`<div style="font-size:10px;font-family:monospace;font-weight:700;color:${c.shortName?'var(--pu)':'#BDBDBD'};margin-top:1px" title="Schedule display name">${c.shortName||'auto: '+cDisplayName(c)}</div>`:''} ${c.extId&&!isViewOnly?`<div style="font-size:9px;font-family:monospace;color:var(--mt);margin-top:1px">${c.extId}</div>`:''}<div class="ccage">${age!==null?age+' yrs':''}</div></div><span class="bdg ${iBdg(c.ins)}">${iLabel(c.ins)}</span></div><div class="dwrap"><div class="dlbls"><span>Dosage</span><span style="font-weight:700;color:${dc}">${c.sch}/${c.rec}h/wk (${pct}%)</span></div><div class="dtrk"><div class="dbar" style="width:${pct}%;background:${dc}"></div></div></div>${c.authEnd&&authLeft!==null?`<div style="font-size:10px;color:${authLeft<30?'var(--rd)':'var(--mt)'};margin-top:3px">Auth ends: ${pd(c.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${authLeft<30?` (${authLeft}d)`:''}  </div>`:''}
+  return`<div class="ccard" onclick="openClientDetail('${c.id}')"><div class="cctop"><div><div class="ccname">${c.name}</div>${!isViewOnly?`<div style="font-size:10px;font-family:monospace;font-weight:700;color:${c.shortName?'var(--pu)':'#BDBDBD'};margin-top:1px" title="Schedule display name">${c.shortName||'auto: '+cDisplayName(c)}</div>`:''} ${c.extId&&!isViewOnly?`<div style="font-size:9px;font-family:monospace;color:var(--mt);margin-top:1px">${c.extId}</div>`:''}<div class="ccage">${age!==null?age+' yrs':''}</div></div><span class="bdg ${iBdg(c.ins)}">${iLabel(c.ins)}</span></div>${(()=>{
+    // OT-only clients have no ABA weekly dosage — show authorized-visit usage
+    // instead, or nothing at all if visits haven't been entered yet.
+    const _ot=(c.therapyType||(c.hasOT?'BOTH':'ABA'))==='OT';
+    if(!_ot) return `<div class="dwrap"><div class="dlbls"><span>Dosage</span><span style="font-weight:700;color:${dc}">${c.sch}/${c.rec}h/wk (${pct}%)</span></div><div class="dtrk"><div class="dbar" style="width:${pct}%;background:${dc}"></div></div></div>`;
+    const used=c.visitsUsed, auth=c.authVisits||40;
+    if(used==null) return '';
+    const rem=auth-used, vp=Math.max(0,Math.min(100,(used/auth)*100));
+    const vc=rem<=0?'var(--rd)':vp>=80?'var(--am)':'var(--gn)';
+    return `<div class="dwrap"><div class="dlbls"><span>Visits</span><span style="font-weight:700;color:${vc}">${used}/${auth} (${Math.max(0,rem)} left)</span></div><div class="dtrk"><div class="dbar" style="width:${vp}%;background:${vc}"></div></div></div>`;
+  })()}${c.authEnd&&authLeft!==null?`<div style="font-size:10px;color:${authLeft<30?'var(--rd)':'var(--mt)'};margin-top:3px">Auth ends: ${pd(c.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${authLeft<30?` (${authLeft}d)`:''}  </div>`:''}
 <div class="cteam">${team.map(s=>{const bg=tClr(s.id),tx=tTxt(s.id);const isOT=s.role==='OT';const otBorder=isOT?'border:1.5px solid #009688;box-shadow:0 0 0 1px #B2DFDB inset;':`border:1px solid ${bg}55;`;return`<span class="ctag" style="background:${bg}22;${otBorder}color:${bg==='#E0E0E0'||bg==='#C8C8C8'||bg==='#F5F0DC'?'#333':bg}" title="${s.name}${isOT?' (OT provider)':''}">${isOT?'<span style="background:#009688;color:#fff;font-size:8px;font-weight:800;padding:1px 4px;border-radius:3px;margin-right:3px;letter-spacing:.3px">OT</span>':''}${s.initials} ${isOT?'':`<span style="opacity:.7">${s.role}</span>`}</span>`;}).join('')}${(()=>{const bk=(c.backupTeam||[]).map(id=>gs(id)).filter(Boolean);return bk.length?'<span style="font-size:9px;color:#BA7517;margin:0 3px">·</span>'+bk.map(s=>`<span class="ctag" style="background:#FAEEDA;border:1px solid #EF9F27;color:#633806" title="Backup">★${s.initials}</span>`).join(''):'';})()}${!isViewOnly?`<button class="edit-team-btn" onclick="event.stopPropagation();openEditTeam('${c.id}')">Edit team</button>`:''}
 </div><div class="cflags">${(()=>{const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');const styles={ABA:'background:#E3F2FD;color:#0D47A1',OT:'background:#E0F2F1;color:#004D40',BOTH:'background:linear-gradient(90deg,#E3F2FD,#E0F2F1);color:#004D40'};return`<span class="flg" style="${styles[tt]||styles.ABA}">${tt==='BOTH'?'ABA+OT':tt}</span>`})()}${c.hasBus?'<span class="flg flg-bus">🚌 Bus</span>':''}${c.inHome?'<span class="flg" style="background:#F3E5F5;color:#6A1B9A">🏠 In-Home</span>':''}${(()=>{const isBoth=(c.therapyType||(c.hasOT?'BOTH':'ABA'))==='BOTH';let chips='';if(c.authEnd){const pclr={APPROVED:'#E8F5E9',SUBMITTED:'#E3F2FD',PENDING:'#FFF3E0'}[c.authPipeline]||'var(--pl)';const ptxt={APPROVED:'#1B5E20',SUBMITTED:'#0D47A1',PENDING:'#E65100'}[c.authPipeline]||'#4527A0';const plbl={APPROVED:'Approved',SUBMITTED:'Submitted',PENDING:'Pending',NONE:'Auth'}[c.authPipeline||'NONE']||'Auth';chips+=`<span class="flg" style="background:${pclr};color:${ptxt}">${isBoth?'ABA: ':''}${plbl}</span>`;}if(isBoth&&c.otAuth?.end){const otLeft=Math.ceil((pd(c.otAuth.end)-new Date())/864e5);let otClr='#E8F5E9',otTxt='#1B5E20',otLbl='Active';if(otLeft<0){otClr='#FFEBEE';otTxt='#B71C1C';otLbl='Expired';}else if(otLeft<30){otClr='#FFF3E0';otTxt='#E65100';otLbl=otLeft+'d left';}chips+=`<span class="flg" style="background:${otClr};color:${otTxt}">OT: ${otLbl}</span>`;}return chips;})()}${(()=>{/* OT visit utilization chip: shown for OT-only clients (c.authVisits + c.visitsUsed) and BOTH clients (c.otAuth.visitsAuthorized + .visitsUsed) */const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');let auth,used,thresh;if(tt==='OT'){auth=c.authVisits;used=c.visitsUsed;thresh=c.visitAlertThreshold??20;}else if(tt==='BOTH'&&c.otAuth){auth=c.otAuth.visitsAuthorized;used=c.otAuth.visitsUsed;thresh=c.otAuth.visitAlertThreshold??20;}else return '';if(auth==null||used==null)return tt==='OT'||(tt==='BOTH'&&c.otAuth)?'<span class="flg" style="background:#FFF3E0;color:#E65100">📝 Enter visits</span>':'';const rem=auth-used;const pctUsed=(used/auth)*100;const pctRem=100-pctUsed;let clr='#E8F5E9',tx='#1B5E20';if(rem<=0){clr='#FFEBEE';tx='#B71C1C';}else if(pctRem<=thresh){clr='#FFF3E0';tx='#E65100';}return `<span class="flg" style="background:${clr};color:${tx}" title="${used}/${auth} used, ${Math.max(0,rem)} remaining">🎟 ${used}/${auth}${rem<=0?' (OVER)':''}</span>`;})()}${(c.scheduleTpl&&c.scheduleTpl.length)?`<span class='flg' style='background:#E8EAF6;color:#283593'>🗓 ${c.scheduleTpl.length}slot${c.scheduleTpl.length!==1?'s':''}</span>`:''}${medChips(c)}${(()=>{if(!c.reassessDue)return'';const d=Math.ceil((pd(c.reassessDue)-new Date())/864e5);return`<span class="reassess-chip ${d<0?'rc-over':d<30?'rc-due':'rc-ok'}">${d<0?'Reassess overdue':d<30?'Reassess '+d+'d':'Reassess ✓'}</span>`;})()}</div></div>`;
 }
@@ -4400,7 +4417,7 @@ function openClientDetail(id){
       </div>
     </div>
     <div class="fg"><label>Notes</label><textarea id="cd-notes" rows="2">${c.notes||''}</textarea></div>
-    <div class="fg"><label>TRICARE Case # <span style="font-weight:400;color:var(--mt);font-size:10px">— External ID · matches auth letters from the pipeline</span></label><input id="cd-ext" value="${c.extId||''}" placeholder="e.g. 05325553" style="font-family:monospace;font-size:12px"></div>
+    ${TRICARE_IDS.includes(c.ins)?`<div class="fg"><label>TRICARE Case # <span style="font-weight:400;color:var(--mt);font-size:10px">— External ID · matches auth letters from the pipeline</span></label><input id="cd-ext" value="${c.extId||''}" placeholder="e.g. 05325553" style="font-family:monospace;font-size:12px"></div>`:''}
     <div class="fg"><label>Primary Contact Email <span style="font-weight:400;color:var(--mt);font-size:10px">— for auth expiration reminders · separate multiple addresses with commas</span></label><input id="cd-pcemail" value="${c.primaryContactEmail||''}" placeholder="parent1@example.com, parent2@example.com" style="font-size:12px"></div>
     <div class="fg" style="margin-top:8px"><label style="display:flex;align-items:center;gap:6px;margin-bottom:8px"><span style="font-size:12px;font-weight:700;color:#B71C1C">⚠️ Medical Alerts</span></label>
       <div style="display:flex;flex-wrap:wrap;gap:6px">${MED_ALERTS.map(m=>`<label style="display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;cursor:pointer;border:1.5px solid var(--bd);background:#fff;font-size:11px;font-weight:600" class="med-toggle" data-med="${m.id}"><input type="checkbox" id="med-${m.id}" ${(c.medAlerts||[]).includes(m.id)?'checked':''} style="accent-color:#B71C1C;width:13px;height:13px"> ${m.label}</label>`).join('')}</div>
@@ -4486,9 +4503,9 @@ function openClientDetail(id){
       </div>
     </div>
     <div class="fg"><label>Notes</label><textarea id="cd-notes" rows="2">${c.notes||''}</textarea></div>
-    <div class="fg"><label>TRICARE Case # <span style="font-weight:400;color:var(--mt);font-size:10px">— External ID · matches auth letters from the pipeline · also HiRasmus/billing reference</span></label>
+    ${(_isOTcl && !TRICARE_IDS.includes(c.ins))?'':`<div class="fg"><label>TRICARE Case # <span style="font-weight:400;color:var(--mt);font-size:10px">— External ID · matches auth letters from the pipeline · also HiRasmus/billing reference</span></label>
       <input id="cd-ext" value="${c.extId||''}" placeholder="e.g. 05325553" style="font-family:monospace;font-size:12px">
-    </div>
+    </div>`}
     <div class="fg"><label>Primary Contact Email <span style="font-weight:400;color:var(--mt);font-size:10px">— for auth expiration reminders · separate multiple addresses with commas</span></label>
       <input id="cd-pcemail" value="${c.primaryContactEmail||''}" placeholder="parent1@example.com, parent2@example.com" style="font-size:12px">
     </div>
@@ -5371,6 +5388,42 @@ function _h1(min){ return (Math.round(min/6)/10).toFixed(1); }
 
 // 📣 My Messages & Alerts — posted notes for this therapist (today + week-wide)
 // plus the auth-alert slot. Label renders only when there's something to show.
+// My Documentation -- this person's own outstanding paperwork: client
+// sessions with no note written, and admin blocks with no activity logged
+// (which don't count toward their timesheet until logged).
+function rMySDocs(stid){
+  const wrap=document.getElementById('mys-doc-sect');
+  if(!wrap) return;
+  if(!stid){ wrap.innerHTML=''; return; }
+  const today=todayBerlin();
+  const ym=today.slice(0,7);
+  const mine=(S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&s.date<=today&&s.status!=='CX'&&!s._virtual);
+  const missingNotes=mine.filter(s=>s.cid&&!s.noteWritten).sort((a,b)=>a.date.localeCompare(b.date));
+  const missingAdmin=mine.filter(s=>!s.cid&&!String(s.sessionLog||'').trim()&&(s.type==='ADMIN'||s._autoAdmin)).sort((a,b)=>a.date.localeCompare(b.date));
+  const monLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  if(!missingNotes.length&&!missingAdmin.length){
+    wrap.innerHTML=`<div class="mys-section-lbl">\u{1F4DD} My Documentation</div>
+      <div style="background:#E8F5E9;border:1px solid #A5D6A7;border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#1B5E20;font-weight:600">\u2713 All caught up for ${monLbl} \u2014 no missing notes or unlogged admin time.</div>`;
+    return;
+  }
+  const row=(s,kind)=>{
+    const cl=s.cid?gc(s.cid):null;
+    return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 10px;background:${kind==='note'?'#FFEBEE':'#FFF8F0'};border:1px solid ${kind==='note'?'#EF9A9A':'#FFE0B2'};border-radius:7px;margin-bottom:4px;font-size:12px;cursor:pointer" onclick="openSess('${s.id}')">
+      <strong>${pd(s.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}</strong>
+      <span style="color:var(--mt)">${ftm(s.s)}\u2013${ftm(s.e)}</span>
+      <span style="flex:1;min-width:90px">${cl?cDisplayName(cl):sTypeLabel(s.type)}</span>
+      <span style="font-size:10px;font-weight:700;color:${kind==='note'?'#B71C1C':'#E65100'}">${kind==='note'?'note missing':'no activity logged'}</span>
+    </div>`;
+  };
+  wrap.innerHTML=`<div class="mys-section-lbl">\u{1F4DD} My Documentation</div>
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px;box-shadow:var(--sh);margin-bottom:14px">
+      <div style="font-size:11px;color:var(--mt);margin-bottom:8px">${monLbl} through today \u00B7 tap any row to open and complete it</div>
+      ${missingNotes.length?`<div style="font-size:11px;font-weight:700;color:#B71C1C;margin:6px 0 4px">\u{1F4C4} Session notes missing (${missingNotes.length})</div>${missingNotes.map(s=>row(s,'note')).join('')}`:''}
+      ${missingAdmin.length?`<div style="font-size:11px;font-weight:700;color:#E65100;margin:10px 0 4px">\u{1F5C2} Admin blocks with no activity logged (${missingAdmin.length})</div>${missingAdmin.map(s=>row(s,'admin')).join('')}
+      <div style="font-size:10px;color:var(--mt);margin-top:6px">Admin time only counts toward your timesheet once you log what you did.</div>`:''}
+    </div>`;
+}
+
 function rMySMessages(stid){
   const wrap=document.getElementById('mys-msg-sect');
   if(!wrap) return;
@@ -6091,6 +6144,7 @@ function rMyS(){
 
   con.innerHTML = header +
     `<div id="mys-msg-sect"></div>` +
+    `<div id="mys-doc-sect"></div>` +
     `<div id="mys-sup-sect"></div>` +
     `<div id="mys-ts-sect"></div>` +
     downtime +
@@ -6104,6 +6158,7 @@ function rMyS(){
 
   // Section cards render into their slots now that the DOM exists
   rMySMessages(mySchedStid);
+  rMySDocs(mySchedStid);
   rMySAuthAlerts(mySchedStid);
   rMySSup(mySchedStid);
   rMySTimesheet(mySchedStid);
@@ -7776,7 +7831,7 @@ function rWaitlist(){
   }
   const statusLabel={WAITING:'Waiting',PT:'Parent Training Model',AUTH:'Auth Ready',URGENT:'Urgent',REMOVED:'Removed'};
   const statusCls={WAITING:'wl-s-waiting',PT:'wl-s-pt',AUTH:'wl-s-auth',URGENT:'wl-s-urgent',REMOVED:'wl-s-removed'};
-  const _reasonLabel=Object.fromEntries(WL_REMOVE_REASONS);
+
   con.innerHTML=wl.map((w,i)=>{
     const authLeft=w.authEnd?Math.ceil((pd(w.authEnd)-new Date())/864e5):null;
     const authWarn=authLeft!==null&&authLeft<30?`<div class="wl-auth-warn">⚠️ Auth expires in ${authLeft<0?'EXPIRED':authLeft+'d'}</div>`:'';
@@ -7799,7 +7854,7 @@ function rWaitlist(){
         ${authWarn}
         ${w.schedNotes?`<div class="wl-notes" style="border-left:2px solid var(--pu);padding-left:7px">📅 ${w.schedNotes}</div>`:''}
         ${w.notes?`<div class="wl-notes">${w.notes}</div>`:''}
-        ${_rm?`<div class="wl-notes" style="border-left:2px solid #9E9E9E;padding-left:7px;color:#616161">\u2715 Removed ${w.removedDate||''} \u00B7 <strong>${_reasonLabel[w.removedReason]||'Other'}</strong>${w.removedNotes?' \u2014 '+w.removedNotes:''}</div>`:''}
+        ${_rm?`<div class="wl-notes" style="border-left:2px solid #9E9E9E;padding-left:7px;color:#616161">\u2715 Removed ${w.removedDate||''} \u00B7 <strong>${exitReasonLabel(w.removedReason)}</strong>${w.removedNotes?' \u2014 '+w.removedNotes:''}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
         ${_rm
@@ -7907,18 +7962,9 @@ function deleteWL(id){if(!confirm('Remove from waitlist?'))return;S.waitlist=(S.
 // the record is kept with a reason and date so the referral history stays
 // intact (useful for reporting on why families leave the waitlist), but the
 // entry drops out of the active list and all waitlist counts.
-const WL_REMOVE_REASONS=[
-  ['PROVIDER','Chose another provider'],
-  ['WAIT','Wait too long / withdrew'],
-  ['MOVED','Moved / PCS'],
-  ['NOSVC','No longer needs services'],
-  ['NORESP','Unreachable / no response'],
-  ['INELIG','Not eligible / insurance'],
-  ['OTHER','Other'],
-];
 function removeWL(id){
   const w=(S.waitlist||[]).find(x=>x.id===id); if(!w) return;
-  const opts=WL_REMOVE_REASONS.map(([k,l])=>`<option value="${k}">${l}</option>`).join('');
+  const opts=WL_REMOVE_REASONS.map(r=>`<option value="${r.id}">${r.label}</option>`).join('');
   _openM(`<h3>Remove from Waitlist</h3>
     <p style="font-size:12px;color:var(--mt);margin-bottom:10px"><strong>${w.name}</strong> stays on record with the reason below \u2014 nothing is deleted. They drop off the active waitlist and out of all waitlist counts.</p>
     <div class="fr2">
@@ -10713,15 +10759,28 @@ function staffOptionsForClient(cid, date){
   return html;
 }
 
-// ── DISCHARGE CLIENT ──
-const DC_REASONS = [
-  {id:'GOALS_MET',  label:'Goals met / graduated'},
-  {id:'MOVED',      label:'Family relocated'},
-  {id:'INSURANCE',  label:'Insurance ended'},
-  {id:'FAMILY_REQ', label:'Family request'},
-  {id:'NO_SHOW',    label:'Repeated no-shows'},
-  {id:'OTHER',      label:'Other'},
+// ── EXIT REASONS (shared) ──
+// One vocabulary for leaving the practice, whether from the active roster
+// (discharge) or the waitlist (removal), so both can be reported together
+// without reconciling different wording. Legacy discharge IDs are unchanged
+// so existing records keep resolving. 'contexts' controls which dropdown
+// each reason appears in — some only make sense in one situation.
+const EXIT_REASONS = [
+  {id:'GOALS_MET',  label:'Goals met / graduated',           contexts:['client']},
+  {id:'PROVIDER',   label:'Chose another provider',          contexts:['client','waitlist']},
+  {id:'WAIT',       label:'Wait too long / withdrew',        contexts:['waitlist']},
+  {id:'MOVED',      label:'Family relocated / PCS',          contexts:['client','waitlist']},
+  {id:'INSURANCE',  label:'Insurance ended / not eligible',  contexts:['client','waitlist']},
+  {id:'FAMILY_REQ', label:'Family request',                  contexts:['client','waitlist']},
+  {id:'NO_SVC',     label:'No longer needs services',        contexts:['client','waitlist']},
+  {id:'NO_SHOW',    label:'Repeated no-shows',               contexts:['client']},
+  {id:'NORESP',     label:'Unreachable / no response',       contexts:['client','waitlist']},
+  {id:'OTHER',      label:'Other',                           contexts:['client','waitlist']},
 ];
+const DC_REASONS        = EXIT_REASONS.filter(r=>r.contexts.includes('client'));
+const WL_REMOVE_REASONS = EXIT_REASONS.filter(r=>r.contexts.includes('waitlist'));
+// Shared lookup — use everywhere a stored reason id is displayed.
+function exitReasonLabel(id){ return (EXIT_REASONS.find(x=>x.id===id)||{}).label || id || '\u2014'; }
 
 function openDischarge(cid){
   const c=gc(cid);if(!c)return;
@@ -10811,7 +10870,7 @@ function rDischarged(){
     return;
   }
 
-  const reasonLabel=r=>DC_REASONS.find(x=>x.id===r)?.label||r||'—';
+  const reasonLabel=exitReasonLabel;
 
   con.innerHTML=discharged.map(c=>{
     const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');
