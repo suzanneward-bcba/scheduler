@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-09T13:30Z-otcard-mydocs">
+<meta name="app-version" content="2026-09-09T13:50Z-singlereport">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -6473,7 +6473,8 @@ function rptTimesheets(){
   const ym=window._tsRptYm||todayBerlin().slice(0,7);
   window._tsRptYm=ym;
   const monthLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
-  const staff=_byLastName(S.staff.filter(x=>x.role!=='Billing'&&(x.role||'').toLowerCase()!=='display'));
+  const _fStid=document.getElementById('rpt-staff')?.value||'';
+  const staff=_byLastName(S.staff.filter(x=>x.role!=='Billing'&&(x.role||'').toLowerCase()!=='display'&&(!_fStid||x.id===_fStid)));
   const rows=staff.map(t=>{
     const e=tsEntries(t.id,ym);
     const conf=tsConfirmOf(t.id,ym);
@@ -6495,7 +6496,7 @@ function rptTimesheets(){
   const confirmedN=staff.filter(t=>tsConfirmOf(t.id,ym)).length;
   document.getElementById('rpt-main').innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
-      <div style="font-size:14px;font-weight:700">Timesheet Confirmations \u00B7 ${monthLbl} \u00B7 ${confirmedN}/${staff.length} confirmed</div>
+      <div style="font-size:14px;font-weight:700">Timesheet Confirmations \u00B7 ${monthLbl}${_fStid?' \u00B7 '+(gs(_fStid)?.name||''):' \u00B7 '+confirmedN+'/'+staff.length+' confirmed'}</div>
       <input type="month" value="${ym}" max="${todayBerlin().slice(0,7)}" onchange="window._tsRptYm=this.value;rptTimesheets()" style="font-size:12px;padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
     </div>
     <div style="font-size:11px;color:var(--mt);margin-bottom:10px">Hours computed live from the schedule \u00B7 confirmation snapshots stored with timestamps \u00B7 \u{1F4AC} = discrepancy comment from the employee</div>
@@ -6512,7 +6513,10 @@ function rptTimesheets(){
 function rptSupervision(){
   const ym = window._supRptYm || todayBerlin().slice(0,7);
   window._supRptYm = ym;
-  const techs=_byLastName(S.staff.filter(x=>['RBT','ABAT'].includes(x.role)));
+  // Honor the Therapist filter in the sidebar — running a single person's
+  // report is the common case at month end.
+  const _fStid=document.getElementById('rpt-staff')?.value||'';
+  const techs=_byLastName(S.staff.filter(x=>['RBT','ABAT'].includes(x.role)&&(!_fStid||x.id===_fStid)));
   const monthLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
   const rows=techs.map(t=>{
     const st=supStats(t.id,ym);
@@ -6532,7 +6536,7 @@ function rptSupervision(){
   }).join('');
   document.getElementById('rpt-main').innerHTML=`
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
-      <div style="font-size:14px;font-weight:700">Supervision Compliance · ${monthLbl}</div>
+      <div style="font-size:14px;font-weight:700">Supervision Compliance · ${monthLbl}${_fStid?' · '+(gs(_fStid)?.name||''):''}</div>
       <div style="display:flex;align-items:center;gap:8px">
         <input type="month" value="${ym}" max="${todayBerlin().slice(0,7)}" onchange="window._supRptYm=this.value;rptSupervision()" style="font-size:12px;padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif">
         <button class="btn bsm bp" onclick="supReportAll(window._supRptYm)">🖨 Print All (${techs.length})</button>
