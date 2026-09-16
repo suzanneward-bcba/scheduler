@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-16T14:05Z-fillgaps3">
+<meta name="app-version" content="2026-09-16T15:50Z-filladmin-holiday">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -3808,8 +3808,8 @@ function _m2t(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60
 
 function openFillAdmin(){
   _openM(`<h3>\u{1F4CB} Fill Admin</h3>
-    <p style="font-size:12px;color:var(--t2);margin-bottom:6px">Fills the open gaps between each therapist's scheduled sessions with admin blocks \u2014 within their own working hours that day. Someone who isn't scheduled that day (or has only one session, so no gap) gets nothing.</p>
-    <div style="font-size:11px;color:var(--mt);background:var(--bg);border-radius:6px;padding:7px 10px;margin-bottom:12px">A therapist's day runs from their first session to their last \u2014 nothing is added before they start or after they finish. Gaps down to 15 minutes are filled (e.g. an early client pickup).</div>
+    <p style="font-size:12px;color:var(--t2);margin-bottom:6px">Fills open gaps with admin across each therapist's working hours \u2014 the span of their Preferred Weekly Schedule for that weekday \u2014 minus any real sessions already booked. PTO days and clinic holidays are skipped.</p>
+    <div style="font-size:11px;color:var(--mt);background:var(--bg);border-radius:6px;padding:7px 10px;margin-bottom:12px">Working hours come from each staff card's Preferred Weekly Schedule. The 12\u201313 lunch hour is left unfilled for part-time staff (salaried Tobias, Sara, Janina & Lindsay are filled through it), and Thursdays fill through lunch for everyone for the team meeting. Gaps down to 15 minutes are filled.</div>
     <div class="fg"><label>Apply to</label>
       <select id="fa-scope">
         <option value="week">This whole week (Mon\u2013Fri)</option>
@@ -3825,41 +3825,74 @@ function doFillAdmin(){
     : [0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
   const MIN_GAP=15; // fill gaps down to 15 minutes (early-pickup admin time)
 
+  const LUNCH_S=_t2m('12:00'), LUNCH_E=_t2m('13:00');
+  // Salaried staff whose day includes the lunch block; everyone else keeps
+  // lunch unpaid/unfilled. Thursdays are exempt for ALL staff (team meeting).
+  const LUNCH_EXEMPT=new Set(['ToS','SB','JS','LP']);
+  // Trim a planned [s,e] gap around the lunch hour unless exempt. Returns an
+  // array of 0, 1, or 2 sub-gaps.
+  function _applyLunch(s,e,st,dow){
+    if(dow===4) return [[s,e]];                       // Thursday: team meeting, fill through
+    if(LUNCH_EXEMPT.has(st.initials)) return [[s,e]]; // salaried: fill through
+    if(e<=LUNCH_S||s>=LUNCH_E) return [[s,e]];        // gap doesn't touch lunch
+    const out=[];
+    if(s<LUNCH_S) out.push([s,LUNCH_S]);              // morning part
+    if(e>LUNCH_E) out.push([LUNCH_E,e]);              // afternoon part
+    return out;                                        // lunch itself dropped
+  }
+  // Clinic holidays close the day for everyone — never fill admin on them
+  // (staff are already paid for holidays at their scaled rate).
+  const workDays=days.filter(d=>!isHol(d));
   let planned=[];
+  let noWindow=[];   // available that day but no working hours defined
   S.staff.forEach(st=>{
     if(st.role==='Billing'||(st.role||'').toLowerCase()==='display') return;
-    days.forEach(date=>{
+    workDays.forEach(date=>{
       const dow=pd(date).getDay();
       if(dow<1||dow>5) return;                       // weekends
-      if(ptoOnDate(st,date)) return;                 // on leave that day
-      // Their real client/OT sessions that day define the working window.
-      const daySess=S.sessions.filter(s=>s.stid===st.id&&s.date===date&&s.status!=='CX'&&!s._virtual&&!s._autoAdmin&&s.type!=='ADMIN'&&s.cid)
-        .sort((a,b)=>_t2m(a.s)-_t2m(b.s));
-      if(daySess.length<2) return;                   // no BETWEEN gap to fill
-      const dayStart=_t2m(daySess[0].s);
-      const dayEnd=_t2m(daySess[daySess.length-1].e);
-      // Everything already occupying time that day (sessions + existing admin),
-      // so we only fill genuinely open stretches.
-      const existingAdmin=S.sessions.filter(s=>s.stid===st.id&&s.date===date&&s.status!=='CX'&&(s.type==='ADMIN'||s._autoAdmin))
-        .map(s=>[_t2m(s.s),_t2m(s.e)]);
-      const occupied=daySess.map(s=>[_t2m(s.s),_t2m(s.e)]).concat(existingAdmin).sort((a,b)=>a[0]-b[0]);
-      // Walk ONLY within [dayStart, dayEnd] \u2014 never before first / after last.
+      if(ptoOnDate(st,date)) return;                 // PTO also blocks the day
+      // Working window = the span of this person's Preferred Weekly Schedule
+      // for this weekday (earliest slot start -> latest slot end). This is
+      // what "when they work" means; sessions only say what's already booked.
+      const daySlots=(st.prefTpl||[]).filter(sl=>+sl.dow===dow&&sl.s&&sl.e);
+      if(!daySlots.length){
+        // No preferred hours for this weekday. If they also have no sessions,
+        // there's no window to fill and we skip silently (e.g. a day off).
+        const hasSess=S.sessions.some(s=>s.stid===st.id&&s.date===date&&s.status!=='CX'&&!s._virtual&&!s._autoAdmin&&s.cid);
+        if(hasSess) noWindow.push(st.initials);       // working but no hours set
+        return;
+      }
+      const dayStart=Math.min(...daySlots.map(sl=>_t2m(sl.s)));
+      const dayEnd  =Math.max(...daySlots.map(sl=>_t2m(sl.e)));
+      // Everything already occupying time in that window: real sessions AND
+      // any existing admin, so we only fill genuinely open stretches.
+      const busy=S.sessions.filter(s=>s.stid===st.id&&s.date===date&&s.status!=='CX'&&!s._virtual&&(s.cid||s.type==='ADMIN'||s._autoAdmin))
+        .map(s=>[_t2m(s.s),_t2m(s.e)])
+        .sort((a,b)=>a[0]-b[0]);
+      // Walk the whole working window, filling every open gap within it.
       let cursor=dayStart;
-      occupied.forEach(([os,oe])=>{
-        if(os>dayEnd) return;
-        if(os-cursor>=MIN_GAP) planned.push({stid:st.id,date,s:_m2t(cursor),e:_m2t(Math.min(os,dayEnd))});
-        cursor=Math.max(cursor,oe);
+      const _addGap=(gs,ge)=>{
+        _applyLunch(gs,ge,st,dow).forEach(([a,b])=>{
+          if(b-a>=MIN_GAP) planned.push({stid:st.id,date,s:_m2t(a),e:_m2t(b)});
+        });
+      };
+      busy.forEach(([bs,be])=>{
+        if(bs>dayEnd) return;
+        if(bs-cursor>=MIN_GAP) _addGap(cursor,Math.min(bs,dayEnd));
+        cursor=Math.max(cursor,be);
       });
+      if(dayEnd-cursor>=MIN_GAP) _addGap(cursor,dayEnd);
     });
   });
 
   if(!planned.length){
-    alert('No open gaps to fill \u2014 every therapist\'s day is already covered for '+(days.length>1?'this week':'that day')+'.');
+    alert('No open gaps to fill \u2014 every therapist\'s working hours are already covered for '+(days.length>1?'this week':'that day')+'.'+(noWindow.length?'\n\nNote: '+[...new Set(noWindow)].join(', ')+' have sessions but no Preferred Weekly Schedule hours set, so their day couldn\'t be measured. Add hours on their staff card.':''));
     return;
   }
   const byDay={}; planned.forEach(p=>{ (byDay[p.date]=byDay[p.date]||[]).push(p); });
   const summary=Object.keys(byDay).sort().map(d=>pd(d).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})+': '+byDay[d].length+' block'+(byDay[d].length!==1?'s':'')).join('\n');
-  if(!confirm('Fill '+planned.length+' admin block'+(planned.length!==1?'s':'')+' into open gaps?\n\n'+summary+'\n\nExisting sessions are untouched. Undo is available immediately after.')) return;
+  const warn=noWindow.length?'\n\n\u26A0 '+[...new Set(noWindow)].join(', ')+' have sessions but no Preferred Weekly Schedule hours \u2014 skipped. Add hours on their staff card to include them.':'';
+  if(!confirm('Fill '+planned.length+' admin block'+(planned.length!==1?'s':'')+' into open gaps?\n\n'+summary+warn+'\n\nExisting sessions are untouched. Undo is available immediately after.')) return;
 
   pushUndo('Fill admin');
   planned.forEach(p=>{
@@ -4662,7 +4695,10 @@ function updClient(id){
   // Sync team → staff.clients
   S.staff.forEach(st=>{if(!st.clients)st.clients=[];st.clients=st.clients.filter(x=>x!==id);});
   c.team.forEach(sid=>{const s=gs(sid);if(s){if(!s.clients)s.clients=[];if(!s.clients.includes(id))s.clients.push(id);}});
-  save();closeM();rClients();rStaff();
+  // rAuthAlerts + rSched so an updated Auth End Date reflects immediately —
+  // a renewed authorization clears its expiration alert without needing a
+  // tab switch or reload. rDaily/rBilling pick up any auth-driven changes too.
+  save();closeM();rClients();rStaff();rSched();rDaily();try{rAuthAlerts();}catch(e){}
 }
 function delClient(id){if(!confirm('Delete client and all sessions?'))return;S.sessions.forEach(s=>{ if(s.cid===id) window._sessDel.add(s.id); });S.clients=S.clients.filter(c=>c.id!==id);S.sessions=S.sessions.filter(s=>s.cid!==id);save();closeM();rClients();rSched();}
 
