@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-16T16:20Z-blockadmin">
+<meta name="app-version" content="2026-09-16T16:35Z-blockadmin2">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1271,9 +1271,9 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
       <button class="copy-wk edit-only desk-only" onclick="copyWeek()" title="Copy any week to one or more future weeks — ABA, OT, or both">⧉ Copy Week…</button>
       <button class="btn bsm edit-only desk-only" onclick="openPostNote()" title="Post a note to a therapist's schedule" style="border-color:#F9A825;color:#795548;background:#FFFDE7;font-weight:700">📌 Post Note</button>
       <div style="width:1px;height:22px;background:var(--bd);margin:0 2px" class="desk-only"></div>
+      <button class="btn bsm bp edit-only desk-only" onclick="openAddSess()">+ Session</button>
       <button class="btn bsm btg edit-only desk-only" onclick="openAddBlock()">+ Admin</button>
-      <button class="btn bsm edit-only desk-only" onclick="openFillAdmin()" title="Fill the gaps between each therapist's sessions with admin time" style="border-color:#7B1FA2;color:#7B1FA2;background:#F3E5F5;font-weight:700">📋 Fill Admin</button>
-      <button class="btn bsm edit-only desk-only" style="border-color:#7B1FA2;color:#7B1FA2;background:#F3E5F5;font-weight:700" onclick="openBlockAdmin()">📋 Add Admin</button>
+      <button class="btn bsm edit-only desk-only" onclick="openBlockAdmin()" title="Assign admin time to therapists per block" style="border-color:#7B1FA2;color:#7B1FA2;background:#F3E5F5;font-weight:700">📋 Fill Admin Block</button>
       <div style="width:1px;height:22px;background:var(--bd);margin:0 2px" class="desk-only"></div>
       <button class="btn bsm desk-only edit-only" onclick="doPrint()" title="Print schedule">🖨 Print</button>
       <button class="btn bsm edit-only" id="undo-btn" onclick="undoLast()" title="Undo last edit" style="display:none;border-color:var(--am);color:var(--am)">↩ Undo</button>
