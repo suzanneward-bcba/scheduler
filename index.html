@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-16T15:50Z-filladmin-holiday">
+<meta name="app-version" content="2026-09-16T16:20Z-blockadmin">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -544,6 +544,9 @@ body.kiosk-mode .blk-sess.cx .tchip{background:#BDBDBD!important;color:#fff!impo
 .blk-admin-row{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--bl);background:#FAFAFA}
 .blk-admin-row:last-child{border-bottom:none}
 .blk-empty{padding:12px 14px;font-size:11px;color:var(--mt);font-style:italic}
+.blk-admin-row{padding:7px 14px;display:flex;flex-wrap:wrap;gap:5px;background:#F3E5F5;border-top:1px solid #E1BEE7}
+.blk-admin-chip{background:#7B1FA2;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;cursor:pointer;user-select:none}
+.blk-admin-chip:hover{background:#B71C1C}
 .blk-add{padding:8px 14px;font-size:11px;color:var(--pu);font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;background:#FAFBFF;border-top:1px dashed var(--bd)}
 .blk-add:hover{background:var(--pl)}
 
@@ -1270,7 +1273,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
       <div style="width:1px;height:22px;background:var(--bd);margin:0 2px" class="desk-only"></div>
       <button class="btn bsm btg edit-only desk-only" onclick="openAddBlock()">+ Admin</button>
       <button class="btn bsm edit-only desk-only" onclick="openFillAdmin()" title="Fill the gaps between each therapist's sessions with admin time" style="border-color:#7B1FA2;color:#7B1FA2;background:#F3E5F5;font-weight:700">📋 Fill Admin</button>
-      <button class="btn bsm bp edit-only desk-only" onclick="openAddSess()">+ Session</button>
+      <button class="btn bsm edit-only desk-only" style="border-color:#7B1FA2;color:#7B1FA2;background:#F3E5F5;font-weight:700" onclick="openBlockAdmin()">📋 Add Admin</button>
       <div style="width:1px;height:22px;background:var(--bd);margin:0 2px" class="desk-only"></div>
       <button class="btn bsm desk-only edit-only" onclick="doPrint()" title="Print schedule">🖨 Print</button>
       <button class="btn bsm edit-only" id="undo-btn" onclick="undoLast()" title="Undo last edit" style="display:none;border-color:var(--am);color:var(--am)">↩ Undo</button>
@@ -1636,7 +1639,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
     <div class="fab-row">
       <span class="fab-label">Admin</span>
       <button class="fab fab-secondary" onclick="fabCollapse();openAddBlock()" title="Add Admin block">📋</button>
-      <button class="fab fab-secondary" onclick="fabCollapse();openFillAdmin()" title="Fill Admin — add each therapist's admin blocks from their staff card" style="background:#7B1FA2">📋</button>
+      <button class="fab fab-secondary" onclick="fabCollapse();openBlockAdmin()" title="Assign admin time to a block" style="background:#7B1FA2">📋</button>
     </div>
     <div class="fab-row">
       <span class="fab-label">Add Session</span>
@@ -3213,7 +3216,11 @@ function rDay(){
       }
     }
 
-    const addBtn=`<div class="blk-add edit-only" onclick="openAddSess('${dayDate}')">+ Add session in this block</div>`;
+    // Who already has an admin block covering this time block, this day?
+    const blkAdmin=S.sessions.filter(s=>s.date===dayDate&&s.status!=='CX'&&
+      (s.type==='ADMIN'||s._autoAdmin)&&s.s< blk.e && blk.s < s.e);
+    const adminChips=blkAdmin.map(s=>{const st=gs(s.stid);return st?`<span class="blk-admin-chip" title="${ftm(s.s)}\u2013${ftm(s.e)} admin \u2014 click to remove" onclick="event.stopPropagation();removeBlockAdmin('${s.id}')">${st.initials} \u2715</span>`:'';}).join('');
+    const addBtn=`${adminChips?`<div class="blk-admin-row edit-only">${adminChips}</div>`:''}<div class="blk-add edit-only" onclick="openBlockAdmin('${dayDate}','${blk.id}')">\u{1F4CB} Assign admin to this block\u2026</div>`;
 
     // Flow now-line: sits between blocks, above the block containing/next after now.
     // Accurate to the stacked-list layout (the old %-of-day bar landed in wrong rows).
@@ -3805,6 +3812,87 @@ function bgCk(e){if(e.target===document.getElementById('mbg'))closeM();}
 // the single source of truth, so days off never receive admin.
 function _t2m(t){const[a,b]=t.split(':').map(Number);return a*60+b;}
 function _m2t(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}
+
+// ── PER-BLOCK ADMIN ASSIGNMENT (manual checklist) ─────────────────────────
+// Sara opens a therapist checklist for a specific day + time block and ticks
+// who gets admin time in it. Applies ONLY to that date + block unless she
+// chooses to copy it. No auto-inference — nobody gets admin unless selected,
+// so staff on leave / not scheduled are never touched.
+let _blkAdminCtx=null;
+function openBlockAdmin(date, blkId){
+  date = date || (curView==='day'?dayDate:todayBerlin());
+  const blocks = DAY_BLOCKS;
+  const blk = blkId ? blocks.find(b=>b.id===blkId) : null;
+  _blkAdminCtx={date, blkId: blk?blk.id:blocks[0].id};
+  const blkOpts = blocks.map(b=>`<option value="${b.id}" ${(_blkAdminCtx.blkId===b.id)?'selected':''}>${b.label}${b.note?' \u00B7 '+b.note:''}</option>`).join('');
+  const staff=_byLastName(S.staff.filter(st=>st.role!=='Billing'&&(st.role||'').toLowerCase()!=='display'&&!st.nonClinical));
+  _openM(`<h3>\u{1F4CB} Assign Admin Time</h3>
+    <div class="fr2">
+      <div class="fg"><label>Date</label><input type="date" id="ba-date" value="${date}" onchange="_blkAdminCtx.date=this.value;_renderBlkAdminList()"></div>
+      <div class="fg"><label>Time block</label><select id="ba-block" onchange="_blkAdminCtx.blkId=this.value;_renderBlkAdminList()">${blkOpts}</select></div>
+    </div>
+    <div style="font-size:11px;color:var(--mt);margin-bottom:6px">Tick each therapist who should have admin time in this block. A \u2713 means they already have it.</div>
+    <div id="ba-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--bd);border-radius:8px;padding:6px"></div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:10px 0 2px"><input type="checkbox" id="ba-copyweek"> Also apply to this block on every weekday this week (Mon\u2013Fri)</label>
+    <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" style="background:#7B1FA2;border-color:#7B1FA2" onclick="saveBlockAdmin()">Save Admin</button></div>`);
+  _renderBlkAdminList();
+}
+function _renderBlkAdminList(){
+  const el=document.getElementById('ba-list'); if(!el||!_blkAdminCtx) return;
+  const {date, blkId}=_blkAdminCtx;
+  const blk=DAY_BLOCKS.find(b=>b.id===blkId);
+  const staff=_byLastName(S.staff.filter(st=>st.role!=='Billing'&&(st.role||'').toLowerCase()!=='display'&&!st.nonClinical));
+  el.innerHTML=staff.map(st=>{
+    const has=S.sessions.some(s=>s.stid===st.id&&s.date===date&&s.status!=='CX'&&(s.type==='ADMIN'||s._autoAdmin)&&s.s<blk.e&&blk.s<s.e);
+    const onPto=ptoOnDate(st,date);
+    const hasSess=S.sessions.some(s=>s.stid===st.id&&s.date===date&&s.status!=='CX'&&!s._virtual&&s.cid&&s.s<blk.e&&blk.s<s.e);
+    const note=onPto?'<span style="color:#E65100;font-size:10px;margin-left:auto">on leave</span>':(hasSess?'<span style="color:var(--mt);font-size:10px;margin-left:auto">has a session in this block</span>':'');
+    return `<label style="display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:6px;${onPto?'opacity:.5':''}">
+      <input type="checkbox" class="ba-chk" data-stid="${st.id}" ${has?'checked':''} ${onPto?'disabled':''}>
+      <span style="font-weight:600;font-size:13px">${st.initials}</span> <span style="font-size:12px;color:var(--t2)">${st.name}</span>${note}
+    </label>`;
+  }).join('')||'<div style="font-size:12px;color:var(--mt);padding:8px">No schedulable staff.</div>';
+}
+function saveBlockAdmin(){
+  if(!_blkAdminCtx) return;
+  const blk=DAY_BLOCKS.find(b=>b.id===_blkAdminCtx.blkId);
+  const copyWeek=document.getElementById('ba-copyweek')?.checked;
+  const wantStids=new Set([...document.querySelectorAll('.ba-chk:checked')].map(el=>el.dataset.stid));
+  const allStids=[...document.querySelectorAll('.ba-chk')].map(el=>el.dataset.stid);
+  const dates = copyWeek
+    ? [0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);})
+    : [_blkAdminCtx.date];
+  pushUndo('Assign block admin');
+  let added=0, removed=0;
+  dates.forEach(date=>{
+    if(isHol(date)) return;                 // never assign on a holiday
+    allStids.forEach(stid=>{
+      const st=gs(stid); if(!st) return;
+      if(ptoOnDate(st,date)) return;          // never assign on someone's leave
+      const existing=S.sessions.find(s=>s.stid===stid&&s.date===date&&s.status!=='CX'&&(s.type==='ADMIN'||s._autoAdmin)&&s.s<blk.e&&blk.s<s.e);
+      const want=wantStids.has(stid);
+      if(want && !existing){
+        S.sessions.push({id:'s'+uid(),cid:'',stid,date,s:blk.s,e:blk.e,type:'ADMIN',status:'OK',cx:'',makeup:false,recurGroup:'',notes:'Admin (assigned)'});
+        added++;
+      } else if(!want && existing){
+        window._sessDel.add(existing.id);
+        S.sessions=S.sessions.filter(s=>s.id!==existing.id);
+        removed++;
+      }
+    });
+  });
+  save(); closeM(); rSched(); rDaily();
+  showToast('\u{1F4CB} Admin updated \u2014 '+added+' added, '+removed+' removed \u2713','#7B1FA2');
+}
+function removeBlockAdmin(sessId){
+  const s=S.sessions.find(x=>x.id===sessId); if(!s) return;
+  const st=gs(s.stid);
+  if(!confirm('Remove admin block for '+(st?st.name:'this therapist')+' ('+ftm(s.s)+'\u2013'+ftm(s.e)+')?')) return;
+  pushUndo('Remove admin');
+  window._sessDel.add(sessId);
+  S.sessions=S.sessions.filter(x=>x.id!==sessId);
+  save(); rSched(); rDaily();
+}
 
 function openFillAdmin(){
   _openM(`<h3>\u{1F4CB} Fill Admin</h3>
