@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-16T16:35Z-blockadmin2">
+<meta name="app-version" content="2026-09-17T11:50Z-prefsched-width">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -250,10 +250,13 @@ input[type="color"]{border:none;padding:0;cursor:pointer;border-radius:4px;heigh
 /* STAFF SCHEDULE TEMPLATE */
 .stpl-wrap{background:#F0F4FF;border:1.5px solid #9FA8DA;border-radius:9px;padding:14px;margin-top:10px}
 .stpl-title{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:#283593;margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.stpl-slot{display:grid;grid-template-columns:76px 110px 1fr 1fr 28px;gap:8px;align-items:center;margin-bottom:6px}
-.stpl-slot select,.stpl-slot input{padding:5px 6px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--nv);background:#fff;width:100%}
+.stpl-slot{display:grid;grid-template-columns:84px 200px minmax(120px,1fr) minmax(90px,140px) 28px;gap:8px;align-items:center;margin-bottom:8px}
+.stpl-slot select,.stpl-slot input{padding:6px 7px;border:1.5px solid var(--bd);border-radius:6px;font-family:'DM Sans',sans-serif;font-size:11px;color:var(--nv);background:#fff;width:100%;min-width:0}
+.stpl-slot .tpicker{display:flex;width:100%;padding:3px 6px;box-sizing:border-box}
+.stpl-slot .tpicker select{flex:1;min-width:0;border:none;background:transparent;padding:3px 2px;font-size:11px;font-variant-numeric:tabular-nums}
+.stpl-slot .tpicker .tp-sep{flex:0 0 auto;padding:0 1px}
 .stpl-slot select:focus,.stpl-slot input:focus{outline:none;border-color:#3949AB}
-.stpl-slot-hdr{display:grid;grid-template-columns:76px 110px 1fr 1fr 28px;gap:8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt);margin-bottom:5px}
+.stpl-slot-hdr{display:grid;grid-template-columns:84px 200px minmax(120px,1fr) minmax(90px,140px) 28px;gap:8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--mt);margin-bottom:5px}
 .stpl-hours{background:#E8EAF6;border-radius:6px;padding:7px 11px;font-size:11px;color:#283593;margin-top:8px;display:flex;align-items:center;justify-content:space-between}
 .stpl-hours strong{font-size:15px;font-family:'Playfair Display',serif}
 .stpl-warn{color:#E65100;font-size:10px;font-weight:600;margin-top:4px;display:flex;align-items:center;gap:4px}
@@ -4907,7 +4910,7 @@ function renderStplSlots(s){
     const isAdminSlot=sl.type==='ADMIN';
     return`<div class="stpl-slot">
       <select onchange="_stplSlots[${i}].dow=+this.value;renderStplSlots()">${dOpts}</select>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
         ${tpicker('stpl-s-' + i, sl.s||'09:00', '_stplSlots[' + i + '].s=this.value;renderStplSlots()')}
         ${tpicker('stpl-e-' + i, sl.e||'11:00', '_stplSlots[' + i + '].e=this.value;renderStplSlots()')}
       </div>
