@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-17T13:30Z-anais-qba">
+<meta name="app-version" content="2026-09-21T12:30Z-qba-role">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1689,8 +1689,12 @@ function insOpts(sel=''){
 }
 
 // ── ROLES ──
-const ROLES=['BCBA','RBT','ABAT','OT','Billing','display'];
-const ROLE_BADGE={BCBA:'b-echo',RBT:'b-sup',ABAT:'b-pt',OT:'b-ot',Billing:'b-adm',display:'b-adm'};
+const ROLES=['BCBA','QBA','RBT','ABAT','OT','Billing','display'];
+const ROLE_BADGE={BCBA:'b-echo',QBA:'b-echo',RBT:'b-sup',ABAT:'b-pt',OT:'b-ot',Billing:'b-adm',display:'b-adm'};
+// A supervisor-level analyst role. QBA (QABA Qualified Behavior Analyst) is a
+// BCBA-equivalent supervisor in this practice: it unlocks the same supervision,
+// case-management and caseload abilities, but is labelled QBA — she is not a BCBA.
+function isSupervisor(role){ return role==='BCBA'||role==='QBA'; }
 
 
 // ── MEDICAL ALERTS ──
@@ -1879,7 +1883,7 @@ function loadSample(){
     {id:'SW', name:'Suzanne Ward',       initials:'SW', role:'BCBA',hrs:null,birthday:'1985-06-14',av:[1,1,1,1,1],bus:false,pto:[],clients:[],color:'#C8C8C8',startDate:'2022-01-01',ptoTotal:30,ptoUsed:0,sickUsed:0},
     {id:'TC', name:'Taylor Calame',      initials:'TC', role:'ABAT',hrs:null,hrsNote:'flex 40/mo',birthday:'1995-03-22',av:[1,1,1,1,0],bus:false,pto:[],clients:[],color:'#FFB3B3'},
     {id:'SB', name:'Sara Bastin',        initials:'SB', role:'RBT',hrs:35,birthday:'1997-11-03',av:[1,1,1,1,1],bus:true, pto:[],clients:[],color:'#98D498'},
-    {id:'AG', name:'Anais Goral',        initials:'AG', role:'BCBA',hrs:30,birthday:'1996-08-20',av:[1,1,0,1,1],bus:false,pto:[],clients:[],color:'#C8B450',credential:'QBA'},
+    {id:'AG', name:'Anais Goral',        initials:'AG', role:'QBA',hrs:30,birthday:'1996-08-20',av:[1,1,0,1,1],bus:false,pto:[],clients:[],color:'#C8B450',credential:'QBA'},
     {id:'MR', name:'Marina Riede',       initials:'MR', role:'OT', hrs:25,birthday:'1988-04-05',av:[1,0,1,0,1],bus:false,pto:[],clients:[],color:'#9E9E9E'},
     {id:'AT', name:'Ali Trznadel',       initials:'AT', role:'ABAT',hrs:30,birthday:'1994-01-30',av:[0,1,1,1,1],bus:true, pto:[],clients:[],color:'#FF9933'},
     {id:'MQ', name:'Miriam Quarterman',  initials:'MQ', role:'RBT',hrs:30,birthday:'1992-09-14',av:[1,1,1,1,1],bus:false,pto:[],clients:[],color:'#22CC22'},
@@ -2280,20 +2284,22 @@ function _fsPostLoadFixups(){
   // Anais Goral earned her QABA supervisor credential (QBA — BCBA-equivalent
   // in this practice), so she moves from RBT to BCBA role, which unlocks full
   // supervisor access (My Supervisees, recording supervision, case manager).
-  if(!S.cfg._anaisQbaUpgrade){
+  // Anais Goral holds the QABA Qualified Behavior Analyst credential (QBA —
+  // BCBA-equivalent supervisor here). Her role is QBA, which carries the same
+  // supervisor abilities via isSupervisor() while labelling her accurately.
+  // New flag (v2) supersedes the earlier pass that set BCBA by mistake.
+  if(!S.cfg._anaisQbaUpgrade2){
     const _ag=(S.staff||[]).find(st=>(st.name||'').trim().toLowerCase()==='anais goral' || st.id==='AG');
     if(_ag){
-      _ag.role='BCBA';
-      delete _ag.extendedAccess; // superseded by BCBA role
-      // Add QBA as primary credential. If a different primary credential
-      // already exists (e.g. RBT), preserve it as secondary rather than lose it.
+      _ag.role='QBA';
+      delete _ag.extendedAccess; // superseded by QBA supervisor role
       if(_ag.credential && _ag.credential!=='QBA' && !_ag.credential2){
         _ag.credential2=_ag.credential;
         _ag.cred2Expiry=_ag.credExpiry||'';
       }
       _ag.credential='QBA';
     }
-    S.cfg._anaisQbaUpgrade=true;
+    S.cfg._anaisQbaUpgrade2=true;
     try{ save(); }catch(e){}
   }
   if(!S.cfg._fillDayAutoAdminFixed){
@@ -3426,7 +3432,7 @@ function rStaff(){
   nEl.innerHTML=soon.map(s=>{const d=dbu(s.birthday);return`<div class="notice"><span style="font-size:16px">🎂</span><strong>${s.name}</strong>'s birthday is ${d===0?'TODAY! 🎉':'in '+d+' day'+(d!==1?'s':'')}</div>`;}).join('');
   const wds=[0,1,2,3,4].map(i=>{const d=new Date(wkStart);d.setDate(d.getDate()+i);return fd(d);});
   const DNL=['M','T','W','T','F'];
-  const ROLE_ORDER=['BCBA','OT','RBT','ABAT','Billing'];
+  const ROLE_ORDER=['BCBA','QBA','OT','RBT','ABAT','Billing'];
   const sortedStaff=[...S.staff].sort((a,b)=>{
     // BUG-FIX: previously used (indexOf(a.role)||99) which treated index 0
     // (BCBA) as falsy and sent every BCBA to the bottom of the list. We
@@ -4207,7 +4213,7 @@ function openSess(id){
         const isSupervisableSess = assignedRole==='rbt' || assignedRole==='abat';
         if(!isSupervisableSess) return '';
         const vst=gs(viewerStid);
-        const viewerIsBCBA = !isViewOnly || ((vst?.role||'').toLowerCase()==='bcba');
+        const viewerIsBCBA = !isViewOnly || isSupervisor(vst?.role);
         if(viewerIsBCBA){
           return `<div style="display:flex;align-items:center;gap:12px;flex-basis:100%;flex-wrap:wrap;margin-top:2px">
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer">
@@ -4411,7 +4417,7 @@ function cancelFuture(rg, fromDate){
 function openAddClient(){
   if(isViewOnly && !isClientManagerViewer() && !isBillingViewer()){promptUnlock();return;}
   const so=_byLastName(schedStaff()).map(s=>`<option value="${s.id}">${s.initials} – ${s.name} (${s.role})</option>`).join('');
-  const bo=_byLastName(S.staff.filter(s=>s.role==='BCBA')).map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  const bo=_byLastName(S.staff.filter(s=>isSupervisor(s.role))).map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
   openM(`<h3>Add Client</h3>
     <div class="fg"><label>Name</label><input id="nc-n" placeholder="Client name"></div>
     <div class="fg"><label>External ID <span style="font-weight:400;color:var(--mt);font-size:10px">— HiRasmus / Cowork / billing system ID (optional)</span></label><input id="nc-ext" placeholder="e.g. HR-10042"></div>
@@ -4485,7 +4491,7 @@ function openClientDetail(id){
   _tplSlots=(c.scheduleTpl||[]).map(s=>Object.assign({},s));
   const so=_byLastName(schedStaff()).map(s=>`<option value="${s.id}" ${(c.team||[]).includes(s.id)?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
   const _isOTcl=((c.therapyType||(c.hasOT?'BOTH':'ABA'))==='OT');
-  const _cmPool=_isOTcl?S.staff.filter(s=>s.role==='OT'):S.staff.filter(s=>s.role==='BCBA');
+  const _cmPool=_isOTcl?S.staff.filter(s=>s.role==='OT'):S.staff.filter(s=>isSupervisor(s.role));
   const bo=_cmPool.map(s=>`<option value="${s.id}" ${c.bcba===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
   const soOT=_byLastName(S.staff.filter(s=>s.role==='OT')).map(s=>`<option value="${s.id}" ${(c.team||[]).includes(s.id)?'selected':''}>${s.initials} – ${s.name} (${s.role})</option>`).join('');
   // existRec precomputed above
@@ -5935,7 +5941,7 @@ function rMySSup(stid){
   const wrap=document.getElementById('mys-sup-sect')||document.getElementById('mys-sup-card');
   if(!wrap) return;
   const st=gs(stid);
-  if(st&&st.role==='BCBA'){ rMySSupervisees(stid, wrap); return; }
+  if(st&&isSupervisor(st.role)){ rMySSupervisees(stid, wrap); return; }
   if(!st||!['RBT','ABAT'].includes(st.role)){ wrap.innerHTML=''; return; }
   const ym=todayBerlin().slice(0,7);
   const s=supStats(stid,ym);
@@ -6080,7 +6086,7 @@ function rMyS(){
       <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:#9E9E9E;border-radius:4px 0 0 4px"></div>
       <div class="mys-sess-time">All day <span class="mys-sess-dur">Default</span></div>
       <div class="mys-sess-client" style="color:var(--t2)">${admType}</div>
-      <div class="mys-sess-meta"><span class="bdg ${s.role==='BCBA'?'b-apm':'b-adm'}">${admType}</span><span style="font-size:10px;color:var(--mt);margin-left:4px">No sessions scheduled — available for assignment</span></div>
+      <div class="mys-sess-meta"><span class="bdg ${isSupervisor(s.role)?'b-apm':'b-adm'}">${admType}</span><span style="font-size:10px;color:var(--mt);margin-left:4px">No sessions scheduled — available for assignment</span></div>
     </div>`;
   } else {
     // Merge sessions and breaks, sort by time
@@ -8016,7 +8022,7 @@ function rWaitlist(){
 function openAddWL(){
   const io=insOpts('');
   const ttOpts=['ABA','BOTH','OT'].map(t=>`<option value="${t}">${t==='BOTH'?'ABA+OT':t}</option>`).join('');
-  const boWL=_byLastName(S.staff.filter(s=>s.role==='BCBA'||s.role==='OT')).map(s=>`<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
+  const boWL=_byLastName(S.staff.filter(s=>isSupervisor(s.role)||s.role==='OT')).map(s=>`<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
   _openM(`<h3>Add to Waitlist</h3>
     <div class="fr2"><div class="fg"><label>Name</label><input id="wl-n" placeholder="Client name"></div><div class="fg"><label>DOB</label><input type="date" id="wl-dob"></div></div>
     <div class="fr2"><div class="fg"><label>Insurance</label><select id="wl-ins"><option value="">Unknown</option>${io}</select></div><div class="fg"><label>Therapy Type</label><select id="wl-tt">${ttOpts}</select></div></div>
@@ -8067,7 +8073,7 @@ function openEditWL(id){
   const io=insOpts(w.ins||'');
   const so=['WAITING','PT','AUTH','URGENT'].map(s=>`<option value="${s}" ${s===w.status?'selected':''}>${{WAITING:'Waiting',PT:'Parent Training',AUTH:'Auth Ready',URGENT:'Urgent'}[s]}</option>`).join('');
   const ttOptsE=['ABA','BOTH','OT'].map(t=>`<option value="${t}" ${(w.therapyType||'ABA')===t?'selected':''}>${t==='BOTH'?'ABA+OT':t}</option>`).join('');
-  const boWLE=_byLastName(S.staff.filter(s=>s.role==='BCBA'||s.role==='OT')).map(s=>`<option value="${s.id}" ${w.bcba===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
+  const boWLE=_byLastName(S.staff.filter(s=>isSupervisor(s.role)||s.role==='OT')).map(s=>`<option value="${s.id}" ${w.bcba===s.id?'selected':''}>${s.name} (${s.role})</option>`).join('');
   _openM(`<h3>Edit Waitlist: ${w.name}</h3>
     <div class="fr2"><div class="fg"><label>Name</label><input id="wl-n" value="${w.name}"></div><div class="fg"><label>DOB</label><input type="date" id="wl-dob" value="${w.dob||''}"></div></div>
     <div class="fr2"><div class="fg"><label>Insurance</label><select id="wl-ins"><option value="">Unknown</option>${io}</select></div><div class="fg"><label>Therapy Type</label><select id="wl-tt">${ttOptsE}</select></div></div>
@@ -9114,7 +9120,7 @@ function setTherapyType(prefix, val){
     // OT-only: Case Manager = OT staff only. ABA/Both: BCBA only.
     const pool=isOT
       ? S.staff.filter(s=>s.role==='OT')
-      : S.staff.filter(s=>s.role==='BCBA');
+      : S.staff.filter(s=>isSupervisor(s.role));
     bcbaEl.innerHTML=pool.map(s=>`<option value="${s.id}" ${s.id===curBcba?'selected':''}>${s.name} (${s.role})</option>`).join('');
   }
 
@@ -10798,7 +10804,7 @@ function teamSuggChips(cid, selectId, roles){
     .filter(st => (roles||CLINICAL_ROLES).includes(st.role))
     .map(st => {
       const clientCount = S.clients.filter(cl => (cl.team||[]).includes(st.id)).length;
-      const maxLoad = st.role==='BCBA' ? 12 : st.role==='OT' ? 10 : 8;
+      const maxLoad = isSupervisor(st.role) ? 12 : st.role==='OT' ? 10 : 8;
       const pct = maxLoad ? Math.round(clientCount/maxLoad*100) : 0;
       const isOn = current.includes(st.id);
       // Availability: days available this week
@@ -10839,7 +10845,7 @@ function toggleTeamChip(stid, selectId){
   if(!chip) return;
   const st = gs(stid);
   const clientCount = S.clients.filter(cl=>(cl.team||[]).includes(stid)).length;
-  const maxLoad = st.role==='BCBA'?12:st.role==='OT'?10:8;
+  const maxLoad = isSupervisor(st.role)?12:st.role==='OT'?10:8;
   const pct = maxLoad?Math.round(clientCount/maxLoad*100):0;
   const dotClr = pct<60?'#639922':pct<90?'#BA7517':'#E24B4A';
   if(opt.selected){
@@ -10866,7 +10872,7 @@ function openEditTeam(cid){
 
   function chipHtml(st, isTeam, isBackup, section){
     const isOn=section==='team'?isTeam:isBackup;
-    const maxLoad=st.role==='BCBA'?12:st.role==='OT'?10:8;
+    const maxLoad=isSupervisor(st.role)?12:st.role==='OT'?10:8;
     const cc=S.clients.filter(cl=>(cl.team||[]).includes(st.id)).length;
     const pct=maxLoad?Math.round(cc/maxLoad*100):0;
     const dotClr=pct<60?'#639922':pct<90?'#BA7517':'#E24B4A';
@@ -10919,7 +10925,7 @@ function etToggle(cid, stid, section){
   const chip=document.getElementById('et-'+section+'-'+stid);
   if(!chip) return;
   const st=gs(stid);
-  const maxLoad=st.role==='BCBA'?12:st.role==='OT'?10:8;
+  const maxLoad=isSupervisor(st.role)?12:st.role==='OT'?10:8;
   const cc=S.clients.filter(cl=>(cl.team||[]).includes(stid)).length;
   const pct=maxLoad?Math.round(cc/maxLoad*100):0;
   const dotClr=pct<60?'#639922':pct<90?'#BA7517':'#E24B4A';
