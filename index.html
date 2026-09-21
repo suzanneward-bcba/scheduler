@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-17T11:50Z-prefsched-width">
+<meta name="app-version" content="2026-09-17T13:30Z-anais-qba">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1879,7 +1879,7 @@ function loadSample(){
     {id:'SW', name:'Suzanne Ward',       initials:'SW', role:'BCBA',hrs:null,birthday:'1985-06-14',av:[1,1,1,1,1],bus:false,pto:[],clients:[],color:'#C8C8C8',startDate:'2022-01-01',ptoTotal:30,ptoUsed:0,sickUsed:0},
     {id:'TC', name:'Taylor Calame',      initials:'TC', role:'ABAT',hrs:null,hrsNote:'flex 40/mo',birthday:'1995-03-22',av:[1,1,1,1,0],bus:false,pto:[],clients:[],color:'#FFB3B3'},
     {id:'SB', name:'Sara Bastin',        initials:'SB', role:'RBT',hrs:35,birthday:'1997-11-03',av:[1,1,1,1,1],bus:true, pto:[],clients:[],color:'#98D498'},
-    {id:'AG', name:'Anais Goral',        initials:'AG', role:'RBT',hrs:30,birthday:'1996-08-20',av:[1,1,0,1,1],bus:false,pto:[],clients:[],color:'#C8B450',extendedAccess:true},
+    {id:'AG', name:'Anais Goral',        initials:'AG', role:'BCBA',hrs:30,birthday:'1996-08-20',av:[1,1,0,1,1],bus:false,pto:[],clients:[],color:'#C8B450',credential:'QBA'},
     {id:'MR', name:'Marina Riede',       initials:'MR', role:'OT', hrs:25,birthday:'1988-04-05',av:[1,0,1,0,1],bus:false,pto:[],clients:[],color:'#9E9E9E'},
     {id:'AT', name:'Ali Trznadel',       initials:'AT', role:'ABAT',hrs:30,birthday:'1994-01-30',av:[0,1,1,1,1],bus:true, pto:[],clients:[],color:'#FF9933'},
     {id:'MQ', name:'Miriam Quarterman',  initials:'MQ', role:'RBT',hrs:30,birthday:'1992-09-14',av:[1,1,1,1,1],bus:false,pto:[],clients:[],color:'#22CC22'},
@@ -2276,6 +2276,25 @@ function _fsPostLoadFixups(){
     const _remap={INELIG:'INSURANCE', NOSVC:'NO_SVC'};
     (S.waitlist||[]).forEach(w=>{ if(w.removedReason&&_remap[w.removedReason]) w.removedReason=_remap[w.removedReason]; });
     S.cfg._exitReasonsUnified=true;
+  }
+  // Anais Goral earned her QABA supervisor credential (QBA — BCBA-equivalent
+  // in this practice), so she moves from RBT to BCBA role, which unlocks full
+  // supervisor access (My Supervisees, recording supervision, case manager).
+  if(!S.cfg._anaisQbaUpgrade){
+    const _ag=(S.staff||[]).find(st=>(st.name||'').trim().toLowerCase()==='anais goral' || st.id==='AG');
+    if(_ag){
+      _ag.role='BCBA';
+      delete _ag.extendedAccess; // superseded by BCBA role
+      // Add QBA as primary credential. If a different primary credential
+      // already exists (e.g. RBT), preserve it as secondary rather than lose it.
+      if(_ag.credential && _ag.credential!=='QBA' && !_ag.credential2){
+        _ag.credential2=_ag.credential;
+        _ag.cred2Expiry=_ag.credExpiry||'';
+      }
+      _ag.credential='QBA';
+    }
+    S.cfg._anaisQbaUpgrade=true;
+    try{ save(); }catch(e){}
   }
   if(!S.cfg._fillDayAutoAdminFixed){
     let _fdFixed=0;
@@ -5305,13 +5324,23 @@ function applyRoleAccess(){
   const confirmedClinician = staffRec &&
     !ADMIN_ACCESS_STIDS.includes(staffRec.id) &&
     ['bcba','ot'].includes((staffRec.role||'').toLowerCase());
-  ['rbt-billing','rbt-attendance','rbt-cancellations','rbt-hours','rbt-leave'].forEach(function(btnId){
+  // Clinicians (BCBA/OT) now see Attendance + Cancellations in addition to
+  // Indirect Services and Supervision. Still hidden from them: Billing
+  // Verification, Employee Hours, Leave & Absence (org-wide / payroll views).
+  ['rbt-billing','rbt-hours','rbt-leave'].forEach(function(btnId){
     const b=document.getElementById(btnId);
     if(b) b.style.display = confirmedClinician ? 'none' : '';
   });
+  ['rbt-attendance','rbt-cancellations'].forEach(function(btnId){
+    const b=document.getElementById(btnId);
+    if(b) b.style.display = '';  // visible to clinicians and admins alike
+  });
   console.log('[Permissions] viewerStid=', viewerStid, 'role=', staffRec?.role, 'adminAccess=', staffRec?.adminAccess, 'clinician=', confirmedClinician);
-  // If clinician lands on a non-allowed report, switch them to Indirect Services
-  if(confirmedClinician && typeof curReport !== 'undefined' && curReport !== 'badmin'){
+  // If a clinician lands on a report they can't see, move them to Indirect
+  // Services. Allowed for clinicians: badmin, supervision, attendance,
+  // cancellations. Everything else redirects.
+  const CLINICIAN_REPORTS = ['badmin','supervision','attendance','cancellations'];
+  if(confirmedClinician && typeof curReport !== 'undefined' && !CLINICIAN_REPORTS.includes(curReport)){
     try { setReport('badmin', document.getElementById('rbt-badmin')); } catch(e){}
   }
   // Re-init My Schedule so the dropdown auto-selects the logged-in user
@@ -6532,8 +6561,22 @@ function getReportSessions(){
   const ins=document.getElementById('rpt-ins')?.value||'';
   const stid=document.getElementById('rpt-staff')?.value||'';
   const cid=document.getElementById('rpt-client')?.value||'';
+  // Clinician scoping: BCBAs see their caseload (clients they case-manage),
+  // OTs see their own sessions. Admin/billing (non-clinician viewers) see all.
+  let _clinScope=null;
+  if(typeof isClinicianViewer==='function' && isClinicianViewer() && viewerStid && !isAdminViewer() && !isBillingViewer()){
+    const vst=gs(viewerStid);
+    const role=((vst&&vst.role)||'').toLowerCase();
+    if(role==='bcba'){
+      const myClients=new Set((S.clients||[]).filter(cl=>cl.bcba===viewerStid).map(cl=>cl.id));
+      _clinScope=s=> s.cid && myClients.has(s.cid);
+    } else {
+      _clinScope=s=> s.stid===viewerStid;   // OT: own sessions
+    }
+  }
   return S.sessions.filter(s=>{
     if(s._virtual||s._autoAdmin) return false;
+    if(_clinScope && !_clinScope(s)) return false;
     if(from&&s.date<from) return false;
     if(to&&s.date>to) return false;
     if(ins){ const cl=gc(s.cid); if(!cl||cl.ins!==ins) return false; }
