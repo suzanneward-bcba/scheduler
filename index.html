@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-23T14:00Z-indirect-autoadmin-fix">
+<meta name="app-version" content="2026-09-23T15:00Z-adminlog-fix">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -2271,6 +2271,14 @@ function _fsPostLoadFixups(){
   // Field consolidation: extId IS the TRICARE Case ID. Fold any legacy
   // caseId values into extId so there's a single canonical field.
   (S.clients||[]).forEach(c=>{ if(!c.extId&&c.caseId)c.extId=c.caseId; });
+  // System-generated admin labels — placeholders, not logged activity. Used by
+  // the log-field migration and the "logged?" test so they never count as work.
+  window._SYS_ADMIN_NOTES = window._SYS_ADMIN_NOTES || new Set([
+    'Filled via Fill Day','Filled via Copy Week','Filled gap with admin',
+    'Filled from weekly schedule','Admin (assigned)',
+    'Admin – available (cancellation)','Admin – freed from cancellation',
+    'Admin (assigned)','Admin \u2013 available (cancellation)','Admin \u2013 freed from cancellation'
+  ]);
   // Fill Day sessions were incorrectly tagged _autoAdmin, which excluded them
   // from timesheets, the payroll sync, AND made them eligible for storage
   // cleanup. They are real scheduled work — clear the flag once.
@@ -2291,6 +2299,23 @@ function _fsPostLoadFixups(){
   // Repair: some real INDIRECT client sessions were stamped _autoAdmin (created
   // over a cancellation-freed slot), which wrongly excluded them from timesheets
   // and billing. A session with both a client and a CPT code is never auto-admin.
+  // Admin activity typed into the "+ Admin" block's note field landed in
+  // `notes`, but the timesheet reads `sessionLog` — so real logged admin work
+  // showed as "no activity logged". Copy genuine notes into sessionLog on
+  // admin blocks, excluding the system placeholder labels above.
+  if(!S.cfg._adminNoteToLogFix){
+    const _sys=window._SYS_ADMIN_NOTES;
+    let _moved=0;
+    (S.sessions||[]).forEach(s=>{
+      const isAdminBlk = s.type==='ADMIN' || s._autoAdmin || (!s.cid && s.type!=='ABA' && s.type!=='OT' && s.type!=='INDIRECT');
+      const note=String(s.notes||'').trim();
+      if(isAdminBlk && note && !_sys.has(note) && !String(s.sessionLog||'').trim()){
+        s.sessionLog=note; _moved++;
+      }
+    });
+    S.cfg._adminNoteToLogFix=true;
+    if(_moved){ console.log('Moved '+_moved+' admin note(s) into sessionLog'); try{ save(); }catch(e){} }
+  }
   if(!S.cfg._autoAdminCodedFix){
     let _fixed=0;
     (S.sessions||[]).forEach(s=>{ if(s._autoAdmin && s.cid && s.cptCode){ delete s._autoAdmin; _fixed++; } });
@@ -4038,7 +4063,8 @@ function openAddBlock(){
     <div class="mact"><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="saveBlock()">Add</button></div>`);
 }
 function saveBlock(){
-  S.sessions.push({id:'s'+uid(),cid:'',stid:document.getElementById('ab-st').value,date:document.getElementById('ab-dt').value,s:document.getElementById('ab-s').value,e:document.getElementById('ab-e').value,type:document.getElementById('ab-ty').value,status:'OK',cx:'',makeup:false,recurGroup:'',notes:document.getElementById('ab-nt').value});
+  const _abNote=document.getElementById('ab-nt').value.trim();
+  S.sessions.push({id:'s'+uid(),cid:'',stid:document.getElementById('ab-st').value,date:document.getElementById('ab-dt').value,s:document.getElementById('ab-s').value,e:document.getElementById('ab-e').value,type:document.getElementById('ab-ty').value,status:'OK',cx:'',makeup:false,recurGroup:'',notes:_abNote,sessionLog:_abNote});
   save();closeM();rSched();rDaily();
 }
 
@@ -5542,7 +5568,9 @@ function rMySDocs(stid){
   const ym=today.slice(0,7);
   const mine=(S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&s.date<=today&&s.status!=='CX'&&!s._virtual);
   const missingNotes=mine.filter(s=>s.cid&&!s.noteWritten).sort((a,b)=>a.date.localeCompare(b.date));
-  const missingAdmin=mine.filter(s=>!s.cid&&!String(s.sessionLog||'').trim()&&(s.type==='ADMIN'||s._autoAdmin)).sort((a,b)=>a.date.localeCompare(b.date));
+  const _sysN=window._SYS_ADMIN_NOTES||new Set();
+  const _act=s=>{const l=String(s.sessionLog||'').trim();if(l)return true;const n=String(s.notes||'').trim();return !!n&&!_sysN.has(n);};
+  const missingAdmin=mine.filter(s=>!s.cid&&!_act(s)&&(s.type==='ADMIN'||s._autoAdmin)).sort((a,b)=>a.date.localeCompare(b.date));
   const monLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
   if(!missingNotes.length&&!missingAdmin.length){
     wrap.innerHTML=`<div class="mys-section-lbl">\u{1F4DD} My Documentation</div>
@@ -5707,7 +5735,13 @@ function tsEntries(stid, ym){
   // availability placeholder — so it must not be excluded even if a stray
   // _autoAdmin flag got stamped on it (e.g. created over a freed cancellation
   // slot). Only genuinely client-less, code-less auto-admin needs a log.
-  const _logged=s=>(s.cid&&s.cptCode) || !s._autoAdmin || !!String(s.sessionLog||'').trim();
+  // "Logged" = has a session log, OR a real (non-placeholder) note. Admin
+  // activity is sometimes captured in `notes` (via the + Admin block), so both
+  // fields count; the system placeholder labels never do.
+  const _sysNotes=window._SYS_ADMIN_NOTES||new Set();
+  const _hasActivity=s=>{ const l=String(s.sessionLog||'').trim(); if(l) return true;
+    const n=String(s.notes||'').trim(); return !!n && !_sysNotes.has(n); };
+  const _logged=s=>(s.cid&&s.cptCode) || !s._autoAdmin || _hasActivity(s);
   const sess=(S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&s.date<=_cap&&_logged(s)&&!s._virtual)
     .sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
   const _leaveDates=new Set((( (gs(stid)||{}).pto)||[]).map(x=>typeof x==='string'?x:(x&&x.date)).filter(Boolean));
