@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-21T13:30Z-bcba-report-scope">
+<meta name="app-version" content="2026-09-23T14:00Z-indirect-autoadmin-fix">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -2288,6 +2288,15 @@ function _fsPostLoadFixups(){
   // BCBA-equivalent supervisor here). Her role is QBA, which carries the same
   // supervisor abilities via isSupervisor() while labelling her accurately.
   // New flag (v2) supersedes the earlier pass that set BCBA by mistake.
+  // Repair: some real INDIRECT client sessions were stamped _autoAdmin (created
+  // over a cancellation-freed slot), which wrongly excluded them from timesheets
+  // and billing. A session with both a client and a CPT code is never auto-admin.
+  if(!S.cfg._autoAdminCodedFix){
+    let _fixed=0;
+    (S.sessions||[]).forEach(s=>{ if(s._autoAdmin && s.cid && s.cptCode){ delete s._autoAdmin; _fixed++; } });
+    S.cfg._autoAdminCodedFix=true;
+    if(_fixed){ console.log('Fixed '+_fixed+' coded session(s) wrongly flagged _autoAdmin'); try{ save(); }catch(e){} }
+  }
   if(!S.cfg._anaisQbaUpgrade2){
     const _ag=(S.staff||[]).find(st=>(st.name||'').trim().toLowerCase()==='anais goral' || st.id==='AG');
     if(_ag){
@@ -5694,7 +5703,11 @@ function tsEntries(stid, ym){
   // Auto-generated admin blocks (from cancellations / Fill Day) count as paid
   // time ONLY when the therapist logged what they actually did in that slot.
   // An unlogged block stays an availability placeholder.
-  const _logged=s=>!s._autoAdmin || !!String(s.sessionLog||'').trim();
+  // A real client session that carries a CPT code is billable work, never an
+  // availability placeholder — so it must not be excluded even if a stray
+  // _autoAdmin flag got stamped on it (e.g. created over a freed cancellation
+  // slot). Only genuinely client-less, code-less auto-admin needs a log.
+  const _logged=s=>(s.cid&&s.cptCode) || !s._autoAdmin || !!String(s.sessionLog||'').trim();
   const sess=(S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&s.date<=_cap&&_logged(s)&&!s._virtual)
     .sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
   const _leaveDates=new Set((( (gs(stid)||{}).pto)||[]).map(x=>typeof x==='string'?x:(x&&x.date)).filter(Boolean));
