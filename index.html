@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-23T15:00Z-adminlog-fix">
+<meta name="app-version" content="2026-09-28T19:15Z-halfday-render">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -3315,7 +3315,8 @@ function rDay(){
     // ptoEntry holds {date, type:'PTO'|'SICK'} or null. We branch the
     // status label on entry.type so sick days don't display as "PTO".
     const ptoEntry=ptoOnDate(st,dayDate);
-    const pto=!!ptoEntry;
+    const ptoHalf=ptoEntry&&ptoEntry.halfDay;          // partial-day leave
+    const pto=!!ptoEntry && !ptoHalf;                   // full-day leave only
     const stSess=dsess.filter(s=>s.stid===st.id);
     const realSess=stSess.filter(s=>!s._autoAdmin&&s.status!=='CX');
     const bg=tClr(st.id),tx=tTxt(st.id);
@@ -3332,6 +3333,12 @@ function rDay(){
       // Use the actual leave type so "Sick" appears for sick days, not "PTO".
       const lblColor = ptoEntry.type==='SICK' ? 'var(--rd)' : 'var(--am)';
       statusLabel='<span style="color:'+lblColor+';font-size:10px;font-weight:600">'+ptoTypeLabel(ptoEntry.type)+'</span>';
+    }
+    else if(ptoHalf){
+      // Half-day leave: label the affected half; the rest of the day stays live.
+      const lblColor = ptoEntry.type==='SICK' ? 'var(--rd)' : 'var(--am)';
+      const hrs = ptoEntry.hours ? ptoEntry.hours+'h ' : '';
+      statusLabel='<span style="color:'+lblColor+';font-size:10px;font-weight:600" title="'+hrs+ptoTypeLabel(ptoEntry.type)+' ('+(ptoEntry.halfWhen||'AM')+')">\u00BD '+ptoTypeLabel(ptoEntry.type)+' '+(ptoEntry.halfWhen||'AM')+'</span>';
     }
     else if(!av) statusLabel='<span style="color:var(--mt);font-size:10px">Off</span>';
     else if(allOff) statusLabel='<span style="color:var(--mt);font-size:10px">Off</span>';
@@ -6087,7 +6094,7 @@ function rMyS(){
     <div class="mys-av" style="background:${bg};color:${tx}">${s.initials}</div>
     <div class="mys-name">${s.name}</div>
     <div class="mys-role">${s.role}${hrsLabel?' · '+hrsLabel:''}</div>
-    <div class="mys-date">${dayLabel}${pto?' · <span style="color:#FFE082;font-weight:700">'+ptoTypeLabel(pto.type)+'</span>':!avail?' · <span style="opacity:.6">Day off</span>':''}</div>
+    <div class="mys-date">${dayLabel}${pto?(pto.halfDay?' · <span style="color:#FFE082;font-weight:700">\u00BD '+ptoTypeLabel(pto.type)+' '+(pto.halfWhen||'AM')+'</span>':' · <span style="color:#FFE082;font-weight:700">'+ptoTypeLabel(pto.type)+'</span>'):!avail?' · <span style="opacity:.6">Day off</span>':''}</div>
   </div>`;
 
   // ── Week navigation ──
@@ -7634,14 +7641,24 @@ function getBlockStatus(stid, date){
   const wds = [0,1,2,3,4].map(i=>{const d=new Date(wkOf(pd(date)));d.setDate(d.getDate()+i);return fd(d);});
   const dowIdx = wds.indexOf(date);
   const avail = dowIdx>=0 ? st.av[dowIdx] : 1;
-  const pto = !!ptoOnDate(st,date);
-  if(!avail || pto) return DAY_BLOCKS.map(()=>'off');
+  const ptoEntry = ptoOnDate(st,date);
+  if(!avail) return DAY_BLOCKS.map(()=>'off');
+  // Full-day PTO blocks everything. A half-day only blocks its half (AM/PM),
+  // leaving the other half free and bookable — so a 3h PM leave still shows
+  // the morning as available on the schedule.
+  if(ptoEntry && !ptoEntry.halfDay) return DAY_BLOCKS.map(()=>'off');
+  const _ptoHalf = ptoEntry && ptoEntry.halfDay ? (ptoEntry.halfWhen||'AM') : null;
 
   const daySess = S.sessions.filter(s=>
     s.stid===stid && s.date===date && s.status!=='CX' && !s._autoAdmin && !s._virtual
   );
 
   return DAY_BLOCKS.map(blk=>{
+    // Half-day leave: mark the blocks in the affected half as off.
+    if(_ptoHalf){
+      const blkIsPM = _t2m(blk.s) >= _t2m('12:00');
+      if((_ptoHalf==='AM' && !blkIsPM) || (_ptoHalf==='PM' && blkIsPM)) return 'off';
+    }
     const overlapping = daySess.filter(s=>timesOverlap(s.s, s.e, blk.s, blk.e));
     if(!overlapping.length) return 'free';
     // Partial if session only covers part of the block
