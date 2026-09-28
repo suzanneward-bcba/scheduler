@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-28T19:15Z-halfday-render">
+<meta name="app-version" content="2026-09-28T20:15Z-halfday-complete">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -3338,7 +3338,8 @@ function rDay(){
       // Half-day leave: label the affected half; the rest of the day stays live.
       const lblColor = ptoEntry.type==='SICK' ? 'var(--rd)' : 'var(--am)';
       const hrs = ptoEntry.hours ? ptoEntry.hours+'h ' : '';
-      statusLabel='<span style="color:'+lblColor+';font-size:10px;font-weight:600" title="'+hrs+ptoTypeLabel(ptoEntry.type)+' ('+(ptoEntry.halfWhen||'AM')+')">\u00BD '+ptoTypeLabel(ptoEntry.type)+' '+(ptoEntry.halfWhen||'AM')+'</span>';
+      const win = (ptoEntry.halfFrom&&ptoEntry.halfTo) ? (ftm(ptoEntry.halfFrom)+'\u2013'+ftm(ptoEntry.halfTo)) : (ptoEntry.halfWhen||'AM');
+      statusLabel='<span style="color:'+lblColor+';font-size:10px;font-weight:600" title="'+hrs+ptoTypeLabel(ptoEntry.type)+' off '+win+'">\u00BD '+ptoTypeLabel(ptoEntry.type)+' '+win+'</span>';
     }
     else if(!av) statusLabel='<span style="color:var(--mt);font-size:10px">Off</span>';
     else if(allOff) statusLabel='<span style="color:var(--mt);font-size:10px">Off</span>';
@@ -6132,11 +6133,16 @@ function rMyS(){
   </div>`:'';
 
   let sessHtml='';
-  if(pto||!avail){
+  const _ptoHalf = pto && pto.halfDay;
+  const _ptoWin = _ptoHalf ? ((pto.halfFrom&&pto.halfTo)?(ftm(pto.halfFrom)+'\u2013'+ftm(pto.halfTo)):(pto.halfWhen||'AM')) : '';
+  const _ptoBanner = _ptoHalf
+    ? `<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:${pto.type==='SICK'?'#FFEBEE':'#FFF8E1'};border:1px solid ${pto.type==='SICK'?'#EF9A9A':'#FFE082'};border-radius:9px;font-size:12px;font-weight:600;color:${pto.type==='SICK'?'#B71C1C':'#E65100'};margin-bottom:8px">${pto.type==='SICK'?'🤒':'🏖'} ${pto.hours?pto.hours+'h ':''}${ptoTypeLabel(pto.type)} off · ${_ptoWin}<span style="font-weight:400;margin-left:4px">— rest of day available</span></div>`
+    : '';
+  if((pto && !_ptoHalf)||!avail){
     sessHtml=`<div class="mys-empty"><div class="mi">${pto?(pto.type==='SICK'?'🤒':'🏖'):'😴'}</div><div style="font-size:14px;font-weight:600">${pto?ptoTypeLabel(pto.type):'Day off'}</div></div>`;
   } else if(!daySess.filter(s=>!s._autoAdmin&&s.status!=='CX').length&&!breaks.length){
     const admType='Admin';
-    sessHtml=`<div class="mys-sess" style="border:1px dashed #B0BEC5;background:#FAFAFA">
+    sessHtml=_ptoBanner+`<div class="mys-sess" style="border:1px dashed #B0BEC5;background:#FAFAFA">
       <div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:#9E9E9E;border-radius:4px 0 0 4px"></div>
       <div class="mys-sess-time">All day <span class="mys-sess-dur">Default</span></div>
       <div class="mys-sess-client" style="color:var(--t2)">${admType}</div>
@@ -6149,7 +6155,7 @@ function rMyS(){
       ...breaks.map(x=>({...x,_type:'brk',s:x.s,e:x.e}))
     ].sort((a,b)=>{/* Pure chronological by start time. Tie-break: CPT-coded sessions sort above admin/_autoAdmin. CX sessions sort chronologically too — strikethrough styling already signals their cancelled state. */const _t=a.s.localeCompare(b.s);if(_t!==0)return _t;const _isAdmin=x=>x._autoAdmin||x.type==='ADMIN';return (_isAdmin(a)?1:0)-(_isAdmin(b)?1:0);});
 
-    sessHtml=items.map(item=>{
+    sessHtml=_ptoBanner+items.map(item=>{
       if(item._type==='brk'){
         return`<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:#FFF9C4;border-radius:9px;font-size:12px;color:#795548;font-weight:600">
           ☕ Break &nbsp;<span style="font-weight:400">${ftm(item.s)} – ${ftm(item.e)}</span>
@@ -7648,14 +7654,18 @@ function getBlockStatus(stid, date){
   // the morning as available on the schedule.
   if(ptoEntry && !ptoEntry.halfDay) return DAY_BLOCKS.map(()=>'off');
   const _ptoHalf = ptoEntry && ptoEntry.halfDay ? (ptoEntry.halfWhen||'AM') : null;
+  const _offFrom = ptoEntry && ptoEntry.halfDay && ptoEntry.halfFrom ? _t2m(ptoEntry.halfFrom) : null;
+  const _offTo   = ptoEntry && ptoEntry.halfDay && ptoEntry.halfTo   ? _t2m(ptoEntry.halfTo)   : null;
 
   const daySess = S.sessions.filter(s=>
     s.stid===stid && s.date===date && s.status!=='CX' && !s._autoAdmin && !s._virtual
   );
 
   return DAY_BLOCKS.map(blk=>{
-    // Half-day leave: mark the blocks in the affected half as off.
-    if(_ptoHalf){
+    // Exact off-window wins; else the AM/PM half.
+    if(_offFrom!=null && _offTo!=null){
+      if(_t2m(blk.s) < _offTo && _offFrom < _t2m(blk.e)) return 'off';
+    } else if(_ptoHalf){
       const blkIsPM = _t2m(blk.s) >= _t2m('12:00');
       if((_ptoHalf==='AM' && !blkIsPM) || (_ptoHalf==='PM' && blkIsPM)) return 'off';
     }
@@ -11334,6 +11344,11 @@ function openLeaveRequest(){
           </div>
         </div>
       </div>
+      <div style="margin-top:8px;font-size:10px;color:#1565C0">Optional \u2014 set exact hours to block on the schedule (leaves the rest of the day open). Leave blank to block the whole AM/PM half above.</div>
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-top:4px">
+        <div class="fg" style="margin:0"><label style="font-size:10px">Off from</label><input type="time" id="lr-hd-from" oninput="updateLrPreview()"></div>
+        <div class="fg" style="margin:0"><label style="font-size:10px">Off to</label><input type="time" id="lr-hd-to" oninput="updateLrPreview()"></div>
+      </div>
     </div>
     <!-- Flex section — visible only when leave type is FLEX. Different from
          half-day in shape: 1-4 hour cap (not full daily-max), notes required
@@ -11635,6 +11650,8 @@ async function submitLeaveRequest(){
     const cap = hrsPerDay(st);
     halfHours = parseFloat(document.getElementById('lr-hd-hours')?.value) || 0;
     halfWhen = document.querySelector('input[name="lr-hd-when"]:checked')?.value || 'AM';
+    var _hFrom=document.getElementById('lr-hd-from')?.value||'';
+    var _hTo=document.getElementById('lr-hd-to')?.value||'';
     if(halfHours < 1){
       alert('Half-day must be at least 1 hour.');
       return;
@@ -11690,6 +11707,7 @@ async function submitLeaveRequest(){
     req.halfHours = halfHours;
     req.halfWhen = halfWhen;
     req.hours = halfHours;
+    if(_hFrom && _hTo && _hFrom < _hTo){ req.halfFrom=_hFrom; req.halfTo=_hTo; }
   }
   // For flex: stamp flexHours and flexWhen. r.hours mirrors flexHours for
   // reporting consistency, even though FLEX doesn't deduct from PTO.
@@ -11963,7 +11981,9 @@ async function approveLeaveRequest(id){
           type: r.type==='SICK'?'SICK':'PTO',
           hours: r.halfHours,
           halfDay: true,
-          halfWhen: r.halfWhen || 'AM'
+          halfWhen: r.halfWhen || 'AM',
+          halfFrom: r.halfFrom || '',
+          halfTo: r.halfTo || ''
         });
       }
     } else {
@@ -12098,6 +12118,8 @@ function openEditLeaveReq(id){
         <label style="font-size:12px">Hours: <input type="number" id="elr-half-hours" value="${r.halfHours||''}" min="0.5" step="0.5" style="width:70px;margin-left:4px"></label>
         <label style="font-size:12px"><input type="radio" name="elr-half-when" value="AM" ${(!r.halfWhen||r.halfWhen==='AM')?'checked':''}> AM</label>
         <label style="font-size:12px"><input type="radio" name="elr-half-when" value="PM" ${r.halfWhen==='PM'?'checked':''}> PM</label>
+        <label style="font-size:12px;margin-left:8px">Off from <input type="time" id="elr-half-from" value="${r.halfFrom||''}" style="margin-left:4px"></label>
+        <label style="font-size:12px">to <input type="time" id="elr-half-to" value="${r.halfTo||''}" style="margin-left:4px"></label>
       </div>
       <div style="font-size:10px;color:var(--mt);margin-top:6px">Partial-day requests must be a single date (From = To). Unchecked = full day(s) off, deducted at the standard daily rate.</div>
     </div>
@@ -12145,11 +12167,15 @@ function saveEditLeaveReq(id){
     const cap=hrsPerDay(targetSt);
     let hh=parseFloat(document.getElementById('elr-half-hours')?.value)||0;
     const hw=document.querySelector('input[name="elr-half-when"]:checked')?.value||'AM';
+    const hFrom=document.getElementById('elr-half-from')?.value||'';
+    const hTo=document.getElementById('elr-half-to')?.value||'';
     if(hh<0.5){ alert('Partial-day hours must be at least 0.5.'); return; }
     if(hh>cap) hh=cap;
     r.halfDay=true; r.halfHours=hh; r.halfWhen=hw; r.hours=hh;
+    if(hFrom && hTo && hFrom < hTo){ r.halfFrom=hFrom; r.halfTo=hTo; }
+    else { delete r.halfFrom; delete r.halfTo; }
   } else {
-    delete r.halfDay; delete r.halfHours; delete r.halfWhen; delete r.hours;
+    delete r.halfDay; delete r.halfHours; delete r.halfWhen; delete r.hours; delete r.halfFrom; delete r.halfTo;
   }
 
   r.from=newFrom;r.to=newTo;r.type=newType;r.status=newStatus;r.notes=newNotes;r.days=days;
@@ -12161,7 +12187,7 @@ function saveEditLeaveReq(id){
     days.forEach(dt=>{
       if(ptoOnDate(targetSt,dt)||isHol(dt)) return;
       const entry={date:dt,type:newType==='SICK'?'SICK':'PTO'};
-      if(r.halfDay){ entry.hours=r.halfHours; entry.halfDay=true; entry.halfWhen=r.halfWhen; }
+      if(r.halfDay){ entry.hours=r.halfHours; entry.halfDay=true; entry.halfWhen=r.halfWhen; if(r.halfFrom&&r.halfTo){ entry.halfFrom=r.halfFrom; entry.halfTo=r.halfTo; } }
       targetSt.pto.push(entry);
     });
     targetSt.pto.sort((a,b)=>a.date.localeCompare(b.date));
