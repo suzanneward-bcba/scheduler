@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-28T20:15Z-halfday-complete">
+<meta name="app-version" content="2026-09-29T14:00Z-perday-hours">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -5770,7 +5770,7 @@ function tsEntries(stid, ym){
   const adminMin=rows.filter(r=>!r.isDirect&&!r.cx&&!_isBillInd(r)).reduce((t,r)=>t+r.mins,0);
   const otherMin=indirectMin+adminMin;
   const st=gs(stid);
-  const dayHrs=((st?.hrs)||40)/5;
+  const dayHrs=hrsPerDay(st);   // actual daily hours (weekly ÷ workdays), not ÷5
   // Leave comes from st.pto[] — the operational array the schedule itself uses
   // to show someone as off. Approved requests mirror into it, and manually
   // entered or imported PTO/Sick days live ONLY there, so reading requests
@@ -5793,7 +5793,13 @@ function tsEntries(stid, ym){
   const ptoDays=ptoEntries.filter(e=>e.type!=='SICK'&&e.type!=='HOL').length;
   const sickDays=ptoEntries.filter(e=>e.type==='SICK').length;
   const holDays=ptoEntries.filter(e=>e.type==='HOL').length;
-  return {rows, directMin, otherMin, indirectMin, adminMin, leaveMin:Math.round(leaveDays*dayHrs*60), leaveDays, ptoDays, sickDays, holDays, ptoEntries, dayHrs, leaveConflicts};
+  // Leave minutes: honor a partial-day entry's own hours; otherwise a full
+  // day at the correct daily rate (weekly ÷ actual workdays).
+  const leaveMin=Math.round(ptoEntries.reduce((t,e)=>{
+    const h=(e.halfDay && e.hours) ? e.hours : ((typeof e.hours==='number' && e.hours>0 && !e.halfDay) ? e.hours : dayHrs);
+    return t + h*60;
+  },0));
+  return {rows, directMin, otherMin, indirectMin, adminMin, leaveMin, leaveDays, ptoDays, sickDays, holDays, ptoEntries, dayHrs, leaveConflicts};
 }
 function tsConfirmOf(stid, ym){ return (S.tsConfirms||[]).find(x=>x.stid===stid&&x.ym===ym); }
 
@@ -8869,7 +8875,7 @@ function renderAvailStripDaily(daySessions, ds){
     hrsByStaff[s.stid] = (hrsByStaff[s.stid] || 0) + mins/60;
   });
   staffShown.forEach(function(st){
-    st._dailyCap = (st.hrs && st.hrs > 0) ? Math.round((st.hrs/5)*10)/10 : 7;
+    st._dailyCap = (st.hrs && st.hrs > 0) ? Math.round(hrsPerDay(st)*10)/10 : 7;
     st._dailyHrs = Math.round((hrsByStaff[st.id]||0) * 10) / 10;
     var av = (st.av && dow >= 0) ? st.av[dow] : 1;
     var pto = (typeof ptoOnDate === 'function') ? !!ptoOnDate(st, ds) : false;
