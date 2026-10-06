@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-02T16:00Z-cpt-units">
+<meta name="app-version" content="2026-10-02T17:00Z-login-email-match">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -5508,16 +5508,25 @@ let viewerStid = ''; // resolved from Firebase login email at data load
 
 function resolveViewerStid(){
   if(!currentUser || !currentUser.email || !S.staff.length) return;
-  const prefix = currentUser.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g,'');
-  const match = S.staff.find(st => {
-    const ini  = (st.initials||'').toLowerCase();
-    const id   = (st.id||'').toLowerCase();
-    const flat = st.name.toLowerCase().replace(/\s+/g,'');
-    const parts = st.name.toLowerCase().split(/\s+/);
-    return ini === prefix || id === prefix || flat === prefix ||
-           parts[0] === prefix || parts[parts.length-1] === prefix;
-  });
+  const loginEmail = currentUser.email.trim().toLowerCase();
+  // 1) Exact match on the staff card's Work Email field — the reliable path.
+  //    Every staff login should resolve here once their email is on file.
+  let match = S.staff.find(st => (st.email||'').trim().toLowerCase() === loginEmail);
+  // 2) Fallback: match the email prefix against initials / id / name, for staff
+  //    whose Work Email hasn't been entered yet.
+  if(!match){
+    const prefix = loginEmail.split('@')[0].replace(/[^a-z0-9]/g,'');
+    match = S.staff.find(st => {
+      const ini  = (st.initials||'').toLowerCase();
+      const id   = (st.id||'').toLowerCase();
+      const flat = (st.name||'').toLowerCase().replace(/\s+/g,'');
+      const parts = (st.name||'').toLowerCase().split(/\s+/);
+      return ini === prefix || id === prefix || flat === prefix ||
+             parts[0] === prefix || parts[parts.length-1] === prefix;
+    });
+  }
   if(match) viewerStid = match.id;
+  else console.warn('[Login] No staff record matched login email "'+loginEmail+'" — set this person\'s Work Email on their staff card.');
 }
 
 function initMyS(){
@@ -8579,9 +8588,19 @@ function _staffCapAdj(st,ym,wkF){
 // plus upcoming birthdays and missing documentation. Scoped to their caseload
 // (clients they case-manage or are on the team of) and their supervisees.
 function _supDashStid(){
-  if(!isAdminViewer()) return viewerStid||mySchedStid;
-  // Admin viewing: let them pick, default to self if they're a supervisor.
-  return window._supDashStid || (isSupervisor(gs(mySchedStid)?.role)?mySchedStid:null) || (S.staff.find(s=>isSupervisor(s.role))||{}).id;
+  // The account holder: resolved from login (viewerStid) first, then the
+  // My Schedule selection, then — if the logged-in person is a supervisor —
+  // their own record. This guarantees a BCBA/QBA sees their OWN dashboard by
+  // default, even if they open it before visiting My Schedule.
+  // A staff member's own login resolves viewerStid, so that IS the account
+  // holder — their dashboard shows themselves, no name selection needed.
+  if(!isAdminViewer()) return viewerStid;
+  // Only SW/Sara (admins) get the picker, defaulting to themselves if they're
+  // a supervisor, else the first supervisor.
+  return window._supDashStid ||
+    ((viewerStid && isSupervisor(gs(viewerStid)?.role)) ? viewerStid : null) ||
+    ((isSupervisor(gs(mySchedStid)?.role)) ? mySchedStid : null) ||
+    (S.staff.find(s=>isSupervisor(s.role))||{}).id;
 }
 function rSupDash(){
   const wrap=document.getElementById('supdash-content'); if(!wrap) return;
