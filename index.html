@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-02T17:00Z-login-email-match">
+<meta name="app-version" content="2026-10-02T17:45Z-supdash-collision-fix">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -8597,7 +8597,7 @@ function _supDashStid(){
   if(!isAdminViewer()) return viewerStid;
   // Only SW/Sara (admins) get the picker, defaulting to themselves if they're
   // a supervisor, else the first supervisor.
-  return window._supDashStid ||
+  return window._supDashPick ||
     ((viewerStid && isSupervisor(gs(viewerStid)?.role)) ? viewerStid : null) ||
     ((isSupervisor(gs(mySchedStid)?.role)) ? mySchedStid : null) ||
     (S.staff.find(s=>isSupervisor(s.role))||{}).id;
@@ -8606,7 +8606,16 @@ function rSupDash(){
   const wrap=document.getElementById('supdash-content'); if(!wrap) return;
   const stid=_supDashStid();
   const me=gs(stid);
-  if(!me){ wrap.innerHTML='<div class="rpt-empty">No supervisor selected.</div>'; return; }
+  if(!me){
+    const sups=S.staff.filter(s=>isSupervisor(s.role));
+    if(!sups.length){
+      wrap.innerHTML='<div class="rpt-empty"><div class="rpt-empty-icon">👤</div><div style="font-weight:600">No supervisors found</div><div style="font-size:12px;color:var(--mt);margin-top:6px;max-width:420px;margin-left:auto;margin-right:auto">No staff member currently has a BCBA or QBA role. Open a supervisor\'s staff card and confirm their Role is set to BCBA or QBA, then reopen this tab.</div></div>';
+    } else {
+      // Supervisors exist but none is selected — offer the picker inline.
+      wrap.innerHTML='<div class="rpt-empty"><div class="rpt-empty-icon">📈</div><div style="font-weight:600">Choose a supervisor to view</div><div style="margin-top:10px"><select onchange="window._supDashPick=this.value;rSupDash()" style="font-size:13px;padding:7px 10px;border:1.5px solid var(--bd);border-radius:7px"><option value="">— Select —</option>'+_byLastName(sups).map(s=>`<option value="${s.id}">${s.name} (${s.role})</option>`).join('')+'</select></div></div>';
+    }
+    return;
+  }
   const today=todayBerlin();
   const ym=today.slice(0,7);
   const monthLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
@@ -8624,7 +8633,7 @@ function rSupDash(){
   // Admin picker
   const pick = isAdminViewer()
     ? `<div style="margin-bottom:12px"><label style="font-size:11px;color:var(--mt);margin-right:6px">Viewing supervisor:</label>
-        <select onchange="window._supDashStid=this.value;rSupDash()" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px">
+        <select onchange="window._supDashPick=this.value;rSupDash()" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px">
         ${_byLastName(S.staff.filter(s=>isSupervisor(s.role))).map(s=>`<option value="${s.id}" ${s.id===stid?'selected':''}>${s.name} (${s.role})</option>`).join('')}
         </select></div>`
     : '';
