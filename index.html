@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-09-29T14:00Z-perday-hours">
+<meta name="app-version" content="2026-10-02T15:30Z-supdash">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -845,6 +845,10 @@ body.kiosk-mode .blk-sess.cx .tchip{background:#BDBDBD!important;color:#fff!impo
 .sugg-wrap{margin-bottom:8px}
 .sugg-lbl{font-size:9px;font-weight:700;color:var(--pu);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
 .sugg-chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px}
+.team-chips{display:flex;flex-wrap:wrap;gap:5px;min-height:24px}
+.team-chip{display:inline-flex;align-items:center;gap:5px;background:#EDE7F6;color:#4A148C;font-size:11px;font-weight:700;padding:3px 6px 3px 10px;border-radius:12px}
+.team-chip-x{cursor:pointer;background:#B39DDB;color:#fff;width:15px;height:15px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:9px}
+.team-chip-x:hover{background:#B71C1C}
 .sugg-chip{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid;transition:all .12s;user-select:none}
 .sugg-chip.sc-avail{background:#EEEDFE;color:#3C3489;border-color:#AFA9EC}
 .sugg-chip.sc-avail:hover{background:#534AB7;color:#fff;border-color:#534AB7}
@@ -1211,6 +1215,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
   <div class="mob-nav-inner">
     <button class="mob-nt on" onclick="sw('sched')" data-mt="sched"><span class="mi">📅</span>Schedule</button>
     <button class="mob-nt" onclick="sw('mysched')" data-mt="mysched"><span class="mi">🙋</span>My Sched</button>
+    <button class="mob-nt" id="mnav-supdash" style="display:none" onclick="sw('supdash')" data-mt="supdash"><span class="mi">📈</span>Dash</button>
     <button class="mob-nt" onclick="sw('clients')" data-mt="clients"><span class="mi">👥</span>Clients</button>
     <button class="mob-nt" onclick="sw('staff')" data-mt="staff"><span class="mi">🧑‍⚕️</span>Staff</button>
     <button class="mob-nt" onclick="sw('daily')" data-mt="daily"><span class="mi">📋</span>Daily</button>
@@ -1234,6 +1239,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
   <div style="padding:0 14px;flex-shrink:0"></div>
   <div class="nt on" onclick="sw('sched')" data-t="sched">📅 Schedule</div>
   <div class="nt" onclick="sw('mysched')" data-t="mysched">🙋 My Schedule</div>
+  <div class="nt" id="nav-supdash" style="display:none" onclick="sw('supdash')" data-t="supdash">📈 My Dashboard</div>
   <div class="nt" onclick="sw('clients')" data-t="clients">👥 Clients</div>
   <div class="nt" onclick="sw('staff')" data-t="staff">🧑‍⚕️ Staff</div>
   <div class="nt edit-only" onclick="sw('daily')" data-t="daily">📋 Daily Log</div>
@@ -1533,6 +1539,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
 </div>
 
 <!-- MY SCHEDULE TAB -->
+<div class="tp" id="tp-supdash"><div id="supdash-content"></div></div>
 <div class="tp" id="tp-mysched">
   <div class="sh2" style="margin-bottom:14px" id="mys-hdr">
     <h2>🙋 My Schedule</h2>
@@ -2717,6 +2724,7 @@ function sw(t){
   document.querySelectorAll('.tp').forEach(p=>p.classList.toggle('on',p.id==='tp-'+t));
   if(t==='sched'&&isMobile()&&curView==='week'){setView('week');}
   if(t==='mysched'){initMyS();}
+  if(t==='supdash'){if(!canViewSupDash()){sw('sched');return;}rSupDash();}
   if(t==='reports'){initReports();}
   if(t==='staff'&&document.getElementById('caseload-view')?.style.display!=='none'){renderCaseload();}
   if(t==='staff'){rLeaveRequests();}
@@ -2798,7 +2806,7 @@ function renderAll(){
 }
 
 function applyHashRoute(){
-  const VALID_TABS=['sched','mysched','clients','staff','daily','reports','settings','waitlist','discharged'];
+  const VALID_TABS=['sched','mysched','supdash','clients','staff','daily','reports','settings','waitlist','discharged'];
   const hash=(window.location.hash||'').replace('#','').split('?')[0];
   if(hash&&VALID_TABS.includes(hash)) sw(hash);
 }
@@ -4555,7 +4563,7 @@ function openClientDetail(id){
     <div class="fr2"><div class="fg"><label>Visits Used <span style="font-weight:400;color:var(--mt);font-size:10px">manually maintained</span></label><input type="number" id="cd-visits-used" value="${c.visitsUsed??''}" min="0" placeholder="e.g. 12"></div><div class="fg"><label>Alert Threshold <span style="font-weight:400;color:var(--mt);font-size:10px">% remaining · default 20</span></label><input type="number" id="cd-visit-alert" value="${c.visitAlertThreshold??20}" min="1" max="100"></div></div>
     ${(()=>{const used=c.visitsUsed,auth=c.authVisits||40;if(used==null)return `<div style="background:#FFF3E0;border:1px solid #FFB300;border-radius:6px;padding:7px 10px;font-size:11px;color:#E65100;margin:-4px 0 10px">📝 Enter \"Visits Used\" to enable visit tracking alerts</div>`;const rem=auth-used;const pct=Math.max(0,Math.min(100,(used/auth)*100));const clr=rem<=0?'var(--rd)':pct>=80?'var(--am)':'var(--gn)';return `<div style="background:var(--bg);border-radius:6px;padding:8px 11px;margin:-4px 0 10px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--mt)">Visit utilization</span><span style="font-weight:700;color:${clr}">${used}/${auth} used · ${Math.max(0,rem)} remaining</span></div><div style="height:6px;background:#E0E0E0;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${clr}"></div></div></div>`;})()}
     <div class="fr2"><div class="fg"><label>Auth Start Date</label><input type="date" id="cd-auth-start" value="${c.authStart||''}"></div><div class="fg"><label>Auth End Date</label><input type="date" id="cd-auth" value="${c.authEnd||''}"></div></div>
-    <div class="fg"><label>OT Team</label><div class="sugg-wrap"><div class="sugg-lbl">Suggested</div><div class="sugg-chips">${teamSuggChips(c.id,'cd-team',['OT'])}</div></div><select id="cd-team" multiple style="height:72px">${soOT}</select><div style="font-size:9px;color:var(--mt);margin-top:3px">Ctrl+click to select multiple · click a chip to toggle</div></div>
+    <div class="fg"><label>OT Team</label>${teamEditor(c.id,'cd-team',['OT'])}</div>
     <div style="display:flex;gap:14px;margin:6px 0">
       <div style="display:flex;flex-direction:column;gap:3px">
         <span style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">Therapy Type</span>
@@ -4602,6 +4610,7 @@ function openClientDetail(id){
     </div>
     <div class="mact"><button class="btn bd" onclick="delClient('${c.id}')" title="Permanently delete all data">Delete</button><button class="btn" style="border-color:#546E7A;color:#546E7A" onclick="closeM();openDischarge('${c.id}')">📁 Discharge</button><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updClient('${c.id}')">Save Info</button></div>`);
     renderTplSlots();
+    try{ renderTeamChips('cd-team'); }catch(e){}
     return;
   }
 
@@ -4641,7 +4650,7 @@ function openClientDetail(id){
         ${(()=>{const used=c.otAuth?.visitsUsed,auth=c.otAuth?.visitsAuthorized;if(auth==null||used==null)return `<div style="background:#FFF3E0;border:1px solid #FFB300;border-radius:6px;padding:7px 10px;font-size:11px;color:#E65100">📝 Enter both \"Authorized\" and \"Used\" above to enable visit tracking alerts</div>`;const rem=auth-used;const pct=Math.max(0,Math.min(100,(used/auth)*100));const clr=rem<=0?'var(--rd)':pct>=80?'var(--am)':'var(--gn)';return `<div style="background:#fff;border-radius:6px;padding:8px 11px;border:1px solid var(--bd)"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--mt)">OT visit utilization</span><span style="font-weight:700;color:${clr}">${used}/${auth} used · ${Math.max(0,rem)} remaining</span></div><div style="height:6px;background:#E0E0E0;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${clr}"></div></div></div>`;})()}
       </div>
     </div>
-    <div class="fg"><label>Team</label><div class="sugg-wrap"><div class="sugg-lbl">Suggested</div><div class="sugg-chips">${teamSuggChips(c.id,'cd-team',null)}</div></div><select id="cd-team" multiple style="height:72px">${so}</select><div style="font-size:9px;color:var(--mt);margin-top:3px">Ctrl+click to select multiple · click a chip to toggle</div></div>
+    <div class="fg"><label>Team</label>${teamEditor(c.id,'cd-team',null)}</div>
     <div style="display:flex;gap:14px;margin:6px 0">
       <div style="display:flex;flex-direction:column;gap:3px">
       <span style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">Therapy Type</span>
@@ -4701,6 +4710,7 @@ function openClientDetail(id){
     </div>
     <div class="mact"><button class="btn bd" onclick="delClient('${c.id}')" title="Permanently delete all data">Delete</button><button class="btn" style="border-color:#546E7A;color:#546E7A" onclick="closeM();openDischarge('${c.id}')">📁 Discharge</button><button class="btn" onclick="closeM()">Cancel</button><button class="btn bp" onclick="updClient('${c.id}')">Save Info</button></div>`);
   renderTplSlots();
+  try{ renderTeamChips('cd-team'); }catch(e){}
 }
 
 function renderTplSlots(){
@@ -8506,12 +8516,25 @@ function updateBillingNav(){
   const d=document.getElementById('nav-billing'); if(d) d.style.display=show?'':'none';
   const m=document.getElementById('mnav-billing'); if(m) m.style.display=show?'':'none';
 }
+// Personal supervisor dashboard: any BCBA/QBA viewing themselves, plus admins.
+function canViewSupDash(){
+  if(isAdminViewer()) return true;
+  const selfId=viewerStid||mySchedStid;
+  const st=selfId?gs(selfId):null;
+  return !!st && isSupervisor(st.role);
+}
+function updateSupDashNav(){
+  const show=canViewSupDash();
+  const d=document.getElementById('nav-supdash'); if(d) d.style.display=show?'':'none';
+  const m=document.getElementById('mnav-supdash'); if(m) m.style.display=show?'':'none';
+}
 function canViewDash(){
   if(!isViewOnly) return true; // unlocked scheduler session
   const selfId=viewerStid||mySchedStid;
   return !!selfId && DASH_VIEWERS.includes(selfId);
 }
 function updateDashNav(){
+  updateSupDashNav();
   const show=canViewDash();
   const d=document.getElementById('nav-dash'); if(d) d.style.display=show?'':'none';
   const m=document.getElementById('mnav-dash'); if(m) m.style.display=show?'':'none';
@@ -8547,6 +8570,170 @@ function _staffHolHrs(st,ym){
 }
 function _staffCapAdj(st,ym,wkF){
   return Math.max(0,(st.hrs||0)*wkF-_staffLeaveHrs(st,ym)-_staffHolHrs(st,ym));
+}
+
+
+// ═══════════ SUPERVISOR DASHBOARD (BCBA / QBA — personal, team-scoped) ═══════
+// Shows the signed-in supervisor their own team: supervisee stats, caseload
+// attendance, CPT/indirect utilization, auth dates, their own billable split,
+// plus upcoming birthdays and missing documentation. Scoped to their caseload
+// (clients they case-manage or are on the team of) and their supervisees.
+function _supDashStid(){
+  if(!isAdminViewer()) return viewerStid||mySchedStid;
+  // Admin viewing: let them pick, default to self if they're a supervisor.
+  return window._supDashStid || (isSupervisor(gs(mySchedStid)?.role)?mySchedStid:null) || (S.staff.find(s=>isSupervisor(s.role))||{}).id;
+}
+function rSupDash(){
+  const wrap=document.getElementById('supdash-content'); if(!wrap) return;
+  const stid=_supDashStid();
+  const me=gs(stid);
+  if(!me){ wrap.innerHTML='<div class="rpt-empty">No supervisor selected.</div>'; return; }
+  const today=todayBerlin();
+  const ym=today.slice(0,7);
+  const monthLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
+
+  // ── My caseload: clients I case-manage OR am on the team of ──
+  const myClients=(S.clients||[]).filter(cl=>cl.status!=='discharged' &&
+    (cl.bcba===stid || (cl.team||[]).includes(stid)));
+  const myCids=new Set(myClients.map(c=>c.id));
+
+  // ── My supervisees: RBT/ABAT on any of my clients' teams ──
+  const superviseeIds=new Set();
+  myClients.forEach(cl=>(cl.team||[]).forEach(tid=>{const t=gs(tid); if(t&&(t.role==='RBT'||t.role==='ABAT')) superviseeIds.add(tid);}));
+  const supervisees=[...superviseeIds].map(id=>gs(id)).filter(Boolean);
+
+  // Admin picker
+  const pick = isAdminViewer()
+    ? `<div style="margin-bottom:12px"><label style="font-size:11px;color:var(--mt);margin-right:6px">Viewing supervisor:</label>
+        <select onchange="window._supDashStid=this.value;rSupDash()" style="font-size:12px;padding:5px 8px;border:1.5px solid var(--bd);border-radius:6px">
+        ${_byLastName(S.staff.filter(s=>isSupervisor(s.role))).map(s=>`<option value="${s.id}" ${s.id===stid?'selected':''}>${s.name} (${s.role})</option>`).join('')}
+        </select></div>`
+    : '';
+
+  // ── CARD 1: Supervisees supervision % + client gaps ──
+  const supRows=supervisees.map(t=>{const st=supStats(t.id,ym); const status=supStatus(st);
+    // client-gap names limited to MY clients
+    const myGap=st.missing.filter(cid=>myCids.has(cid)).map(cid=>cDisplayName(gc(cid))).filter(Boolean);
+    return {t, st, status, myGap};
+  }).sort((a,b)=>a.st.pct-b.st.pct);
+  const card1=`<div class="scard" style="grid-column:1/-1"><h3>🎓 My Supervisees — ${monthLbl}</h3>
+    ${supRows.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
+        <th style="padding:5px 8px">Tech</th><th style="padding:5px 8px;text-align:right">Direct</th><th style="padding:5px 8px;text-align:right">Supervised</th><th style="padding:5px 8px;text-align:right">%</th><th style="padding:5px 8px">Status</th><th style="padding:5px 8px">Client gaps (my caseload)</th>
+      </tr></thead><tbody>
+      ${supRows.map(r=>`<tr style="cursor:pointer" onclick="mySchedStid='${r.t.id}';sw('mysched')">
+        <td style="padding:5px 8px;font-weight:600">${r.t.initials} · ${r.t.name}</td>
+        <td style="padding:5px 8px;text-align:right">${_h1(r.st.directMin)}h</td>
+        <td style="padding:5px 8px;text-align:right">${_h1(r.st.supMin)}h</td>
+        <td style="padding:5px 8px;text-align:right;font-weight:700;color:${r.st.pct>=5?'#1B5E20':r.st.pct>=4?'#E65100':'#B71C1C'}">${r.st.pct.toFixed(1)}%</td>
+        <td style="padding:5px 8px"><span class="flg" style="background:${r.status.bg};color:${r.status.clr}">${r.status.lbl}</span></td>
+        <td style="padding:5px 8px;font-size:11px;color:#B71C1C">${r.myGap.length?('⚠ '+r.myGap.join(', ')):'—'}</td>
+      </tr>`).join('')}
+      </tbody></table></div>`:'<div style="font-size:12px;color:var(--mt)">No supervisees on your caseload.</div>'}
+  </div>`;
+
+  // ── CARD 2: My clients' attendance / cancellation (this month) ──
+  const attRows=myClients.map(cl=>{
+    const sess=(S.sessions||[]).filter(s=>s.cid===cl.id&&(s.date||'').startsWith(ym)&&s.date<=today&&!s._autoAdmin&&!s._virtual&&(s.type==='ABA'||s.type==='OT'));
+    const total=sess.length; const cx=sess.filter(s=>s.status==='CX').length;
+    const ns=sess.filter(s=>s.cx==='NS').length;
+    const rate=total?Math.round((total-cx)/total*100):null;
+    return {cl,total,cx,ns,rate};
+  }).filter(r=>r.total>0).sort((a,b)=>(a.rate??100)-(b.rate??100));
+  const card2=`<div class="scard" style="grid-column:1/-1"><h3>📊 My Clients — Attendance · ${monthLbl}</h3>
+    ${attRows.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
+        <th style="padding:5px 8px">Client</th><th style="padding:5px 8px;text-align:right">Sessions</th><th style="padding:5px 8px;text-align:right">Cancelled</th><th style="padding:5px 8px;text-align:right">No-show</th><th style="padding:5px 8px;text-align:right">Attendance</th>
+      </tr></thead><tbody>
+      ${attRows.map(r=>`<tr style="cursor:pointer" onclick="openClientDetail('${r.cl.id}')">
+        <td style="padding:5px 8px;font-weight:600">${cDisplayName(r.cl)}</td>
+        <td style="padding:5px 8px;text-align:right">${r.total}</td>
+        <td style="padding:5px 8px;text-align:right;color:${r.cx?'#E65100':'inherit'}">${r.cx}</td>
+        <td style="padding:5px 8px;text-align:right;color:${r.ns?'#B71C1C':'inherit'}">${r.ns}</td>
+        <td style="padding:5px 8px;text-align:right;font-weight:700;color:${r.rate>=90?'#1B5E20':r.rate>=75?'#E65100':'#B71C1C'}">${r.rate}%</td>
+      </tr>`).join('')}
+      </tbody></table></div>`:'<div style="font-size:12px;color:var(--mt)">No sessions this month for your clients.</div>'}
+  </div>`;
+
+  // ── CARD 3: CPT / indirect utilization — 97155/97156 monthly + indirect hrs ──
+  const cptRows=myClients.filter(cl=>{const tt=cl.therapyType||(cl.hasOT?'BOTH':'ABA');return tt==='ABA'||tt==='BOTH';}).map(cl=>{
+    const cnt=cp=>(S.sessions||[]).filter(s=>s.cid===cl.id&&s.cptCode===cp&&s.status!=='CX'&&(s.date||'').startsWith(ym)&&s.date<=today).length;
+    const indMin=(S.sessions||[]).filter(s=>s.cid===cl.id&&s.type==='INDIRECT'&&s.cptCode&&s.status!=='CX'&&(s.date||'').startsWith(ym)&&s.date<=today).reduce((t,s)=>t+_dMins(s),0);
+    return {cl, c55:cnt('97155'), c56:cnt('97156'), indMin};
+  });
+  const lastDay=(()=>{const d=pd(ym+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
+  const daysLeft=Math.ceil((pd(lastDay)-pd(today))/864e5);
+  const cell=n=>{const clr=n>0?'#1B5E20':(daysLeft<=7?'#B71C1C':'#E65100');const bg=n>0?'#E8F5E9':(daysLeft<=7?'#FFEBEE':'#FFF3E0');return `<span style="background:${bg};color:${clr};font-size:11px;font-weight:800;padding:2px 10px;border-radius:10px">${n>0?n+' ✓':'0'}</span>`;};
+  const card3=`<div class="scard" style="grid-column:1/-1"><h3>✅ CPT & Indirect — ${monthLbl} <span style="font-weight:400;font-size:11px;color:var(--mt)">· ${daysLeft}d left</span></h3>
+    <p style="font-size:11px;color:var(--mt);margin-bottom:8px">Each active ABA client needs ≥1 of 97155 and 97156 each month.</p>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
+        <th style="padding:5px 8px">Client</th><th style="padding:5px 8px;text-align:center">97155</th><th style="padding:5px 8px;text-align:center">97156</th><th style="padding:5px 8px;text-align:right">Indirect hrs</th>
+      </tr></thead><tbody>
+      ${cptRows.sort((a,b)=>((b.c55===0)+(b.c56===0))-((a.c55===0)+(a.c56===0))||cDisplayName(a.cl).localeCompare(cDisplayName(b.cl))).map(r=>`<tr style="cursor:pointer" onclick="openClientDetail('${r.cl.id}')">
+        <td style="padding:5px 8px;font-weight:600">${cDisplayName(r.cl)}</td>
+        <td style="padding:5px 8px;text-align:center">${cell(r.c55)}</td>
+        <td style="padding:5px 8px;text-align:center">${cell(r.c56)}</td>
+        <td style="padding:5px 8px;text-align:right">${_h1(r.indMin)}h</td>
+      </tr>`).join('')||'<tr><td colspan="4" style="padding:10px;text-align:center;color:var(--mt)">No ABA clients</td></tr>'}
+      </tbody></table></div>
+  </div>`;
+
+  // ── CARD 4: Auth dates & upcoming expirations (my caseload, 60d) ──
+  const authExp=myClients.filter(cl=>cl.authEnd).map(cl=>({cl,days:Math.ceil((pd(cl.authEnd)-pd(today))/864e5),kind:'ABA'}))
+    .concat(myClients.filter(cl=>cl.otAuth&&cl.otAuth.end).map(cl=>({cl,days:Math.ceil((pd(cl.otAuth.end)-pd(today))/864e5),kind:'OT'})))
+    .filter(x=>x.days<=60).sort((a,b)=>a.days-b.days);
+  const card4=`<div class="scard"><h3>📅 Auth Expirations <span style="font-weight:400;font-size:11px;color:var(--mt)">· next 60d</span></h3>
+    ${authExp.length?`<div style="display:flex;flex-wrap:wrap;gap:6px">${authExp.map(x=>`<span class="flg" style="background:${x.days<0?'#FFEBEE':x.days<14?'#FFEBEE':'#FFF3E0'};color:${x.days<14?'#B71C1C':'#E65100'};cursor:pointer" onclick="openClientDetail('${x.cl.id}')">${cDisplayName(x.cl)} · ${x.kind} ${x.days<0?('expired '+(-x.days)+'d'):x.days+'d'}</span>`).join('')}</div>`:'<div style="font-size:12px;color:#1B5E20;font-weight:600">Nothing expiring in 60 days ✓</div>'}
+  </div>`;
+
+  // ── CARD 5: My own billable split (direct / indirect / admin) ──
+  let myDir=0,myInd=0,myAdm=0;
+  (S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&s.date<=today&&s.status!=='CX'&&!s._virtual).forEach(s=>{
+    const mins=_dMins(s);
+    if(s.cid&&(s.type==='ABA'||s.type==='OT')) myDir+=mins;
+    else if(s.type==='INDIRECT'&&s.cptCode) myInd+=mins;
+    else if(!s._autoAdmin||String(s.sessionLog||'').trim()||String(s.notes||'').trim()) myAdm+=mins;
+  });
+  const myTot=myDir+myInd+myAdm; const billPct=myTot?Math.round((myDir+myInd)/myTot*100):0;
+  const card5=`<div class="scard"><h3>⏱ My Hours — ${monthLbl}</h3>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:8px">
+      <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif;color:#1B5E20">${_h1(myDir)}h</div><div style="font-size:10px;color:var(--mt)">DIRECT</div></div>
+      <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif;color:#0D47A1">${_h1(myInd)}h</div><div style="font-size:10px;color:var(--mt)">INDIRECT</div></div>
+      <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif;color:#9E9E9E">${_h1(myAdm)}h</div><div style="font-size:10px;color:var(--mt)">ADMIN</div></div>
+      <div><div style="font-size:20px;font-weight:700;font-family:'Playfair Display',serif;color:var(--pu)">${billPct}%</div><div style="font-size:10px;color:var(--mt)">BILLABLE</div></div>
+    </div>
+  </div>`;
+
+  // ── CARD 6: Upcoming birthdays (supervisees + clients, next 30d) ──
+  const bdayList=[];
+  supervisees.concat(myClients).forEach(p=>{
+    const b=p.birthday||p.dob; if(!b) return;
+    const mo=b.slice(5,7), da=b.slice(8,10); if(!mo||!da) return;
+    let next=new Date(pd(today).getFullYear()+'-'+mo+'-'+da); if(isNaN(next)) return;
+    if(fd(next)<today) next=new Date((pd(today).getFullYear()+1)+'-'+mo+'-'+da);
+    const days=Math.ceil((next-pd(today))/864e5);
+    if(days<=30) bdayList.push({name:p.name?p.name:cDisplayName(p),days,kind:p.role?'staff':'client'});
+  });
+  bdayList.sort((a,b)=>a.days-b.days);
+  const card6=`<div class="scard"><h3>🎂 Upcoming Birthdays <span style="font-weight:400;font-size:11px;color:var(--mt)">· 30d</span></h3>
+    ${bdayList.length?`<div style="display:flex;flex-direction:column;gap:4px">${bdayList.map(b=>`<div style="font-size:12px;display:flex;justify-content:space-between"><span>${b.kind==='staff'?'🧑‍⚕️':'🧒'} ${b.name}</span><span style="color:var(--mt)">${b.days===0?'today!':b.days+'d'}</span></div>`).join('')}</div>`:'<div style="font-size:12px;color:var(--mt)">None in the next 30 days.</div>'}
+  </div>`;
+
+  // ── CARD 7: Missing documentation (my clients' sessions, this month) ──
+  const missDoc=(S.sessions||[]).filter(s=>myCids.has(s.cid)&&(s.date||'').startsWith(ym)&&s.date<=today&&s.status!=='CX'&&s.cid&&!s.noteWritten).sort((a,b)=>a.date.localeCompare(b.date));
+  const card7=`<div class="scard" style="grid-column:1/-1"><h3>📝 Missing Session Notes — My Clients ${missDoc.length?`<span style="background:#FFEBEE;color:#B71C1C;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">${missDoc.length}</span>`:'<span style="background:#E8F5E9;color:#1B5E20;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">All documented ✓</span>'}</h3>
+    ${missDoc.length?`<div style="max-height:220px;overflow-y:auto">${missDoc.map(s=>{const cl=gc(s.cid);const st=gs(s.stid);return `<div style="font-size:12px;padding:4px 0;border-top:1px solid var(--bd);cursor:pointer" onclick="openSess('${s.id}')">${s.date} · ${cl?cDisplayName(cl):'—'} · ${st?st.initials:'—'}</div>`;}).join('')}</div>`:'<div style="font-size:12px;color:#1B5E20;font-weight:600">Every session this month is documented ✓</div>'}
+  </div>`;
+
+  wrap.innerHTML=`
+    <div class="sh2" style="margin-bottom:14px"><h2>📈 ${isAdminViewer()&&stid!==mySchedStid?me.name+"'s":'My'} Dashboard</h2>
+      <div style="font-size:11px;color:var(--mt)">${me.role} · ${myClients.length} clients · ${supervisees.length} supervisees · ${monthLbl}</div>
+    </div>
+    ${pick}
+    <div class="dash-grid">
+      ${card1}${card7}${card2}${card3}${card4}${card5}${card6}
+    </div>`;
 }
 
 function rDash(){
@@ -9221,6 +9408,7 @@ function setTherapyType(prefix, val){
     teamEl.innerHTML=pool.map(s=>
       `<option value="${s.id}" ${curSelected.includes(s.id)?'selected':''}>${s.initials} – ${s.name}${isOT?' ('+s.role+')':''}</option>`
     ).join('');
+    try{ renderTeamChips(teamEl.id); }catch(e){}
   }
 
   // Show/hide OT Authorization section — visible only for BOTH clients in the edit modal
@@ -10882,6 +11070,53 @@ function renderPtoChips(stid, st, forList){
 // Clinical roles only — never Billing
 const CLINICAL_ROLES = ['BCBA','OT','RBT','ABAT'];
 
+// Intuitive team editor: current members as removable chips, a simple add
+// picker, and the suggestions. All of it drives the hidden multi-select
+// (selectId) that updClient reads on save — so no save-path change needed.
+function teamEditor(cid, selectId, roles){
+  const c = gc(cid);
+  const pool = _byLastName(S.staff.filter(st => (roles||CLINICAL_ROLES).includes(st.role)));
+  const opts = pool.map(s=>`<option value="${s.id}" ${(c&&(c.team||[]).includes(s.id))?'selected':''}>${s.initials} – ${s.name}</option>`).join('');
+  return `
+    <div id="${selectId}-chips" class="team-chips"></div>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+      <select id="${selectId}-add" style="flex:1;font-size:12px;padding:6px 8px;border:1.5px solid var(--bd);border-radius:7px">
+        <option value="">+ Add team member…</option>
+        ${pool.map(s=>`<option value="${s.id}">${s.initials} – ${s.name} (${s.role})</option>`).join('')}
+      </select>
+      <button type="button" class="btn bsm bp" onclick="teamAddPicked('${selectId}')">Add</button>
+    </div>
+    <div class="sugg-wrap" style="margin-top:8px"><div class="sugg-lbl">Suggested</div><div class="sugg-chips">${teamSuggChips(cid, selectId, roles)}</div></div>
+    <select id="${selectId}" multiple style="display:none">${opts}</select>`;
+}
+// Render the current-team removable chips from the hidden select's state.
+function renderTeamChips(selectId){
+  const sel=document.getElementById(selectId); const box=document.getElementById(selectId+'-chips');
+  if(!sel||!box) return;
+  const chosen=Array.from(sel.selectedOptions).map(o=>o.value);
+  if(!chosen.length){ box.innerHTML='<span style="font-size:11px;color:var(--mt)">No team members yet — add one below.</span>'; return; }
+  box.innerHTML=chosen.map(id=>{const st=gs(id);if(!st)return '';
+    return `<span class="team-chip">${st.initials} <span style="opacity:.7;font-weight:400">${st.name}</span><span class="team-chip-x" onclick="teamRemove('${selectId}','${id}')" title="Remove">✕</span></span>`;
+  }).join('');
+}
+function teamAddPicked(selectId){
+  const add=document.getElementById(selectId+'-add'); const id=add&&add.value; if(!id) return;
+  const sel=document.getElementById(selectId); if(!sel) return;
+  let opt=Array.from(sel.options).find(o=>o.value===id);
+  if(!opt){ const st=gs(id); if(!st) return; opt=document.createElement('option'); opt.value=id; opt.textContent=st.initials+' – '+st.name; sel.appendChild(opt); }
+  opt.selected=true;
+  add.value='';
+  renderTeamChips(selectId);
+  // keep the suggestion chip in sync if present
+  const chip=document.getElementById('sc-'+selectId+'-'+id); if(chip) teamSyncSuggChip(id,selectId,true);
+}
+function teamRemove(selectId, id){
+  const sel=document.getElementById(selectId); if(!sel) return;
+  const opt=Array.from(sel.options).find(o=>o.value===id); if(opt) opt.selected=false;
+  renderTeamChips(selectId);
+  const chip=document.getElementById('sc-'+selectId+'-'+id); if(chip) teamSyncSuggChip(id,selectId,false);
+}
+
 function teamSuggChips(cid, selectId, roles){
   const c = gc(cid);
   const current = c ? (c.team||[]) : [];
@@ -10925,18 +11160,32 @@ function teamSuggChips(cid, selectId, roles){
 function toggleTeamChip(stid, selectId){
   const sel = document.getElementById(selectId);
   if(!sel) return;
-  const opt = Array.from(sel.options).find(o=>o.value===stid);
-  if(!opt) return;
+  let opt = Array.from(sel.options).find(o=>o.value===stid);
+  // If the suggested person isn't in the select's option list, add them —
+  // otherwise clicking the chip would silently do nothing and the save would
+  // never include them. This was the "selected but not saved" team bug.
+  if(!opt){
+    const st = gs(stid);
+    if(!st) return;
+    opt = document.createElement('option');
+    opt.value = stid;
+    opt.textContent = st.initials + ' – ' + st.name;
+    sel.appendChild(opt);
+  }
   opt.selected = !opt.selected;
-  // Update chip visual
+  teamSyncSuggChip(stid, selectId, opt.selected);
+  renderTeamChips(selectId);   // keep the removable-chip row in sync
+}
+// Update one suggestion chip's on/off visual.
+function teamSyncSuggChip(stid, selectId, isOn){
   const chip = document.getElementById('sc-'+selectId+'-'+stid);
   if(!chip) return;
-  const st = gs(stid);
+  const st = gs(stid); if(!st) return;
   const clientCount = S.clients.filter(cl=>(cl.team||[]).includes(stid)).length;
   const maxLoad = isSupervisor(st.role)?12:st.role==='OT'?10:8;
   const pct = maxLoad?Math.round(clientCount/maxLoad*100):0;
   const dotClr = pct<60?'#639922':pct<90?'#BA7517':'#E24B4A';
-  if(opt.selected){
+  if(isOn){
     chip.className = 'sugg-chip sc-on';
     chip.innerHTML = `✓ ${st.initials} <span style="font-weight:400;opacity:.8">${st.role}</span> <span style="font-size:9px;opacity:.7">${clientCount}/${maxLoad}</span>`;
   } else {
