@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-02T17:45Z-supdash-collision-fix">
+<meta name="app-version" content="2026-10-07T14:30Z-erika-leave-approver">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -5131,6 +5131,10 @@ let isViewOnly = false;
 // Admin identity is carried by the per-staff flag `adminAccess: true` (independent of role).
 // Client-management elevation for a clinician carried by `clientManager: true`.
 const ADMIN_ACCESS_STIDS = ['SW','SB'];         // Suzanne Ward + Sara Bastin
+// Leave approvers: can see the leave-request queue and approve/decline/edit
+// leave, flex & sick for ALL staff — WITHOUT any other admin power (no
+// settings, lock, billing, reports). Admins are approvers implicitly.
+const LEAVE_APPROVER_STIDS = ['ErT'];           // Erika Toth
 const CLIENT_MANAGER_STIDS = ['MR'];             // Marina Riede (Director of OT Services)
 const SCHEDULER_ROLES = ['bcba', 'billing', 'ot']; // kept for legacy callers
 
@@ -5237,6 +5241,12 @@ function isTherapistViewer(){
 }
 // Can approve leave requests, edit anyone's schedule, see Settings
 function canApprove(){ return isAdminViewer(); }
+// Leave-specific approval: admins OR designated leave approvers.
+function canApproveLeave(){
+  if(isAdminViewer()) return true;
+  const selfId = viewerStid || mySchedStid;
+  return !!selfId && LEAVE_APPROVER_STIDS.includes(selfId);
+}
 // Can see all reports tab
 function canSeeAllReports(){ return isAdminViewer() || isBillingViewer(); }
 
@@ -11872,7 +11882,8 @@ function updateLrPreview(){
 // constant is the single place to wire to a config-stored array.
 const LEAVE_ADMIN_EMAILS = [
   'sara@adaptability.co',
-  'suzanneward@adaptability.co'
+  'suzanneward@adaptability.co',
+  'erika@adaptability.co'
 ];
 async function sendLeaveRequestEmail(req){
   const st = gs(req.stid);
@@ -12201,7 +12212,7 @@ function rLeaveRequests(){
   // Admin-only AND scheduler must be unlocked. The lock toggle keeps
   // viewerStid set, so without the !isViewOnly guard the queue (with
   // personal medical/family info) leaks into Staff View — Read Only.
-  const canSee = isAdminViewer() && !isViewOnly;
+  const canSee = (isAdminViewer() && !isViewOnly) || (!isAdminViewer() && canApproveLeave());
   const html=(()=>{
     if(!canSee) return '';
     const pending=(S.leaveRequests||[]).filter(r=>r.status==='pending');
@@ -12256,6 +12267,7 @@ function rLeaveRequests(){
 // approving. Equal to (or over) the full-day rate = approved as a full day.
 // Under the full-day rate = approved as partial hours, deducted precisely.
 async function approveLeaveRequestWithHours(id){
+  if(!canApproveLeave()){ alert('You don\u2019t have permission to approve leave.'); return; }
   const r=(S.leaveRequests||[]).find(x=>x.id===id);if(!r)return;
   const st=gs(r.stid);if(!st)return;
   if(r.from===r.to){
@@ -12353,6 +12365,7 @@ async function approveLeaveRequest(id){
 }
 
 async function declineLeaveRequest(id){
+  if(!canApproveLeave()) return;
   const r=(S.leaveRequests||[]).find(x=>x.id===id);if(!r)return;
   const st=gs(r.stid);if(!st)return;
   const reason=prompt('Reason for declining (optional — will be sent to '+st.name+'):');
@@ -12388,6 +12401,7 @@ async function declineLeaveRequest(id){
 
 // ── EDIT / DELETE LEAVE REQUESTS ──
 function deleteLeaveReq(id){
+  if(!canApproveLeave()) return;
   const r=(S.leaveRequests||[]).find(x=>x.id===id);if(!r)return;
   const st=gs(r.stid);
   if(!confirm('Delete this leave request for '+(st?.name||'staff')+'? This will also remove the dates from their PTO record.')) return;
@@ -12407,6 +12421,7 @@ function deleteLeaveReq(id){
 }
 
 function openEditLeaveReq(id){
+  if(!canApproveLeave()) return;
   const r=(S.leaveRequests||[]).find(x=>x.id===id);if(!r)return;
   const st=gs(r.stid);
   const statusOpts=['pending','approved','declined'].map(s=>
@@ -12444,6 +12459,7 @@ function openEditLeaveReq(id){
 }
 
 function saveEditLeaveReq(id){
+  if(!canApproveLeave()) return;
   const r=(S.leaveRequests||[]).find(x=>x.id===id);if(!r)return;
   const st=gs(r.stid);
   const newStid=document.getElementById('elr-stid')?.value||r.stid;
