@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-07T14:30Z-erika-leave-approver">
+<meta name="app-version" content="2026-10-10T14:00Z-timesheet-readable">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -363,6 +363,12 @@ body.view-only .stf-row button{display:none!important}
 .mys-select-wrap label{font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.3px;display:block;margin-bottom:7px}
 .mys-select{width:100%;padding:11px 13px;border:1.5px solid var(--bd);border-radius:9px;font-family:'DM Sans',sans-serif;font-size:14px;color:var(--nv);background:#fff;cursor:pointer}
 .mys-select:focus{outline:none;border-color:var(--pu)}
+.ts-table tbody tr:nth-child(even){background:#F7F8FB}
+.ts-table tbody tr.ts-leave-row:nth-child(even){background:inherit}
+.ts-table tbody tr{border-bottom:1px solid #EEF1F5}
+.ts-table tbody tr.ts-cx{opacity:.5;text-decoration:line-through}
+.ts-table tbody tr.ts-leave{background:#FFEBEE!important}
+.ts-table tbody tr:hover{background:#EEF2FF}
 .mys-section-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--mt);margin:14px 0 8px;display:flex;align-items:center;gap:6px}
 
 
@@ -5899,23 +5905,23 @@ function rMySTimesheet(stid){
     if(!tsConfirmOf(stid,m)) dueMonths.push(m);
   });
   const banner=dueMonths.length?`<div style="background:#FFF3E0;border:1px solid #FFB74D;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:600;color:#E65100">\u23F0 Please review and confirm your timesheet for: ${dueMonths.map(m=>pd(m+'-01').toLocaleDateString('en-US',{month:'short',year:'numeric'})).join(', ')}</div>`:'';
-  const leaveRows=e.ptoEntries.map(p=>`<tr style="background:${p.type==='SICK'?'#FFF5F5':p.type==='HOL'?'#F0F7FF':'#FFFDF2'}">
-      <td style="padding:3px 6px">${p.date.slice(5)}</td>
-      <td style="padding:3px 6px">${p.type==='SICK'?'\u{1F912} Sick leave':p.type==='HOL'?('\u{1F387} Holiday'+(p.name?' \u00B7 '+p.name:'')):'\u{1F3D6} PTO / Vacation'}</td>
-      <td style="padding:3px 6px">${p.type==='SICK'?'SICK':p.type==='HOL'?'HOL':'PTO'}</td>
-      <td style="padding:3px 6px;text-align:right">${_h1(e.dayHrs*60)}h</td>
-      <td style="padding:3px 6px;text-align:center"></td>
+  const leaveRows=e.ptoEntries.map(p=>`<tr class="ts-leave-row" style="background:${p.type==='SICK'?'#FFF5F5':p.type==='HOL'?'#F0F7FF':'#FFFDF2'}">
+      <td style="padding:7px 10px;white-space:nowrap">${p.date.slice(5)}</td>
+      <td style="padding:7px 10px">${p.type==='SICK'?'\u{1F912} Sick leave':p.type==='HOL'?('\u{1F387} Holiday'+(p.name?' \u00B7 '+p.name:'')):'\u{1F3D6} PTO / Vacation'}</td>
+      <td style="padding:7px 10px">${p.type==='SICK'?'SICK':p.type==='HOL'?'HOL':'PTO'}</td>
+      <td style="padding:7px 10px;text-align:right;white-space:nowrap">${_h1(e.dayHrs*60)}h</td>
+      <td style="padding:7px 10px;text-align:center"></td>
     </tr>`).join('');
   const entryRows=e.rows.map(r=>{
     const cl=r.s.cid?gc(r.s.cid):null;
     const label=cl?cDisplayName(cl):sTypeLabel(r.s.type);
     const noteCell=(r.s.cid&&!r.cx&&r.s.date<=todayBerlin())?(r.s.noteWritten?'\u2713':'<span style="color:#E65100">\u2717</span>'):'';
-    return `<tr style="${r.cx?'opacity:.45;text-decoration:line-through':(r.onLeave?'background:#FFEBEE':'')}">
-      <td style="padding:3px 6px">${r.s.date.slice(5)}</td>
-      <td style="padding:3px 6px">${label}${r.cx?' <span style="font-size:9px">(CX'+(r.s.cx?' '+r.s.cx:'')+')</span>':''}${r.onLeave?' <span style="font-size:9px;font-weight:800;color:#B71C1C">\u26A0 DURING LEAVE</span>':''}</td>
-      <td style="padding:3px 6px">${r.s.cptCode||r.s.type}</td>
-      <td style="padding:3px 6px;text-align:right">${r.cx?'\u2014':_h1(r.mins)+'h'}</td>
-      <td style="padding:3px 6px;text-align:center">${noteCell}</td>
+    return `<tr class="${r.cx?'ts-cx':(r.onLeave?'ts-leave':'')}">
+      <td style="padding:7px 10px;white-space:nowrap">${r.s.date.slice(5)}</td>
+      <td style="padding:7px 10px">${label}${r.cx?' <span style="font-size:10px">(CX'+(r.s.cx?' '+r.s.cx:'')+')</span>':''}${r.onLeave?' <span style="font-size:10px;font-weight:800;color:#B71C1C">\u26A0 DURING LEAVE</span>':''}</td>
+      <td style="padding:7px 10px">${r.s.cptCode||r.s.type}</td>
+      <td style="padding:7px 10px;text-align:right;white-space:nowrap">${r.cx?'\u2014':_h1(r.mins)+'h'}</td>
+      <td style="padding:7px 10px;text-align:center">${noteCell}</td>
     </tr>`;
   }).join('');
   const conflictBanner=e.leaveConflicts?`<div style="background:#FFEBEE;border:1px solid #EF9A9A;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:600;color:#B71C1C">\u26A0 ${e.leaveConflicts} session${e.leaveConflicts>1?'s':''} on this timesheet fall${e.leaveConflicts>1?'':'s'} on a day you were on approved leave \u2014 please note it in the comment before confirming so it can be corrected.</div>`:'';
@@ -5934,12 +5940,13 @@ function rMySTimesheet(stid){
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${e.leaveDays}d</div><div style="font-size:10px;color:var(--mt)">LEAVE${e.leaveDays?` \u00B7 ${e.ptoDays}\u{1F3D6} ${e.sickDays}\u{1F912}${e.holDays?` ${e.holDays}\u{1F387}`:''}`:''} (\u2248${_h1(e.leaveMin)}h)</div></div>
       <div><div style="font-size:18px;font-weight:700;font-family:'Playfair Display',serif">${_h1(e.directMin+e.otherMin+e.leaveMin)}h</div><div style="font-size:10px;color:var(--mt)">TOTAL</div></div>
     </div>
-    <details style="margin-top:10px"><summary style="font-size:11px;font-weight:700;color:var(--pu);cursor:pointer">Show ${e.rows.length+e.leaveDays} entries</summary>
-      <div style="max-height:260px;overflow-y:auto;margin-top:6px"><table style="width:100%;border-collapse:collapse;font-size:11px">
-        <thead><tr style="color:var(--mt);font-size:9px;text-transform:uppercase;text-align:left;border-bottom:1px solid var(--bd)"><th style="padding:3px 6px">Date</th><th style="padding:3px 6px">Client / Activity</th><th style="padding:3px 6px">Code</th><th style="padding:3px 6px;text-align:right">Hrs</th><th style="padding:3px 6px;text-align:center">Note</th></tr></thead>
-        <tbody>${(entryRows+leaveRows)||'<tr><td colspan="5" style="padding:10px;text-align:center;color:var(--mt)">No entries this month</td></tr>'}</tbody>
+    <div style="margin-top:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--pu);margin-bottom:6px">${e.rows.length+e.leaveDays} entries</div>
+      <div style="max-height:420px;overflow-y:auto;border:1px solid var(--bd);border-radius:8px"><table class="ts-table" style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="color:var(--mt);font-size:11px;text-transform:uppercase;text-align:left;border-bottom:2px solid var(--bd);position:sticky;top:0;background:#fff;z-index:1"><th style="padding:7px 10px">Date</th><th style="padding:7px 10px">Client / Activity</th><th style="padding:7px 10px">Code</th><th style="padding:7px 10px;text-align:right">Hrs</th><th style="padding:7px 10px;text-align:center">Note</th></tr></thead>
+        <tbody>${(entryRows+leaveRows)||'<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--mt)">No entries this month</td></tr>'}</tbody>
       </table></div>
-    </details>
+    </div>
     ${(()=>{ // Confirmable only once the month is over (or on its last day) — a
       // timesheet attests to work performed, and mid-month the month isn't done.
       const _lastDay=(()=>{const d=pd(ym+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
