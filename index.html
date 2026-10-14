@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-10T14:00Z-timesheet-readable">
+<meta name="app-version" content="2026-10-10T14:30Z-erika-leave-report">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -5402,10 +5402,16 @@ function applyRoleAccess(){
   // Clinicians (BCBA/OT) now see Attendance + Cancellations in addition to
   // Indirect Services and Supervision. Still hidden from them: Billing
   // Verification, Employee Hours, Leave & Absence (org-wide / payroll views).
-  ['rbt-billing','rbt-hours','rbt-leave'].forEach(function(btnId){
+  ['rbt-billing','rbt-hours'].forEach(function(btnId){
     const b=document.getElementById(btnId);
     if(b) b.style.display = confirmedClinician ? 'none' : '';
   });
+  // Leave & Absence report: visible to admins, non-clinicians, AND designated
+  // leave approvers (Erika) — it's the reporting companion to their approval role.
+  (function(){
+    const b=document.getElementById('rbt-leave');
+    if(b) b.style.display = (confirmedClinician && !canApproveLeave()) ? 'none' : '';
+  })();
   ['rbt-attendance','rbt-cancellations'].forEach(function(btnId){
     const b=document.getElementById(btnId);
     if(b) b.style.display = '';  // visible to clinicians and admins alike
@@ -5414,7 +5420,7 @@ function applyRoleAccess(){
   // If a clinician lands on a report they can't see, move them to Indirect
   // Services. Allowed for clinicians: badmin, supervision, attendance,
   // cancellations. Everything else redirects.
-  const CLINICIAN_REPORTS = ['badmin','supervision','attendance','cancellations'];
+  const CLINICIAN_REPORTS = ['badmin','supervision','attendance','cancellations'].concat(canApproveLeave()?['leave']:[]);
   if(confirmedClinician && typeof curReport !== 'undefined' && !CLINICIAN_REPORTS.includes(curReport)){
     try { setReport('badmin', document.getElementById('rbt-badmin')); } catch(e){}
   }
