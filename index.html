@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-10T14:30Z-erika-leave-report">
+<meta name="app-version" content="2026-10-14T14:00Z-partial-leave-conflict">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -5793,12 +5793,29 @@ function tsEntries(stid, ym){
   const _logged=s=>(s.cid&&s.cptCode) || !s._autoAdmin || _hasActivity(s);
   const sess=(S.sessions||[]).filter(s=>s.stid===stid&&(s.date||'').startsWith(ym)&&s.date<=_cap&&_logged(s)&&!s._virtual)
     .sort((a,b)=>a.date.localeCompare(b.date)||a.s.localeCompare(b.s));
-  const _leaveDates=new Set((( (gs(stid)||{}).pto)||[]).map(x=>typeof x==='string'?x:(x&&x.date)).filter(Boolean));
+  // Map date -> leave entry, so conflict detection can be TIME-AWARE: a
+  // partial-day leave (e.g. PM 12:00-15:00) should only flag sessions that
+  // actually overlap its window, not morning sessions on the same day.
+  const _leaveByDate={};
+  (((gs(stid)||{}).pto)||[]).forEach(x=>{ const d=typeof x==='string'?x:(x&&x.date); if(d) _leaveByDate[d]=(typeof x==='object'?x:{date:d}); });
+  // Does a session's time overlap this leave entry? Full-day leave = always;
+  // partial-day = only within its off-window (exact halfFrom/halfTo, else AM/PM).
+  const _sessOverlapsLeave=(s,lv)=>{
+    if(!lv) return false;
+    if(!lv.halfDay) return true;                         // full day blocks everything
+    const sS=_t2m(s.s), sE=_t2m(s.e);
+    let oF, oT;
+    if(lv.halfFrom && lv.halfTo){ oF=_t2m(lv.halfFrom); oT=_t2m(lv.halfTo); }
+    else if((lv.halfWhen||'AM')==='PM'){ oF=_t2m('12:00'); oT=_t2m('23:59'); }
+    else { oF=0; oT=_t2m('12:00'); }                     // AM
+    return sS < oT && oF < sE;                            // true time overlap
+  };
   const rows=sess.map(s=>{
     const cx=s.status==='CX';
     const mins=cx?0:_dMins(s);
     const isDirect=!cx&&s.cid&&(s.type==='ABA'||s.type==='OT');
-    const onLeave=!cx&&_leaveDates.has(s.date); // non-CX session on an approved leave day = data error
+    // Only a conflict if the session actually overlaps the leave window.
+    const onLeave=!cx&&_sessOverlapsLeave(s,_leaveByDate[s.date]);
     return {s, cx, mins, isDirect, onLeave};
   });
   const leaveConflicts=rows.filter(r=>r.onLeave).length;
