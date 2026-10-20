@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-14T14:00Z-partial-leave-conflict">
+<meta name="app-version" content="2026-10-16T10:00Z-qba-team-role">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1825,7 +1825,11 @@ function serviceOptsHtml(selectedType, selectedCpt, staffRole, isEditMode){
   const matches=(opt)=>{
     if(isEditMode) return true;
     if(!opt.roles) return true;
-    return staffRole && opt.roles.includes(staffRole);
+    if(!staffRole) return false;
+    if(opt.roles.includes(staffRole)) return true;
+    // QBA is a BCBA-equivalent supervisor — allow it anywhere BCBA is allowed.
+    if(staffRole==='QBA' && opt.roles.includes('BCBA')) return true;
+    return false;
   };
   const isSelected=(opt)=>{
     if(opt.cpt) return selectedType===opt.type && selectedCpt===opt.cpt;
@@ -5652,7 +5656,7 @@ function rMySMessages(stid){
   // Will the auth-alert slot have content? (same criteria as rMySAuthAlerts)
   const st=gs(stid);
   let hasAuth=false;
-  if(st&&['BCBA','OT'].includes(st.role)){
+  if(st&&(isSupervisor(st.role)||st.role==='OT')){
     const today=todayBerlin();
     hasAuth=S.clients.some(c=>c.status!=='discharged'&&(c.bcba===stid||(c.team||[]).includes(stid))&&c.authEnd&&Math.ceil((pd(c.authEnd)-pd(today))/864e5)<=30);
   }
@@ -11165,7 +11169,7 @@ function renderPtoChips(stid, st, forList){
 
 // ── TEAM MEMBER SUGGESTION CHIPS ──
 // Clinical roles only — never Billing
-const CLINICAL_ROLES = ['BCBA','OT','RBT','ABAT'];
+const CLINICAL_ROLES = ['BCBA','QBA','OT','RBT','ABAT'];  // QBA = BCBA-equivalent supervisor
 
 // Intuitive team editor: current members as removable chips, a simple add
 // picker, and the suggestions. All of it drives the hidden multi-select
