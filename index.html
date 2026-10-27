@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-23T14:00Z-sup-skip-nodirect">
+<meta name="app-version" content="2026-10-23T14:45Z-delete-restrict3">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -2856,7 +2856,7 @@ function showMissingClientAlert(sessions){
       <td style="padding:4px 8px;font-size:11px;font-weight:600;border-bottom:1px solid var(--bl)">${svc}</td>
       <td style="padding:4px 8px;font-size:11px;color:var(--mt);border-bottom:1px solid var(--bl)">${note}</td>
       <td style="padding:4px 8px;border-bottom:1px solid var(--bl)"><select id="mc-${s.id}" style="font-size:11px;padding:3px;width:160px">${clientOpts}</select></td>
-      <td style="padding:4px 8px;border-bottom:1px solid var(--bl)"><button class="btn bxs bd" onclick="deleteMissingClientSess('${s.id}')" title="Delete this session">🗑</button></td>
+      <td style="padding:4px 8px;border-bottom:1px solid var(--bl)">${canDeleteSession()?`<button class="btn bxs bd" onclick="deleteMissingClientSess('${s.id}')" title="Delete this session">🗑</button>`:''}</td>
     </tr>`;
   }).join('');
   window._missingClientIds = sessions.map(s=>s.id);
@@ -2909,6 +2909,7 @@ function saveMissingClients(){
 }
 
 function deleteMissingClientSess(id){
+  if(!canDeleteSession()){alert('Only Suzanne, Sara, or Erika can delete a session.');return;}
   if(!confirm('Delete this session permanently?')) return;
   pushUndo('Delete missing-client session');
   S.sessions = S.sessions.filter(x=>x.id!==id);
@@ -4325,7 +4326,7 @@ function openSess(id){
     </div>`:''}
     ${isRec?`<div style="background:#F9FBE7;border:1px solid #C5E1A5;border-radius:7px;padding:9px;margin-top:6px;font-size:11px;color:#33691E">🔁 This session repeats. <button class="btn bxs" style="background:#FFCDD2;border-color:#EF9A9A;color:#B71C1C" onclick="cancelFuture('${s.recurGroup}','${s.date}')" title="Removes future sessions from the schedule entirely — for auth expiry or a schedule rebuild">Delete all future (${futureSiblings})</button></div>`:''}
     ${s.stid==='UNASSIGNED'?'<div style="font-size:11px;color:var(--am);font-weight:600;padding:6px 8px;background:#FFF8E1;border-radius:6px;margin-top:6px">⚠ Unassigned — select a therapist above to assign, or set a cancellation code below.</div>':''}
-    <div class="mact"><button class="btn bd" onclick="delSess('${s.id}')">Delete</button><button class="btn" onclick="closeM()">Close</button>${s.stid==='UNASSIGNED'?'<button class="btn" onclick="closeM();quickAssign(\''+ s.id +'\')">Assign →</button>':''}<button class="btn bp" onclick="updSess('${s.id}')">Save</button></div>`);
+    <div class="mact">${canDeleteSession()?`<button class="btn bd" onclick="delSess('${s.id}')">Delete</button>`:''}<button class="btn" onclick="closeM()">Close</button>${s.stid==='UNASSIGNED'?'<button class="btn" onclick="closeM();quickAssign(\''+ s.id +'\')">Assign →</button>':''}<button class="btn bp" onclick="updSess('${s.id}')">Save</button></div>`);
   try{ supClientHint(); }catch(e){} // show the multi-client reminder if one is already saved
 }
 function updSess(id){
@@ -4452,13 +4453,13 @@ function updSess(id){
     doUpdate(false);
   }
 }
-function delSess(id){if(!confirm('Delete this session?'))return;pushUndo('Delete session');window._sessDel.add(id);S.sessions=S.sessions.filter(s=>s.id!==id);save();closeM();rSched();rDaily();}
+function delSess(id){if(!canDeleteSession()){alert('Only Suzanne, Sara, or Erika can delete a session. Please cancel it instead so it stays on the record.');return;}if(!confirm('Delete this session?'))return;pushUndo('Delete session');window._sessDel.add(id);S.sessions=S.sessions.filter(s=>s.id!==id);save();closeM();rSched();rDaily();}
 // Ending a recurring block is normally an auth expiry or a full schedule
 // rebuild, so the future sessions should come OFF the schedule entirely
 // rather than linger as cancellations (which would otherwise show up in
 // cancellation reports and clutter every future day view).
 // Tombstoned so a stale device can't resurrect them via merge-on-write.
-function cancelFuture(rg, fromDate){
+function cancelFuture(rg, fromDate){if(!canDeleteSession()){alert('Only Suzanne, Sara, or Erika can delete sessions.');return;}
   const doomed=S.sessions.filter(s=>s.recurGroup===rg&&s.date>fromDate);
   if(!doomed.length){ alert('No future sessions found in this recurring group.'); return; }
   const dates=doomed.map(s=>s.date).sort();
@@ -5145,6 +5146,15 @@ const ADMIN_ACCESS_STIDS = ['SW','SB'];         // Suzanne Ward + Sara Bastin
 // leave, flex & sick for ALL staff — WITHOUT any other admin power (no
 // settings, lock, billing, reports). Admins are approvers implicitly.
 const LEAVE_APPROVER_STIDS = ['ErT'];           // Erika Toth
+// Only these people may DELETE a scheduled session (everyone else must cancel
+// it, which keeps the record for reporting). Prevents accidental data loss from
+// staff deleting instead of cancelling.
+const SESSION_DELETE_STIDS = ['SW','SB','ErT']; // Suzanne, Sara, Erika
+function canDeleteSession(){
+  if(isAdminViewer()) return true;               // SW/SB are admins anyway
+  const selfId = viewerStid || mySchedStid;
+  return !!selfId && SESSION_DELETE_STIDS.includes(selfId);
+}
 const CLIENT_MANAGER_STIDS = ['MR'];             // Marina Riede (Director of OT Services)
 const SCHEDULER_ROLES = ['bcba', 'billing', 'ot']; // kept for legacy callers
 
