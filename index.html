@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-16T10:00Z-qba-team-role">
+<meta name="app-version" content="2026-10-23T14:00Z-sup-skip-nodirect">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -6041,7 +6041,9 @@ function rMySSupervisees(stid, wrap){
     const t=gs(tid); const s=supStats(tid,ym); const stat=supStatus(s);
     const missMine=s.missing.filter(cid=>myCids.has(cid)).map(cid=>{const cl=gc(cid);return cl?cDisplayName(cl):'';}).filter(Boolean);
     return {t,s,stat,missMine};
-  }).sort((a,b)=>(order[a.stat.clr]??9)-(order[b.stat.clr]??9)||a.t.name.localeCompare(b.t.name));
+  }).filter(r=>r.s.directMin>0)   // no direct sessions this month = nothing to supervise
+    .sort((a,b)=>(order[a.stat.clr]??9)-(order[b.stat.clr]??9)||a.t.name.localeCompare(b.t.name));
+  if(!rows.length){ wrap.innerHTML=''; return; }
   const lastOfMonth=(()=>{const d=pd(ym+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
   const daysLeft=Math.ceil((pd(lastOfMonth)-pd(todayBerlin()))/864e5);
   const urgent=daysLeft<=7&&rows.some(r=>r.stat.lbl!=='Met \u2713'&&r.s.directMin>0);
@@ -6805,6 +6807,7 @@ function rptSupervision(){
   const monthLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
   const rows=techs.map(t=>{
     const st=supStats(t.id,ym);
+    if(st.directMin<=0) return '';   // no direct sessions this month = nothing to supervise
     const stat=supStatus(st);
     const pendingN=(S.sessions||[]).filter(x=>x.stid===t.id&&(x.date||'').startsWith(ym)&&x.supervised&&!x.supAckAt).length;
     const miss=st.missing.map(cid=>{const cl=gc(cid);return cl?cDisplayName(cl):'';}).filter(Boolean).join(', ');
@@ -8672,7 +8675,11 @@ function rSupDash(){
   // ── My supervisees: RBT/ABAT on any of my clients' teams ──
   const superviseeIds=new Set();
   myClients.forEach(cl=>(cl.team||[]).forEach(tid=>{const t=gs(tid); if(t&&(t.role==='RBT'||t.role==='ABAT')) superviseeIds.add(tid);}));
-  const supervisees=[...superviseeIds].map(id=>gs(id)).filter(Boolean);
+  // Only techs who actually had direct (97153/OT) sessions this month need
+  // supervision — a tech with zero direct hours has nothing to supervise, so
+  // they drop off the list rather than showing a false "supervision missing".
+  const supervisees=[...superviseeIds].map(id=>gs(id)).filter(Boolean)
+    .filter(t=>supStats(t.id,ym).directMin>0);
 
   // Admin picker
   const pick = isAdminViewer()
