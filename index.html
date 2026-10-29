@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-23T14:45Z-delete-restrict3">
+<meta name="app-version" content="2026-10-27T14:00Z-halfday-hours-display">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -5942,13 +5942,23 @@ function rMySTimesheet(stid){
     if(!tsConfirmOf(stid,m)) dueMonths.push(m);
   });
   const banner=dueMonths.length?`<div style="background:#FFF3E0;border:1px solid #FFB74D;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;font-weight:600;color:#E65100">\u23F0 Please review and confirm your timesheet for: ${dueMonths.map(m=>pd(m+'-01').toLocaleDateString('en-US',{month:'short',year:'numeric'})).join(', ')}</div>`:'';
-  const leaveRows=e.ptoEntries.map(p=>`<tr class="ts-leave-row" style="background:${p.type==='SICK'?'#FFF5F5':p.type==='HOL'?'#F0F7FF':'#FFFDF2'}">
+  const leaveRows=e.ptoEntries.map(p=>{
+    // Hours shown must match what the entry actually represents: a half-day
+    // carries its own `hours` (e.g. 3h); a full day uses the daily rate.
+    // Previously every leave row hardcoded the full daily hours, so a 3-hour
+    // half-day displayed as a full 6-hour day.
+    const hrs = (p.halfDay && p.hours) ? p.hours
+              : ((typeof p.hours==='number' && p.hours>0 && !p.halfDay) ? p.hours : e.dayHrs);
+    const half = p.halfDay ? ' \u00BD' : '';
+    const win = p.halfDay ? ((p.halfFrom&&p.halfTo)?(' '+ftm(p.halfFrom)+'\u2013'+ftm(p.halfTo)):(' '+(p.halfWhen||'AM'))) : '';
+    return `<tr class="ts-leave-row" style="background:${p.type==='SICK'?'#FFF5F5':p.type==='HOL'?'#F0F7FF':'#FFFDF2'}">
       <td style="padding:7px 10px;white-space:nowrap">${p.date.slice(5)}</td>
-      <td style="padding:7px 10px">${p.type==='SICK'?'\u{1F912} Sick leave':p.type==='HOL'?('\u{1F387} Holiday'+(p.name?' \u00B7 '+p.name:'')):'\u{1F3D6} PTO / Vacation'}</td>
+      <td style="padding:7px 10px">${half}${p.type==='SICK'?'\u{1F912} Sick leave':p.type==='HOL'?('\u{1F387} Holiday'+(p.name?' \u00B7 '+p.name:'')):'\u{1F3D6} PTO / Vacation'}${win}</td>
       <td style="padding:7px 10px">${p.type==='SICK'?'SICK':p.type==='HOL'?'HOL':'PTO'}</td>
-      <td style="padding:7px 10px;text-align:right;white-space:nowrap">${_h1(e.dayHrs*60)}h</td>
+      <td style="padding:7px 10px;text-align:right;white-space:nowrap">${_h1(hrs*60)}h</td>
       <td style="padding:7px 10px;text-align:center"></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
   const entryRows=e.rows.map(r=>{
     const cl=r.s.cid?gc(r.s.cid):null;
     const label=cl?cDisplayName(cl):sTypeLabel(r.s.type);
