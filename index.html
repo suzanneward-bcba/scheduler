@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-27T14:00Z-halfday-hours-display">
+<meta name="app-version" content="2026-10-27T15:00Z-last-working-day">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -5874,6 +5874,14 @@ function tsEntries(stid, ym){
   return {rows, directMin, otherMin, indirectMin, adminMin, leaveMin, leaveDays, ptoDays, sickDays, holDays, ptoEntries, dayHrs, leaveConflicts};
 }
 function tsConfirmOf(stid, ym){ return (S.tsConfirms||[]).find(x=>x.stid===stid&&x.ym===ym); }
+// Last WORKING day of a month (Mon-Fri). When the calendar last day falls on a
+// weekend, confirmation should open on the preceding Friday — nobody's in on
+// Sat/Sun to confirm. Holidays aren't excluded (the month's work is still done).
+function _lastWorkingDay(ym){
+  const d=pd(ym+'-01'); d.setMonth(d.getMonth()+1); d.setDate(0);  // calendar last day
+  while(d.getDay()===0 || d.getDay()===6){ d.setDate(d.getDate()-1); }  // back off Sun/Sat
+  return fd(d);
+}
 
 // A discrepancy comment is its own record, separate from confirming. An
 // employee can flag an issue WITHOUT attesting the timesheet is accurate —
@@ -5893,8 +5901,8 @@ function tsSubmitComment(stid, ym){
 }
 function tsConfirm(stid, ym){
   if(isViewOnly && viewerStid!==stid){ alert('Only '+(gs(stid)?.name||'the employee')+' can confirm their own timesheet.'); return; }
-  const _ld=(()=>{const d=pd(ym+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
-  if(!(ym<todayBerlin().slice(0,7) || todayBerlin()===_ld)){ alert('This month isn\u2019t over yet \u2014 confirmation opens on its last day.'); return; }
+  const _ld=_lastWorkingDay(ym);
+  if(!(ym<todayBerlin().slice(0,7) || todayBerlin()>=_ld)){ alert('This month isn\u2019t over yet \u2014 confirmation opens on the last working day.'); return; }
   if(tsConfirmOf(stid,ym)) return;
   const e=tsEntries(stid,ym);
   const cEl=document.getElementById('ts-comment-'+stid);
@@ -5996,8 +6004,8 @@ function rMySTimesheet(stid){
     </div>
     ${(()=>{ // Confirmable only once the month is over (or on its last day) — a
       // timesheet attests to work performed, and mid-month the month isn't done.
-      const _lastDay=(()=>{const d=pd(ym+'-01');d.setMonth(d.getMonth()+1);d.setDate(0);return fd(d);})();
-      window._tsConfirmable = ym<curYm || todayBerlin()===_lastDay;
+      const _lastDay=_lastWorkingDay(ym);
+      window._tsConfirmable = ym<curYm || todayBerlin()>=_lastDay;
       return '';})()}
     ${conf
       ?(conf.comment?`<div style="margin-top:8px;font-size:11px;color:var(--t2)"><b>Your comment:</b> ${conf.comment}</div>`:'')
@@ -6006,7 +6014,7 @@ function rMySTimesheet(stid){
         <button class="btn bsm" onclick="tsSubmitComment('${stid}','${ym}')">Submit Comment</button>
         ${window._tsConfirmable?`<button class="btn bp bsm" onclick="tsConfirm('${stid}','${ym}')">Confirm Timesheet \u2713</button>`:''}
       </div>
-      ${!window._tsConfirmable?`<div style="font-size:10px;color:var(--mt);margin-top:6px">\u{1F512} Confirmation opens on the last day of the month, once all sessions are in.</div>`:''}`}
+      ${!window._tsConfirmable?`<div style="font-size:10px;color:var(--mt);margin-top:6px">\u{1F512} Confirmation opens on the last working day of the month, once all sessions are in.</div>`:''}`}
   </div>`;
 }
 
