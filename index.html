@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-27T15:00Z-last-working-day">
+<meta name="app-version" content="2026-10-30T14:00Z-leave-advance-notice">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1600,7 +1600,7 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
         <span class="rfl">Client</span>
         <select id="rpt-client" class="rft"><option value="">All Clients</option></select>
         <span class="rfl" id="lv-type-lbl" style="display:none">Leave Type</span>
-        <select id="rpt-leave-type" class="rft" style="display:none"><option value="">All Types</option><option value="PTO">PTO / Vacation</option><option value="SICK">Sick Day</option><option value="PERSONAL">Personal</option><option value="FLEX">Flex / Schedule Adjustment</option><option value="UNPAID">Unpaid Leave</option></select>
+        <select id="rpt-leave-type" class="rft" style="display:none"><option value="">All Types</option><option value="PTO">PTO / Vacation</option><option value="SICK">Sick Day</option><option value="FLEX">Flex / Schedule Adjustment</option><option value="UNPAID">Unpaid Leave</option></select>
         <button class="btn bp" style="width:100%;justify-content:center;padding:10px;margin-top:10px" onclick="runReport()">▶ Run Report</button>
       </div>
     </div>
@@ -7434,6 +7434,17 @@ function rptBillableAdmin(){
 // ─────────────────────────────────────────
 // LEAVE & ABSENCE REPORT
 // ─────────────────────────────────────────
+// Advance notice: whole days between when a leave request was SUBMITTED and the
+// first day of leave. Negative = submitted after leave started (same-day/late).
+// Only meaningful for therapist-submitted requests (manual admin entries have no
+// submittedAt). Returns null when we can't compute it.
+function leaveAdvanceDays(r){
+  if(!r||!r.submittedAt||!r.from) return null;
+  const sub=pd(String(r.submittedAt).slice(0,10));
+  const start=pd(r.from);
+  if(isNaN(sub)||isNaN(start)) return null;
+  return Math.round((start-sub)/864e5);
+}
 function rptLeave(){
   const from=document.getElementById('rpt-from')?.value||'';
   const to=document.getElementById('rpt-to')?.value||'';
@@ -7546,6 +7557,16 @@ function rptLeave(){
       <td><span class="tchip" style="background:${bg};color:${tx};font-size:10px">${st?.initials||'?'}</span> ${st?.name||r.fromName||'—'}</td>
       <td>${typeLabel(r.type)}</td>
       <td>${dateStr}</td>
+      <td style="font-size:10px;color:var(--mt);white-space:nowrap">${r.submittedAt?pd(String(r.submittedAt).slice(0,10)).toLocaleDateString('en-US',{month:'short',day:'numeric'}):'<span title="No submission date (manual entry)">\u2014</span>'}</td>
+      <td style="text-align:center;white-space:nowrap">${(()=>{
+        const adv=leaveAdvanceDays(r);
+        if(adv==null) return '<span style="color:var(--mt)">\u2014</span>';
+        // Color by notice: >=14d green, 3-13d amber, <3d (incl. same-day/late) red.
+        const clr=adv>=14?'#1B5E20':adv>=3?'#E65100':'#B71C1C';
+        const bg =adv>=14?'#E8F5E9':adv>=3?'#FFF3E0':'#FFEBEE';
+        const lbl=adv<0?Math.abs(adv)+'d late':adv===0?'same day':adv+'d';
+        return `<span style="background:${bg};color:${clr};font-size:10px;font-weight:700;padding:2px 8px;border-radius:9px">${lbl}</span>`;
+      })()}</td>
       <td style="text-align:center">${(()=>{
         const wd=countWorkdays(r); const hrs=countHours(r);
         if(!wd && !hrs) return '—';
@@ -7586,7 +7607,7 @@ function rptLeave(){
     </table>
     <div style="font-size:11px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">All requests</div>
     <table class="rpt-table">
-      <thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Hours</th><th>Status</th><th>Notes</th><th class="edit-only"></th></tr></thead>
+      <thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Submitted</th><th>Advance Notice</th><th>Hours</th><th>Status</th><th>Notes</th><th class="edit-only"></th></tr></thead>
       <tbody>${detailRows}</tbody>
     </table>`;
 }
@@ -11692,7 +11713,6 @@ function openLeaveRequest(){
       <select id="lr-type" onchange="updateLrPreview()">
         <option value="PTO">🏖 PTO / Vacation</option>
         <option value="SICK">🤒 Sick Day</option>
-        <option value="PERSONAL">🙏 Personal / Other</option>
         <option value="FLEX">🔄 Flex / Schedule Adjustment (make up time)</option>
         <option value="UNPAID">💼 Unpaid Leave (no doctor's note / no PTO left)</option>
       </select>
@@ -12154,9 +12174,9 @@ function openManualLeaveEntry(){
   // current data model, but the filter is here for forward compatibility).
   const staffOpts = _byLastName(S.staff).map(s=>`<option value="${s.id}">${s.name} (${s.role})</option>`).join('');
   // Type dropdown uses the central LEAVE_TYPES dict so it stays in sync.
-  const typeOpts = Object.entries(LEAVE_TYPES).map(([v,m])=>
+  const typeOpts = Object.entries(LEAVE_TYPES).filter(([v])=>v!=='PERSONAL').map(([v,m])=>
     `<option value="${v}">${m.emoji} ${m.longLabel}</option>`
-  ).join('');
+  ).join('');  // Personal folded into PTO — no new Personal entries
   const today = todayBerlin();
   _openM(`<h3>+ Manual Leave Entry</h3>
     <div style="background:#FFF8E1;border:1px solid #FFCC80;border-radius:8px;padding:9px 12px;margin-bottom:12px;font-size:11px;color:#5D4037;line-height:1.5">
