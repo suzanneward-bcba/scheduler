@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-10-30T14:00Z-leave-advance-notice">
+<meta name="app-version" content="2026-11-07T14:00Z-cfo-all-reports">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -5150,6 +5150,14 @@ const LEAVE_APPROVER_STIDS = ['ErT'];           // Erika Toth
 // it, which keeps the record for reporting). Prevents accidental data loss from
 // staff deleting instead of cancelling.
 const SESSION_DELETE_STIDS = ['SW','SB','ErT']; // Suzanne, Sara, Erika
+// Staff granted full access to ALL reports regardless of their scheduling role
+// (e.g. the CFO, who is an ABAT in the schedule but needs every report's data).
+// This affects report visibility ONLY — not scheduling, supervision, or edit rights.
+const REPORTS_FULL_STIDS = ['ToS']; // Tobias Schiebelhut (CFO)
+function hasFullReports(){
+  const selfId = viewerStid || mySchedStid;
+  return !!selfId && REPORTS_FULL_STIDS.includes(selfId);
+}
 function canDeleteSession(){
   if(isAdminViewer()) return true;               // SW/SB are admins anyway
   const selfId = viewerStid || mySchedStid;
@@ -5268,7 +5276,7 @@ function canApproveLeave(){
   return !!selfId && LEAVE_APPROVER_STIDS.includes(selfId);
 }
 // Can see all reports tab
-function canSeeAllReports(){ return isAdminViewer() || isBillingViewer(); }
+function canSeeAllReports(){ return isAdminViewer() || isBillingViewer() || hasFullReports(); }
 
 // Determines whether the current viewer can mark THIS specific session's
 // note as done (or undone). Admins can mark any session; therapists and
@@ -5387,7 +5395,7 @@ function applyRoleAccess(){
     window._kioskMode = false;
   }
   const showSettings = isAdminViewer();
-  const showReports  = isAdminViewer() || isBillingViewer() || isClinicianViewer();
+  const showReports  = isAdminViewer() || isBillingViewer() || isClinicianViewer() || hasFullReports();
   const showLock     = isAdminViewer(); // only admins toggle the lock
 
   // Apply client-editor body class so CSS shows client mgmt controls for Billing/ClientManager
@@ -5412,6 +5420,7 @@ function applyRoleAccess(){
   const staffRec = _viewerStaffRec();
   const confirmedClinician = staffRec &&
     !ADMIN_ACCESS_STIDS.includes(staffRec.id) &&
+    !hasFullReports() &&   // CFO etc. get ALL reports, not the clinician-restricted set
     ['bcba','qba','ot'].includes((staffRec.role||'').toLowerCase());
   // Clinicians (BCBA/OT) now see Attendance + Cancellations in addition to
   // Indirect Services and Supervision. Still hidden from them: Billing
@@ -5784,7 +5793,7 @@ function tsUnconfirm(confId){
   S.tsConfirms=(S.tsConfirms||[]).filter(x=>x.id!==confId);
   save(); rptTimesheets();
 }
-function canReviewTimesheets(){ return !isViewOnly || TIMESHEET_REVIEWERS.includes(viewerStid); }
+function canReviewTimesheets(){ return !isViewOnly || TIMESHEET_REVIEWERS.includes(viewerStid) || hasFullReports(); }
 
 function tsEntries(stid, ym){
   // A timesheet reflects work PERFORMED: the schedule is generated in advance,
