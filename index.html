@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-11-07T14:00Z-cfo-all-reports">
+<meta name="app-version" content="2026-11-13T15:30Z-generate-replace-by-service">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -409,7 +409,9 @@ body.kiosk-mode #kiosk-bar{display:flex}
 body.kiosk-mode #app{padding-top:52px}
 /* Kiosk: cancelled sessions unmistakably greyed — faded, desaturated, struck through */
 body.kiosk-mode .bdg.b-pastauth{background:#FFF3E0;color:#E65100;border:1px solid #FFB74D;font-weight:800}
-.blk-sess.pastauth{box-shadow:inset 3px 0 0 #FB8C00}
+.blk-sess.pastauth{box-shadow:inset 4px 0 0 #FB8C00;background:#FFF8EC!important}
+.blk-sess.pastauth .blk-cl{color:#E65100}
+body.kiosk-mode .blk-sess.pastauth{background:#FFF3E0!important;box-shadow:inset 6px 0 0 #FB8C00}
 .blk-sess.cx{opacity:.45;filter:grayscale(1);background:#E8E8E8!important;border-left-color:#9E9E9E!important}
 body.kiosk-mode .blk-sess.cx .blk-cl{text-decoration:line-through;color:#777!important}
 body.kiosk-mode .blk-sess.cx .tchip{background:#BDBDBD!important;color:#fff!important}
@@ -2970,6 +2972,9 @@ function rSched(){
 // ABA-only and BOTH clients' sessions (including BOTH clients' OT sessions) remain visible.
 // Admin/unassigned sessions (no cid) are always kept.
 function _schedShowSess(s){
+  // Discharged clients never show on the schedule, even if their future
+  // sessions weren't cancelled at discharge time. Discharge is authoritative.
+  if(s.cid){ const _cl=gc(s.cid); if(_cl && _isDischarged(_cl)) return false; }
   // ABA / OT / All filter on the schedule view (schedSvcFilter).
   // ABA view: ABA-domain sessions and BCBA/RBT/ABAT therapists only.
   // OT view:  OT-domain sessions and OT therapists only.
@@ -4616,6 +4621,12 @@ function openClientDetail(id){
         <input type="date" id="gen-start-date" value="${todayBerlin()}" style="padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif">
         <span style="font-size:10px;color:var(--mt)">Leave as today for a new schedule · set a future date for seasonal transitions</span>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:4px 0;flex-wrap:wrap">
+        <label style="font-size:11px;font-weight:700;color:var(--mt);white-space:nowrap">Generate through:</label>
+        <input type="date" id="gen-through-date" value="${c.authEnd||''}" style="padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-size:12px">
+        <span style="font-size:10px;color:var(--mt)">Defaults to auth end · set a <strong>term-end date</strong> (e.g. end of summer schedule) to generate through it</span>
+      </div>
+      <div style="font-size:10px;color:#E65100;margin:-2px 0 4px">Sessions dated past the auth end are flagged amber "past auth" until reauthorized.</div>
       <button class="gen-btn" onclick="genSchedule('${c.id}')">${tplBtnLbl}</button>
       <div class="gen-preview" id="gen-preview"></div>
     </div>
@@ -4716,6 +4727,12 @@ function openClientDetail(id){
         <input type="date" id="gen-start-date" value="${todayBerlin()}" style="padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-size:12px;font-family:'DM Sans',sans-serif">
         <span style="font-size:10px;color:var(--mt)">Leave as today for a new schedule · set a future date for seasonal transitions</span>
       </div>
+      <div style="display:flex;align-items:center;gap:8px;margin:4px 0;flex-wrap:wrap">
+        <label style="font-size:11px;font-weight:700;color:var(--mt);white-space:nowrap">Generate through:</label>
+        <input type="date" id="gen-through-date" value="${c.authEnd||''}" style="padding:4px 8px;border:1.5px solid var(--bd);border-radius:6px;font-size:12px">
+        <span style="font-size:10px;color:var(--mt)">Defaults to auth end · set a <strong>term-end date</strong> (e.g. end of summer schedule) to generate through it</span>
+      </div>
+      <div style="font-size:10px;color:#E65100;margin:-2px 0 4px">Sessions dated past the auth end are flagged amber "past auth" until reauthorized.</div>
       <button class="gen-btn" onclick="genSchedule('${c.id}')">${tplBtnLbl}</button>
       <div class="gen-preview" id="gen-preview"></div>
     </div>
@@ -4761,21 +4778,41 @@ function genSchedule(cid){
   if(!c.authEnd){alert('Please set an Authorization End Date first, then Save Info.');return;}
   if(!_tplSlots.length){alert('Add at least one session slot to the template first.');return;}
   const authEnd=pd(c.authEnd);
+  // Generate through an explicit end date (defaults to auth end). This lets
+  // Sara project to a TERM boundary (summer/fall schedule change) rather than
+  // the auth period. Sessions dated past authEnd auto-flag amber "past auth"
+  // via isPastAuth() (it compares date > authEnd), so no per-session tagging.
+  const _throughEl=document.getElementById('gen-through-date');
+  let genThrough = (_throughEl && _throughEl.value) ? pd(_throughEl.value) : new Date(authEnd);
+  if(genThrough < authEnd) genThrough = new Date(authEnd);  // never generate less than the auth
   const today=pd(todayBerlin());
   // Use Start From date if set, otherwise default to today
   const startEl=document.getElementById('gen-start-date');
   const startFrom=startEl&&startEl.value?pd(startEl.value):today;
   // Remove existing future recurring sessions from the start date forward
-  S.sessions.forEach(s=>{ if(s.cid===cid&&s.recurGroup&&pd(s.date)>=startFrom) window._sessDel.add(s.id); });
-  S.sessions=S.sessions.filter(s=>!(s.cid===cid&&s.recurGroup&&pd(s.date)>=startFrom));
+  // Determine which SERVICE this template generates (ABA vs OT) so we only
+  // replace that service's existing sessions — never the other service's.
+  const _genIsOT = _tplSlots.some(sl=>sl.type==='OT') && !_tplSlots.some(sl=>sl.type!=='OT');
+  const _genIsABA = _tplSlots.some(sl=>sl.type!=='OT') && !_tplSlots.some(sl=>sl.type==='OT');
+  const _sameService = s => {
+    // If the template is purely one service, match sessions of that service.
+    // Mixed templates (rare) fall back to replacing all — behaves as before.
+    const sOT = s.type==='OT';
+    if(_genIsOT)  return sOT;
+    if(_genIsABA) return !sOT;
+    return true;
+  };
+  const _clearMatch = s => s.cid===cid && s.recurGroup && pd(s.date)>=startFrom && _sameService(s);
+  S.sessions.forEach(s=>{ if(_clearMatch(s)) window._sessDel.add(s.id); });
+  S.sessions=S.sessions.filter(s=>!_clearMatch(s));
   // Generate from startFrom through auth end
   const rg=uid();
   let count=0;
   let weekMon=wkOf(startFrom);
-  while(weekMon<=authEnd){
+  while(weekMon<=genThrough){
     _tplSlots.forEach(sl=>{
       const d=new Date(weekMon);d.setDate(d.getDate()+(sl.dow-1));
-      if(d>=startFrom&&d<=authEnd){
+      if(d>=startFrom&&d<=genThrough){
         S.sessions.push({id:'s'+uid(),cid,stid:sl.stid,date:fd(d),s:sl.s,e:sl.e,type:sl.type,location:sl.location||'clinic',status:'OK',cx:'',makeup:false,recurGroup:rg,notes:''});
         count++;
       }
@@ -4788,8 +4825,10 @@ function genSchedule(cid){
   const prev=document.getElementById('gen-preview');
   if(prev){
     prev.style.display='block';
-    const wks=Math.round((authEnd-startFrom)/864e5/7);
-    prev.innerHTML=`✅ Generated <strong>${count} sessions</strong> across ~${wks} weeks (${_tplSlots.length} slot${_tplSlots.length!==1?'s':''}/week) through <strong>${authEnd.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</strong>`;
+    const wks=Math.round((genThrough-startFrom)/864e5/7);
+    const _pastDays=Math.round((genThrough-authEnd)/864e5);
+    const _past=_pastDays>0?` <span style="color:#E65100;font-weight:700">· projected ~${Math.round(_pastDays/7)} weeks past auth end (amber-flagged)</span>`:'';
+    prev.innerHTML=`✅ Generated <strong>${count} sessions</strong> across ~${wks} weeks through <strong>${genThrough.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</strong>${_past}`;
   }
   rSched();rClients();
 }
@@ -11559,10 +11598,14 @@ function doDischarge(cid){
   c.team=[];
   c.backupTeam=[];
 
-  // Cancel future sessions if requested
+  // Always cancel FUTURE sessions on discharge (from the discharge date
+  // forward) — a discharged client shouldn't hold live future sessions.
+  // The checkbox only controls whether to also cancel sessions on the
+  // discharge date itself.
+  S.sessions.filter(s=>s.cid===cid&&s.date>date&&s.status!=='CX'&&!s._autoAdmin)
+    .forEach(s=>{s.status='CX';s.cx='CX-DC';});
   if(cancelFuture){
-    const today=todayBerlin();
-    S.sessions.filter(s=>s.cid===cid&&s.date>=today&&s.status!=='CX'&&!s._autoAdmin)
+    S.sessions.filter(s=>s.cid===cid&&s.date===date&&s.status!=='CX'&&!s._autoAdmin)
       .forEach(s=>{s.status='CX';s.cx='CX-DC';});
   }
 
