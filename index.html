@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-11-17T10:00Z-97155-recoupment-watch">
+<meta name="app-version" content="2026-11-17T15:30Z-admin-all-clients-dash">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -8767,9 +8767,14 @@ function rSupDash(){
   const ym=today.slice(0,7);
   const monthLbl=pd(ym+'-01').toLocaleDateString('en-US',{month:'long',year:'numeric'});
 
-  // ── My caseload: clients I case-manage OR am on the team of ──
+  // ── Caseload scope ──
+  // Suzanne + Sara (ADMIN_ACCESS_STIDS) see ALL active clients on their own
+  // dashboard; every other supervisor sees only clients they case-manage or are
+  // on the team of. (When an admin drills into another supervisor via the picker,
+  // stid becomes that supervisor, so the view narrows to that caseload.)
+  const _allClientView = ADMIN_ACCESS_STIDS.includes(stid);
   const myClients=(S.clients||[]).filter(cl=>cl.status!=='discharged' &&
-    (cl.bcba===stid || (cl.team||[]).includes(stid)));
+    (_allClientView || cl.bcba===stid || (cl.team||[]).includes(stid)));
   const myCids=new Set(myClients.map(c=>c.id));
 
   // ── My supervisees: RBT/ABAT on any of my clients' teams ──
