@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-11-13T15:30Z-generate-replace-by-service">
+<meta name="app-version" content="2026-11-17T10:00Z-97155-recoupment-watch">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -7023,14 +7023,15 @@ function rptBilling(){
     const indirSess=indirKeys.flatMap(k=>insGroups[k]);
     tableHTML+=`<div class="rpt-group-hdr" style="background:#4A148C">Indirect Services (PT + CPT-coded)</div>
     <table class="rpt-table"><thead><tr>
-      <th>Date</th><th>Staff</th><th>Code</th><th>Start</th><th>End</th><th>Hrs</th><th>Notes</th>
+      <th>Date</th><th>Client</th><th>Staff</th><th>Code</th><th>Start</th><th>End</th><th>Hrs</th><th>Notes</th>
     </tr></thead><tbody>
     ${indirSess.map(s=>{
       const st=gs(s.stid);
+      const cl=s.cid?gc(s.cid):null;
       const hrs=(sessMins(s)/60).toFixed(2);
       const dateStr=pd(s.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
       return`<tr class="${s.status==='CX'?'cx-row':''}">
-        <td>${dateStr}</td><td>${st?.name||'—'}</td>
+        <td>${dateStr}</td><td style="font-weight:600">${cl?cDisplayName(cl):'—'}</td><td>${st?.name||'—'}</td>
         <td><span class="bdg ${sessChipBdg(s)}">${sessChipLabel(s)}</span></td>
         <td>${ftm(s.s)}</td><td>${ftm(s.e)}</td>
         <td>${hrs}</td><td style="color:var(--mt);font-size:10px">${s.notes||''}</td>
@@ -7441,8 +7442,10 @@ function rptBillableAdmin(){
       const dStr=pd(s.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
       const mins=Math.round(sessMins(s));
       const hrs=(mins/60).toFixed(2);
+      const _cl=s.cid?gc(s.cid):null;
       return `<tr>
         <td style="padding:6px 8px;font-size:11px;white-space:nowrap">${dStr}</td>
+        <td style="padding:6px 8px;font-size:11px;white-space:nowrap;font-weight:600">${_cl?cDisplayName(_cl):'—'}</td>
         <td style="padding:6px 8px;font-size:11px;white-space:nowrap">${ftm(s.s)}–${ftm(s.e)}</td>
         <td style="padding:6px 8px;font-size:11px;font-family:monospace;font-weight:700">${s.cptCode}</td>
         <td style="padding:6px 8px;font-size:11px;text-align:right">${hrs}h</td>
@@ -7462,7 +7465,7 @@ function rptBillableAdmin(){
       </div>
       <div style="padding:8px 12px">${cptBreakdown}</div>
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
-        <thead><tr style="background:var(--bg)"><th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">Date</th><th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">Time</th><th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">CPT</th><th style="padding:6px 8px;text-align:right;font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">Hrs</th><th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">Note</th></tr></thead>
+        <thead><tr style="background:var(--bg)"><th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">Date</th><th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">Client</th><th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">Time</th><th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">CPT</th><th style="padding:6px 8px;text-align:right;font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">Hrs</th><th style="padding:6px 8px;text-align:left;font-size:10px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px">Note</th></tr></thead>
         <tbody>${rows}</tbody>
       </table></div>
     </div>`;
@@ -8884,6 +8887,37 @@ function rSupDash(){
     ${!unitRows.length&&!countRows.length?'<div style="font-size:12px;color:var(--mt)">No ABA clients.</div>':''}
   </div>`;
 
+  // ── CARD 3b: 97155 coverage & recoupment watch ──────────────────────
+  // Payer rule: a client with a 97153 (direct ABA) session in a month but NO
+  // 97155 (program modification) that same month is a recoupment risk. Lists,
+  // per ABA client, the month's 97153 count, 97155 count, and WHICH therapist(s)
+  // completed the 97155 — flagging any client with 97153 but no 97155. This is
+  // the "who did the 97155" view that used to live on the dashboard.
+  const _in155=s=> s.cid && s.type==='INDIRECT' && s.cptCode==='97155' && s.status!=='CX' && !s._virtual && (s.date||'').startsWith(ym) && s.date<=today;
+  const _dir153=s=> s.cid && s.type==='ABA' && s.status!=='CX' && !s._virtual && !s._autoAdmin && (s.date||'').startsWith(ym) && s.date<=today;
+  const recoupRows=abaClients.map(cl=>{
+    const n153=(S.sessions||[]).filter(s=>s.cid===cl.id&&_dir153(s)).length;
+    const i155=(S.sessions||[]).filter(s=>s.cid===cl.id&&_in155(s));
+    const therapists=[...new Set(i155.map(s=>{const st=gs(s.stid);return st?(st.initials||st.name):null;}).filter(Boolean))];
+    return {cl, n153, n155:i155.length, therapists, risk:n153>0&&i155.length===0};
+  }).filter(r=>r.n153>0||r.n155>0);
+  const riskN=recoupRows.filter(r=>r.risk).length;
+  const cardRecoup=`<div class="scard" style="grid-column:1/-1"><h3>🛡️ 97155 Coverage & Recoupment Watch — ${monthLbl} ${riskN?`<span style="background:#FFEBEE;color:#B71C1C;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">${riskN} at risk</span>`:(recoupRows.length?'<span style="background:#E8F5E9;color:#1B5E20;font-size:11px;font-weight:800;padding:2px 9px;border-radius:10px;margin-left:6px">All covered ✓</span>':'')}</h3>
+    <p style="font-size:11px;color:var(--mt);margin-bottom:6px">A client with a 97153 session but no 97155 (program modification) in the same month is a recoupment risk. Shows which therapist completed each client's 97155 this month.</p>
+    ${recoupRows.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:1.5px solid var(--bd);color:var(--mt);font-size:10px;text-transform:uppercase;text-align:left">
+        <th style="padding:5px 8px">Client</th><th style="padding:5px 8px;text-align:center">97153</th><th style="padding:5px 8px;text-align:center">97155</th><th style="padding:5px 8px">97155 completed by</th><th style="padding:5px 8px">Status</th>
+      </tr></thead><tbody>
+      ${recoupRows.sort((a,b)=>(b.risk-a.risk)||cDisplayName(a.cl).localeCompare(cDisplayName(b.cl))).map(r=>`<tr style="cursor:pointer;${r.risk?'background:#FFF5F5':''}" onclick="openClientDetail('${r.cl.id}')">
+        <td style="padding:5px 8px;font-weight:600">${cDisplayName(r.cl)}</td>
+        <td style="padding:5px 8px;text-align:center">${r.n153||'—'}</td>
+        <td style="padding:5px 8px;text-align:center;font-weight:700;color:${r.n155?'#1B5E20':'#B71C1C'}">${r.n155||'0'}</td>
+        <td style="padding:5px 8px">${r.therapists.length?r.therapists.join(', '):'<span style="color:var(--mt)">—</span>'}</td>
+        <td style="padding:5px 8px">${r.risk?'<span style="background:#FFEBEE;color:#B71C1C;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;white-space:nowrap">⚠ Recoup risk</span>':(r.n155?'<span style="background:#E8F5E9;color:#1B5E20;font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px">✓ Covered</span>':'<span style="color:var(--mt);font-size:10px">—</span>')}</td>
+      </tr>`).join('')}
+      </tbody></table></div>`:'<div style="font-size:12px;color:var(--mt)">No 97153 or 97155 activity for your clients this month.</div>'}
+  </div>`;
+
   // ── CARD 4: Auth dates & upcoming expirations (my caseload, 60d) ──
   const authExp=myClients.filter(cl=>cl.authEnd).map(cl=>({cl,days:Math.ceil((pd(cl.authEnd)-pd(today))/864e5),kind:'ABA'}))
     .concat(myClients.filter(cl=>cl.otAuth&&cl.otAuth.end).map(cl=>({cl,days:Math.ceil((pd(cl.otAuth.end)-pd(today))/864e5),kind:'OT'})))
@@ -8937,7 +8971,7 @@ function rSupDash(){
     </div>
     ${pick}
     <div class="dash-grid">
-      ${card1}${card7}${card2}${card3}${card4}${card5}${card6}
+      ${card1}${card7}${card2}${card3}${cardRecoup}${card4}${card5}${card6}
     </div>`;
 }
 
