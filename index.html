@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-11-23T13:20Z-closure-services-only">
+<meta name="app-version" content="2026-11-23T13:30Z-clo-code-reconcile">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1900,6 +1900,20 @@ function defCX(){return[
 // Codes that skip auto-admin and leave therapist free
 const NO_ADMIN_CX=['HOL','CLO'];
 
+// Ensure the HOL/CLO codes exist in the saved cancellation-code list so that
+// auto-cancelled holiday (HOL) and clinic-closure (CLO) sessions reconcile with
+// the per-session dropdown — i.e. show their real code instead of falling back to
+// "Scheduled". Existing configs predate CLO and only seed defaults when the whole
+// list is missing, so we add any missing code here WITHOUT touching the clinic's
+// own custom codes, labels, or order. Idempotent — safe to run on every boot.
+function ensureCxDefaults(){
+  if(!S.cfg) S.cfg={};
+  if(!Array.isArray(S.cfg.cxCodes)||!S.cfg.cxCodes.length){ S.cfg.cxCodes=defCX(); return; }
+  const have=new Set(S.cfg.cxCodes.map(c=>c&&c.code));
+  if(!have.has('HOL')) S.cfg.cxCodes.push({code:'HOL', label:'Holiday'});
+  if(!have.has('CLO')) S.cfg.cxCodes.push({code:'CLO', label:'Clinic Closure'});
+}
+
 // ── SAMPLE DATA ──
 function loadSample(){
   S.staff=[
@@ -2291,7 +2305,7 @@ async function connectFirebaseWithCfg(cfg, isNew=false){
 // we don't re-seed because adminTasksUrlSeeded stays true.
 function _fsPostLoadFixups(){
   if(!S.cfg)S.cfg={};
-  if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX(); if(!S.cfg.travelZones)S.cfg.travelZones=defTravelZones();
+  if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX(); ensureCxDefaults(); if(!S.cfg.travelZones)S.cfg.travelZones=defTravelZones();
   // Field consolidation: extId IS the TRICARE Case ID. Fold any legacy
   // caseId values into extId so there's a single canonical field.
   (S.clients||[]).forEach(c=>{ if(!c.extId&&c.caseId)c.extId=c.caseId; });
@@ -2590,7 +2604,7 @@ function useDemoMode(){
   let loaded = false;
   try{const d=localStorage.getItem('abl-local');if(d){S=Object.assign({},S,JSON.parse(d));loaded=true;}}catch(e){}
   if(!S.cfg)S.cfg={};
-  if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX(); if(!S.cfg.travelZones)S.cfg.travelZones=defTravelZones();
+  if(!S.cfg.cxCodes)S.cfg.cxCodes=defCX(); ensureCxDefaults(); if(!S.cfg.travelZones)S.cfg.travelZones=defTravelZones();
   renderAll();
   setSyncStatus('ok','Local mode');
 }
