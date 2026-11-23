@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-11-17T15:30Z-admin-all-clients-dash">
+<meta name="app-version" content="2026-11-23T13:20Z-closure-services-only">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -1392,8 +1392,13 @@ button,a,[onclick],select,.fch,.sbl,.ccard,.stcard,.blk-sess,.cs-sess,.note-tog,
         <div style="display:flex;gap:6px;margin-top:9px;flex-wrap:wrap">
           <input type="date" id="nhd" class="fi" style="flex:1;min-width:100px">
           <input type="text" id="nhn" placeholder="Name…" class="fi" style="flex:2;min-width:120px">
+          <select id="nht" class="fi" style="flex:1;min-width:110px" title="Paid Holiday = everyone paid for the day. Clinic Closure = clinic closed, no holiday pay — staff book PTO for the day if they want it paid.">
+            <option value="HOLIDAY">Paid Holiday</option>
+            <option value="CLOSURE">Clinic Closure</option>
+          </select>
           <button class="btn bp bsm" onclick="addHol()">Add</button>
         </div>
+        <div style="font-size:10px;color:var(--mt);margin-top:5px">Paid Holiday pays everyone for the day. Clinic Closure cancels the day's sessions and closes the schedule but is <b>not</b> a paid holiday — staff book PTO for those days.</div>
       </div>
       <div class="scard">
         <h3>🎨 Insurance Legend</h3>
@@ -2711,6 +2716,14 @@ function tTxt(sid){return txtForBg(tClr(sid));}
 function thrChip(sid){const s=gs(sid);if(!s)return'';const bg=tClr(sid),tx=tTxt(sid);return`<span class="tchip" style="background:${bg};color:${tx}">${s.initials}</span>`;}
 function dbu(bs){if(!bs)return null;const t=new Date();t.setHours(0,0,0,0);const[,m,d]=bs.split('-').map(Number);let nx=new Date(t.getFullYear(),m-1,d);if(nx<t)nx.setFullYear(t.getFullYear()+1);return Math.round((nx-t)/864e5);}
 function isHol(ds){return S.holidays.find(h=>h.date===ds);}
+// Entry type: 'HOLIDAY' (paid, clinic fully closed) vs 'CLOSURE' (closed for
+// SERVICES only — admin continues, not a paid day, staff book PTO). Legacy
+// entries with no type default to HOLIDAY.
+function holType(h){ return (h&&h.type==='CLOSURE')?'CLOSURE':'HOLIDAY'; }
+function holCx(h){ return holType(h)==='CLOSURE'?'CLO':'HOL'; }
+// A PAID HOLIDAY on this date (clinic fully closed — no sessions AND no admin).
+// Clinic closures are NOT included: admin still runs on a closure day.
+function isPaidHoliday(ds){ return (S.holidays||[]).some(h=>h&&h.date===ds&&holType(h)==='HOLIDAY'); }
 // birthdays on a given date string
 // Canonical "no longer active" check — discharge sets status='discharged';
 // imports may use active:false. Both mean: exclude from alerts and stats.
@@ -3082,7 +3095,7 @@ function rWeekFull(){
       const cptChip=s.cptCode?(()=>{const noteOk=s.serviceNote&&s.serviceNote.trim();return `<div style="position:absolute;bottom:2px;right:2px;font-size:7px;background:#F3E5F5;color:#4A235A;padding:1px 4px;border-radius:2px;font-weight:800" title="Indirect: ${s.cptCode}${noteOk?'':' — note missing'}">${s.cptCode}${noteOk?'':' ⚠'}</div>`;})():'';
       return`<div class="sbl ${tbCls(s)} ${insCls}${cxcl}${isUnassigned?' unassigned':''}" style="${autoStyle}" data-sid="${s.id}" data-unassigned="${isUnassigned&&!isViewOnly}" onclick="openSess(this.dataset.sid)">${cxch}${otfl}${much}${supch}${locch}${grpChip}${cptChip}${isAuto?'<div style="position:absolute;top:2px;right:2px;font-size:7px;background:#ECEFF1;color:#546E7A;padding:1px 4px;border-radius:2px;font-weight:800">FREE</div>':''}<div class="stm">${ftm(s.s)}–${ftm(s.e)}</div><div class="scln">${clName}</div><div class="smet">${tbdg}</div><div class="sthr"><span class="tdot" style="background:${isUnassigned?'#9E9E9E':bg}"></span><span style="font-size:9px;color:${isUnassigned?'var(--rd)':'var(--mt)'}">${isUnassigned?'?':gs(s.stid)?.initials||'—'}</span></div>${cl&&cl.medAlerts?.length?`<div class="med-sess-warn">${medChips(cl,true)}</div>`:''}</div>`;
     }).join('');
-    if(!sh)sh=hol?`<div style="text-align:center;padding:14px"><div style="font-size:20px">🎌</div><div style="font-size:10px;margin-top:3px">${hol.name}</div></div>`:'<div style="text-align:center;padding:12px;font-size:10px;color:var(--mt)">No sessions</div>';
+    if(!sh)sh=hol?`<div style="text-align:center;padding:14px"><div style="font-size:20px">${holType(hol)==='CLOSURE'?'🚪':'🎌'}</div><div style="font-size:10px;margin-top:3px">${hol.name}${holType(hol)==='CLOSURE'?'<div style="font-size:9px;color:var(--mt)">Closed — admin only</div>':''}</div></div>`:'<div style="text-align:center;padding:12px;font-size:10px;color:var(--mt)">No sessions</div>';
     html+=`<div class="dc"><div class="${hcls}"><div><div class="ddn">${dn}</div><div class="ddv">${d.getDate()}</div></div><div style="text-align:right">${hol?`<span class="hch">${hol.name}</span>`:''}${isT?'<span style="font-size:9px;font-weight:700;opacity:.75;display:block;margin-top:2px">TODAY</span>':''}</div></div>${bdayBar}<div class="dbody">${sh}<button class="asb" onclick="openAddSess('${ds}')">+ Session</button></div>${busbar}</div>`;
   });
   html+='</div>';
@@ -3617,9 +3630,10 @@ function setCX(id,code){
     S.sessions=S.sessions.filter(x=>!(x._autoAdmin&&x._fromCx===id));
     delete s._leaveType; // clear leave tag if restored
   }
-  // Tag HOL/CLO so timesheet counts as paid leave, not admin hours
+  // Tag HOL/CLO so timesheet reflects it, not admin hours. HOL = paid holiday;
+  // CLO = clinic closure (NOT paid — staff book PTO for the day).
   if(code&&['HOL','CLO'].includes(code)){
-    s._leaveType='HOL';
+    s._leaveType=code;
   } else if(code&&s._leaveType){
     delete s._leaveType;
   }
@@ -3711,7 +3725,7 @@ function rSettings(){
   }
   const tzEl=document.getElementById('tzlist');
   if(tzEl) tzEl.innerHTML=getTravelZones().map((z,i)=>`<div class="cdi"><div><div class="cda">${z.label}</div><div class="cdd" style="display:flex;align-items:center;gap:8px"><input type="number" value="${z.mins}" min="1" style="width:56px;padding:3px 6px;border:1.5px solid var(--bd);border-radius:5px;font-size:11px;font-family:'DM Sans',sans-serif" onchange="updTZMins(${i},+this.value)"> min from clinic</div></div><button class="btn bxs bd" onclick="rmTZ(${i})">Remove</button></div>`).join('');
-  document.getElementById('hollist').innerHTML=S.holidays.length?S.holidays.map((h,i)=>`<div class="holi"><div><div style="font-weight:600;font-size:11px">${h.name}</div><div style="font-size:10px;color:var(--mt)">${pd(h.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</div></div><button class="btn bxs bd" onclick="rmHol(${i})">×</button></div>`).join(''):'<div style="font-size:11px;color:var(--mt);margin-bottom:7px">None added.</div>';
+  document.getElementById('hollist').innerHTML=S.holidays.length?S.holidays.map((h,i)=>{const _clo=holType(h)==='CLOSURE';const _badge=`<span class="flg" style="background:${_clo?'#FFF3E0':'#E8F5E9'};color:${_clo?'#E65100':'#1B5E20'};font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;margin-left:6px">${_clo?'Closure':'Paid Holiday'}</span>`;return `<div class="holi"><div><div style="font-weight:600;font-size:11px">${h.name}${_badge}</div><div style="font-size:10px;color:var(--mt)">${pd(h.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'})}</div></div><button class="btn bxs bd" onclick="rmHol(${i})">×</button></div>`;}).join(''):'<div style="font-size:11px;color:var(--mt);margin-bottom:7px">None added.</div>';
   document.getElementById('ins-legend').innerHTML=INS.map(i=>`<div class="lrow"><div class="ldot" style="background:${i.color}"></div><span class="bdg ${i.badge}">${i.label}</span><span style="color:var(--mt);font-size:10px">${i.group}</span></div>`).join('');
   document.getElementById('thr-legend').innerHTML=S.staff.map(s=>{const bg=s.color||'#9E9E9E',tx=txtForBg(bg);return`<div class="lrow"><div class="ldot" style="background:${bg};border:1px solid #ccc"></div><strong style="font-size:11px">${s.initials}</strong><span style="font-size:11px">${s.name}</span><span class="bdg ${ROLE_BADGE[s.role]||'b-adm'}" style="font-size:9px">${s.role}</span></div>`;}).join('');
   // External links — populate from cfg, blank if not set.
@@ -3738,23 +3752,30 @@ function saveExternalLinks(){
   if(typeof rMyS === 'function' && mySchedStid) try{ rMyS(); }catch(e){}
   setTimeout(()=>{ if(status) status.innerHTML=''; }, 3000);
 }
-function addHol(){const dt=document.getElementById('nhd').value,nm=document.getElementById('nhn').value.trim();if(!dt||!nm)return alert('Enter date and name.');S.holidays.push({id:uid(),date:dt,name:nm});document.getElementById('nhd').value='';document.getElementById('nhn').value='';applyHolidayAutoCx();save();rSettings();rSched();}
+function addHol(){const dt=document.getElementById('nhd').value,nm=document.getElementById('nhn').value.trim();const ty=(document.getElementById('nht')||{}).value==='CLOSURE'?'CLOSURE':'HOLIDAY';if(!dt||!nm)return alert('Enter date and name.');S.holidays.push({id:uid(),date:dt,name:nm,type:ty});document.getElementById('nhd').value='';document.getElementById('nhn').value='';applyHolidayAutoCx();save();rSettings();rSched();}
 function rmHol(i){S.holidays.splice(i,1);save();rSettings();rSched();}
 
-// Holiday auto-cancel: applies HOL code silently to every non-cancelled session on a holiday.
-// Called when a holiday is added, and on app boot (so prior-deploy holidays catch up).
-// Sets _holidayAutoCx:true so the Slack cancellation message is skipped (line ~2893 guard).
+// Holiday/Closure auto-cancel (silent, idempotent). Called when an entry is added
+// and on app boot (so prior-deploy entries catch up).
+//   • Paid Holiday → clinic fully closed: cancel EVERY session (client + admin)
+//     with HOL (paid for all).
+//   • Clinic Closure → closed for SERVICES only: cancel client sessions with CLO
+//     but LEAVE admin blocks (no client id) in place — admin still runs that day.
+// Sets _holidayAutoCx:true so the Slack cancellation message is skipped.
 function applyHolidayAutoCx(){
-  const holDates = new Set((S.holidays||[]).map(h=>h.date));
+  const byType = {};
+  (S.holidays||[]).forEach(h=>{ if(h&&h.date) byType[h.date]=holType(h); });
   let cancelled = 0;
   S.sessions.forEach(s=>{
-    if(holDates.has(s.date) && s.status!=='CX'){
-      s.status='CX';
-      s.cx='HOL';
-      s._holidayAutoCx=true;
-      s._leaveType='HOL';
-      cancelled++;
-    }
+    const ty = byType[s.date];
+    if(!ty || s.status==='CX') return;
+    // On a closure day, keep admin/non-client blocks — only services are cancelled.
+    if(ty==='CLOSURE' && !s.cid) return;
+    s.status='CX';
+    s.cx = (ty==='CLOSURE')?'CLO':'HOL';
+    s._holidayAutoCx=true;
+    s._leaveType=s.cx;             // HOL counts as paid; CLO does not
+    cancelled++;
   });
   return cancelled;
 }
@@ -3772,10 +3793,11 @@ function checkHolidayReminders(){
     while(d<hd){d.setDate(d.getDate()+1);if(d.getDay()>=1&&d.getDay()<=5)wdays++;}
     if(wdays!==3) return;
     if(S.cfg.holRemindersPosted.includes(h.id)) return;
-    // Count affected sessions
-    const affected=S.sessions.filter(s=>s.date===h.date&&s.cx==='HOL').length;
+    // Count affected sessions (HOL for holidays, CLO for closures)
+    const _cx=holCx(h); const _clo=holType(h)==='CLOSURE';
+    const affected=S.sessions.filter(s=>s.date===h.date&&s.cx===_cx).length;
     const dayName=hd.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
-    const msg='🎌 *Holiday reminder: '+h.name+'*\nComing up on *'+dayName+'* ('+3+' workdays from today).\n'+affected+' session'+(affected!==1?'s':'')+' will be auto-cancelled.';
+    const msg=(_clo?'🚪 *Clinic closure: ':'🎌 *Holiday reminder: ')+h.name+'*\nComing up on *'+dayName+'* ('+3+' workdays from today).\n'+affected+' session'+(affected!==1?'s':'')+' will be auto-cancelled.'+(_clo?'\n_Clinic closed — not a paid holiday. Book PTO for this day if you want it paid._':'');
     sendSlackMessage('C05NDMNJRT3', msg).catch(function(e){ console.warn('Holiday reminder Slack failed:',e); });
     S.cfg.holRemindersPosted.push(h.id);
     save();
@@ -3959,7 +3981,7 @@ function saveBlockAdmin(){
   pushUndo('Assign block admin');
   let added=0, removed=0;
   dates.forEach(date=>{
-    if(isHol(date)) return;                 // never assign on a holiday
+    if(isPaidHoliday(date)) return;         // never assign admin on a paid holiday (closures still allow admin)
     allStids.forEach(stid=>{
       const st=gs(stid); if(!st) return;
       if(ptoOnDate(st,date)) return;          // never assign on someone's leave
@@ -3990,7 +4012,7 @@ function removeBlockAdmin(sessId){
 
 function openFillAdmin(){
   _openM(`<h3>\u{1F4CB} Fill Admin</h3>
-    <p style="font-size:12px;color:var(--t2);margin-bottom:6px">Fills open gaps with admin across each therapist's working hours \u2014 the span of their Preferred Weekly Schedule for that weekday \u2014 minus any real sessions already booked. PTO days and clinic holidays are skipped.</p>
+    <p style="font-size:12px;color:var(--t2);margin-bottom:6px">Fills open gaps with admin across each therapist's working hours \u2014 the span of their Preferred Weekly Schedule for that weekday \u2014 minus any real sessions already booked. PTO days and paid holidays are skipped (clinic closures still fill admin).</p>
     <div style="font-size:11px;color:var(--mt);background:var(--bg);border-radius:6px;padding:7px 10px;margin-bottom:12px">Working hours come from each staff card's Preferred Weekly Schedule. The 12\u201313 lunch hour is left unfilled for part-time staff (salaried Tobias, Sara, Janina & Lindsay are filled through it), and Thursdays fill through lunch for everyone for the team meeting. Gaps down to 15 minutes are filled.</div>
     <div class="fg"><label>Apply to</label>
       <select id="fa-scope">
@@ -4022,9 +4044,10 @@ function doFillAdmin(){
     if(e>LUNCH_E) out.push([LUNCH_E,e]);              // afternoon part
     return out;                                        // lunch itself dropped
   }
-  // Clinic holidays close the day for everyone — never fill admin on them
-  // (staff are already paid for holidays at their scaled rate).
-  const workDays=days.filter(d=>!isHol(d));
+  // Paid holidays close the day for everyone — never fill admin on them (staff are
+  // already paid at their scaled rate). Clinic CLOSURES are closed for services
+  // only, so admin IS filled on those days.
+  const workDays=days.filter(d=>!isPaidHoliday(d));
   let planned=[];
   let noWindow=[];   // available that day but no working hours defined
   S.staff.forEach(st=>{
@@ -5904,6 +5927,9 @@ function tsEntries(stid, ym){
   const _ptoDates=new Set(ptoEntries.map(e=>e.date));
   (S.holidays||[]).forEach(h=>{
     if(!h||!h.date||!(h.date||'').startsWith(ym)||h.date>_cap) return;
+    // Clinic Closures are NOT paid holidays — they close the schedule only. Staff
+    // book PTO for those days, which is already counted above. Skip them here.
+    if(holType(h)==='CLOSURE') return;
     if(_ptoDates.has(h.date)) return;
     if(!isStaffWorkday(st,h.date)) return;
     ptoEntries.push({date:h.date,type:'HOL',name:h.name||''});
@@ -10992,7 +11018,7 @@ function addPtoDate(stid){
   if(!dates.length){alert('No dates to add (check weekday filter).');return;}
   let added=0;
   dates.forEach(dt=>{
-    if(!ptoOnDate(st,dt)&&!isHol(dt)){
+    if(!ptoOnDate(st,dt)&&!isPaidHoliday(dt)){
       st.pto.push({date:dt,type});
       added++;
     }
@@ -12005,12 +12031,12 @@ function updateLrPreview(){
   // Count weekdays — for half-day this is always 1
   let count=0;
   if(halfActive){
-    if(isHol(from)){ alert('That\u2019s a clinic holiday ('+(isHol(from).name||'')+') \u2014 you\u2019re paid for it automatically, no time off needed.'); return; }
+    if(isPaidHoliday(from)){ const _ph=(S.holidays||[]).find(h=>h.date===from&&holType(h)==='HOLIDAY'); alert('That\u2019s a paid holiday ('+((_ph&&_ph.name)||'')+') \u2014 you\u2019re paid for it automatically, no time off needed.'); return; }
     // Half-day: From should equal To, count is 1
     count = (pd(from).getDay()>=1 && pd(from).getDay()<=5) ? 1 : 0;
   } else {
     const cur=pd(from);const end=pd(to||from);
-    while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5&&!isHol(fd(new Date(cur))))count++;cur.setDate(cur.getDate()+1);}
+    while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5&&!isPaidHoliday(fd(new Date(cur))))count++;cur.setDate(cur.getDate()+1);}
   }
   // Build the preview text. For half-day: show hours requested.
   // For flex: show "X hours flexed (AM/PM)" — same shape as half-day.
@@ -12129,7 +12155,7 @@ async function submitLeaveRequest(){
   while(cur<=end){
     if(cur.getDay()>=1&&cur.getDay()<=5){
       const ds=fd(new Date(cur));
-      const h=isHol(ds);
+      const h=(S.holidays||[]).find(x=>x.date===ds&&holType(x)==='HOLIDAY');
       if(h) _holSkipped.push((h.name||'Holiday')+' ('+ds+')');
       else days.push(ds);
     }
@@ -12340,7 +12366,7 @@ async function submitManualLeaveEntry(){
   const days=[];
   const cur=pd(from);const end=pd(to);
   while(cur<=end){
-    if(isHol(fd(new Date(cur)))){cur.setDate(cur.getDate()+1);continue;} // clinic holidays are paid automatically — never leave
+    if(isPaidHoliday(fd(new Date(cur)))){cur.setDate(cur.getDate()+1);continue;} // paid holidays are auto-paid — never leave (closures are bookable PTO days)
     const dow=cur.getDay();
     if(!wkOnly || (dow>=1 && dow<=5)) days.push(fd(new Date(cur)));
     cur.setDate(cur.getDate()+1);
@@ -12373,7 +12399,7 @@ async function submitManualLeaveEntry(){
     migratePto(st);
     migratePtoToHours(st);
     days.forEach(dt=>{
-      if(!ptoOnDate(st,dt)&&!isHol(dt)){
+      if(!ptoOnDate(st,dt)&&!isPaidHoliday(dt)){
         st.pto.push({date:dt, type:type==='SICK'?'SICK':'PTO', hours: isStaffWorkday(st,dt) ? hpd : 0});
       }
     });
@@ -12492,7 +12518,7 @@ async function approveLeaveRequest(id){
       }
     } else {
       r.days.forEach(dt=>{
-        if(!ptoOnDate(st,dt)&&!isHol(dt)){
+        if(!ptoOnDate(st,dt)&&!isPaidHoliday(dt)){
           st.pto.push({date:dt, type:r.type==='SICK'?'SICK':'PTO', hours: isStaffWorkday(st,dt) ? hpd : 0});
         }
       });
@@ -12662,7 +12688,7 @@ function saveEditLeaveReq(id){
   // Regenerate days
   const days=[];
   const cur=pd(newFrom);const end=pd(newTo);
-  while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5&&!isHol(fd(new Date(cur))))days.push(fd(new Date(cur)));cur.setDate(cur.getDate()+1);}
+  while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5&&!isPaidHoliday(fd(new Date(cur))))days.push(fd(new Date(cur)));cur.setDate(cur.getDate()+1);}
 
   const targetSt=newSt||st;
 
@@ -12693,7 +12719,7 @@ function saveEditLeaveReq(id){
   if(newStatus==='approved'&&targetSt){
     migratePto(targetSt);
     days.forEach(dt=>{
-      if(ptoOnDate(targetSt,dt)||isHol(dt)) return;
+      if(ptoOnDate(targetSt,dt)||isPaidHoliday(dt)) return;
       const entry={date:dt,type:newType==='SICK'?'SICK':'PTO'};
       if(r.halfDay){ entry.hours=r.halfHours; entry.halfDay=true; entry.halfWhen=r.halfWhen; if(r.halfFrom&&r.halfTo){ entry.halfFrom=r.halfFrom; entry.halfTo=r.halfTo; } }
       targetSt.pto.push(entry);
@@ -12772,7 +12798,7 @@ function importLeaveCSV(input){
       const days=[];
       try{
         const cur=pd(fromDate);const end=pd(toDate);
-        while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5&&!isHol(fd(new Date(cur))))days.push(fd(new Date(cur)));cur.setDate(cur.getDate()+1);}
+        while(cur<=end){if(cur.getDay()>=1&&cur.getDay()<=5&&!isPaidHoliday(fd(new Date(cur))))days.push(fd(new Date(cur)));cur.setDate(cur.getDate()+1);}
       }catch(e){return;}
 
       // Skip duplicates — same staff + from date
