@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-11-25T11:00Z-treatment-phase">
+<meta name="app-version" content="2026-11-25T11:40Z-ot-visits-calculated">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -656,6 +656,7 @@ body.kiosk-mode .blk-sess.cx .tchip{background:#BDBDBD!important;color:#fff!impo
 .phase-sel.phase-active{background:#E8F5E9;border-color:#A5D6A7;color:#1B5E20}
 .phase-sel.phase-intake{background:#FFF3E0;border-color:#FFCC80;color:#E65100}
 .phase-sel.phase-assessment{background:#E3F2FD;border-color:#90CAF9;color:#0D47A1}
+.phase-sel.phase-hold{background:#ECEFF1;border-color:#B0BEC5;color:#455A64}
 .phase-sel.phase-unset{background:#F5F5F5;border-color:var(--bd);color:#9E9E9E;font-weight:600}
 /* AUTH PIPELINE */
 .pipe-steps{display:flex;gap:0;margin:8px 0;border-radius:8px;overflow:hidden;border:1px solid var(--bd)}
@@ -3511,6 +3512,7 @@ const TX_PHASES=[
   {key:'intake',     label:'Intake & Documentation'},
   {key:'assessment', label:'Assessment & Treatment Planning'},
   {key:'active',     label:'Active Treatment'},
+  {key:'hold',       label:'On Hold / No Auth'},
 ];
 function phaseLabel(k){const p=TX_PHASES.find(x=>x.key===k);return p?p.label:'';}
 function phaseField(svc){return 'phase'+(svc==='OT'?'OT':'ABA');}
@@ -3535,6 +3537,73 @@ function setClientPhase(cid, svc, val){
   if(val) c[f]=val; else delete c[f];
   save();
   if(typeof rClients==='function') try{ rClients(); }catch(e){}
+}
+
+// ── OT VISIT UTILIZATION (calculated from the schedule) ───────────────────────
+// Replaces the manually-maintained "Visits Used". Counts OT sessions (type 'OT')
+// for this client — matched by stable id — within the OT authorization period:
+//   • completed  = past, non-cancelled visits (date ≤ today)
+//   • upcoming   = future scheduled visits (today < date ≤ auth end)
+//   • remaining  = authorized − completed
+//   • remainingAfter = remaining − upcoming (how many more can still be booked)
+// Cancellations and no-shows (status CX) are excluded from both counts. A visit
+// becomes "completed" automatically once its date is in the past (count once).
+// BOTH clients use c.otAuth (start/end/visitsAuthorized/visitsUsed); OT-only
+// clients use c.authStart/authEnd/authVisits/visitsUsed. The old manual figure is
+// kept only to flag discrepancies (older visits may predate the scheduler).
+function otVisitStats(c){
+  const both=(c.therapyType||(c.hasOT?'BOTH':'ABA'))==='BOTH';
+  const start = both ? (c.otAuth&&c.otAuth.start) : c.authStart;
+  const end   = both ? (c.otAuth&&c.otAuth.end)   : c.authEnd;
+  const authRaw = both ? (c.otAuth&&c.otAuth.visitsAuthorized) : c.authVisits;
+  const manRaw  = both ? (c.otAuth&&c.otAuth.visitsUsed)       : c.visitsUsed;
+  const r={both,start,end,authorized:(authRaw==null||authRaw==='')?null:+authRaw,
+           manual:(manRaw==null||manRaw==='')?null:+manRaw,
+           completed:0,upcoming:0,remaining:null,remainingAfter:null,
+           noAuth:false,review:false,discrepancy:false};
+  if(!end){ r.noAuth=true; return r; }       // period not defined → can't calculate
+  const today=todayBerlin();
+  (S.sessions||[]).forEach(s=>{
+    if(s.cid!==c.id || s.type!=='OT') return;
+    if(s._autoAdmin||s._virtual) return;
+    if(s.status==='CX') return;              // excludes cancellations + no-shows
+    const d=s.date; if(!d) return;
+    if(start && d<start) return;             // before this authorization
+    if(d>end){ r.review=true; return; }      // after end → unclear which auth; flag
+    if(d<=today) r.completed++; else r.upcoming++;
+  });
+  if(r.authorized!=null){
+    r.remaining=r.authorized-r.completed;
+    r.remainingAfter=r.remaining-r.upcoming;
+  }
+  if(r.manual!=null && r.manual!==r.completed) r.discrepancy=true;
+  return r;
+}
+// Read-only visit-utilization panel (modal) built from otVisitStats.
+function otVisitPanelHtml(c){
+  const s=otVisitStats(c);
+  if(s.noAuth) return `<div style="background:#FFF3E0;border:1px solid #FFB300;border-radius:6px;padding:8px 11px;font-size:11px;color:#E65100;margin:-4px 0 10px">📝 Set the authorization end date to calculate visit utilization from the schedule.</div>`;
+  if(s.authorized==null) return `<div style="background:#FFF3E0;border:1px solid #FFB300;border-radius:6px;padding:8px 11px;font-size:11px;color:#E65100;margin:-4px 0 10px">📝 Enter Authorized Visits to calculate utilization from the schedule.</div>`;
+  const rem=s.remaining, remAfter=s.remainingAfter;
+  const pctUsed=Math.max(0,Math.min(100,(s.completed/s.authorized)*100));
+  const pctUp=Math.max(0,Math.min(100-pctUsed,(s.upcoming/s.authorized)*100));
+  const clr=rem<=0?'var(--rd)':(pctUsed>=80?'var(--am)':'var(--gn)');
+  const metric=(lbl,val,color)=>`<div style="flex:1;min-width:88px;text-align:center;background:#fff;border:1px solid var(--bd);border-radius:6px;padding:6px 4px"><div style="font-size:17px;font-weight:800;color:${color}">${val}</div><div style="font-size:8.5px;color:var(--mt);text-transform:uppercase;letter-spacing:.2px;line-height:1.25;margin-top:1px">${lbl}</div></div>`;
+  return `<div style="background:var(--bg);border-radius:6px;padding:9px 11px;margin:-4px 0 10px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;margin-bottom:6px"><span style="color:var(--mt)">Visit utilization <span style="font-size:9px">· calculated from the schedule</span></span><span style="font-weight:700;color:${clr}">${s.completed}/${s.authorized} used · ${Math.max(0,rem)} remaining</span></div>
+    <div style="height:8px;background:#E0E0E0;border-radius:4px;overflow:hidden;display:flex;margin-bottom:9px">
+      <div style="height:100%;width:${pctUsed}%;background:${clr}"></div>
+      <div style="height:100%;width:${pctUp}%;background:${clr};opacity:.3" title="Upcoming scheduled"></div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      ${metric('Visits Used',s.completed,'#1B5E20')}
+      ${metric('Upcoming',s.upcoming,'#0D47A1')}
+      ${metric('Remaining',rem,rem<=0?'var(--rd)':'var(--nv)')}
+      ${metric('After Scheduled',remAfter,remAfter<0?'var(--rd)':'var(--nv)')}
+    </div>
+    ${s.discrepancy?`<div style="background:#FFF8E1;border:1px solid #FFCC80;border-radius:6px;padding:6px 9px;font-size:10.5px;color:#5D4037;margin-top:8px">⚠ Review: calculated completed visits (<b>${s.completed}</b>) differ from the previous manual count (<b>${s.manual}</b>). Older visits may predate the scheduler — verify before relying on the calculated total.</div>`:''}
+    ${s.review?`<div style="background:#FFEBEE;border:1px solid #EF9A9A;border-radius:6px;padding:6px 9px;font-size:10.5px;color:#B71C1C;margin-top:8px">⚠ Review: some OT sessions fall after this authorization's end date — confirm which authorization they belong to.</div>`:''}
+  </div>`;
 }
 
 // ── ABA DIRECT-SERVICE UTILIZATION (current auth period) ──────────────────────
@@ -3594,7 +3663,7 @@ function cCard(c){
     return `<div class="dwrap"><div class="dlbls"><span>Visits</span><span style="font-weight:700;color:${vc}">${used}/${auth} (${Math.max(0,rem)} left)</span></div><div class="dtrk"><div class="dbar" style="width:${vp}%;background:${vc}"></div></div></div>`;
   })()}${c.authEnd&&authLeft!==null?`<div style="font-size:10px;color:${authLeft<30?'var(--rd)':'var(--mt)'};margin-top:3px">Auth ends: ${pd(c.authEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${authLeft<30?` (${authLeft}d)`:''}  </div>`:''}
 <div class="cteam">${team.map(s=>{const bg=tClr(s.id),tx=tTxt(s.id);const isOT=s.role==='OT';const otBorder=isOT?'border:1.5px solid #009688;box-shadow:0 0 0 1px #B2DFDB inset;':`border:1px solid ${bg}55;`;return`<span class="ctag" style="background:${bg}22;${otBorder}color:${bg==='#E0E0E0'||bg==='#C8C8C8'||bg==='#F5F0DC'?'#333':bg}" title="${s.name}${isOT?' (OT provider)':''}">${isOT?'<span style="background:#009688;color:#fff;font-size:8px;font-weight:800;padding:1px 4px;border-radius:3px;margin-right:3px;letter-spacing:.3px">OT</span>':''}${s.initials} ${isOT?'':`<span style="opacity:.7">${s.role}</span>`}</span>`;}).join('')}${(()=>{const bk=(c.backupTeam||[]).map(id=>gs(id)).filter(Boolean);return bk.length?'<span style="font-size:9px;color:#BA7517;margin:0 3px">·</span>'+bk.map(s=>`<span class="ctag" style="background:#FAEEDA;border:1px solid #EF9F27;color:#633806" title="Backup">★${s.initials}</span>`).join(''):'';})()}${!isViewOnly?`<button class="edit-team-btn" onclick="event.stopPropagation();openEditTeam('${c.id}')">Edit team</button>`:''}
-</div><div class="cflags">${(()=>{const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');const styles={ABA:'background:#E3F2FD;color:#0D47A1',OT:'background:#E0F2F1;color:#004D40',BOTH:'background:linear-gradient(90deg,#E3F2FD,#E0F2F1);color:#004D40'};return`<span class="flg" style="${styles[tt]||styles.ABA}">${tt==='BOTH'?'ABA+OT':tt}</span>`})()}${c.hasBus?'<span class="flg flg-bus">🚌 Bus</span>':''}${c.inHome?'<span class="flg" style="background:#F3E5F5;color:#6A1B9A">🏠 In-Home</span>':''}${!isViewOnly?(()=>{/* Treatment Phase — replaces the auth-pipeline status chip. Per service; auth dates/units/status stay in the client's auth workflow. */const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');const both=tt==='BOTH';let out='';if(tt==='ABA'||both)out+=phaseSelectHtml(c.id,'ABA',{stop:true,prefix:both});if(tt==='OT'||both)out+=phaseSelectHtml(c.id,'OT',{stop:true,prefix:both});return out;})():(()=>{/* Read-only view: show phase as a static chip */const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');const both=tt==='BOTH';const chip=(svc)=>{const v=c[phaseField(svc)];return `<span class="flg phase-sel ${v?'phase-'+v:'phase-unset'}" style="cursor:default">${both?svc+': ':''}${v?phaseLabel(v):'Select phase'}</span>`;};let out='';if(tt==='ABA'||both)out+=chip('ABA');if(tt==='OT'||both)out+=chip('OT');return out;})()}${(()=>{/* OT visit utilization chip: shown for OT-only clients (c.authVisits + c.visitsUsed) and BOTH clients (c.otAuth.visitsAuthorized + .visitsUsed) */const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');let auth,used,thresh;if(tt==='OT'){auth=c.authVisits;used=c.visitsUsed;thresh=c.visitAlertThreshold??20;}else if(tt==='BOTH'&&c.otAuth){auth=c.otAuth.visitsAuthorized;used=c.otAuth.visitsUsed;thresh=c.otAuth.visitAlertThreshold??20;}else return '';if(auth==null||used==null)return tt==='OT'||(tt==='BOTH'&&c.otAuth)?'<span class="flg" style="background:#FFF3E0;color:#E65100">📝 Enter visits</span>':'';const rem=auth-used;const pctUsed=(used/auth)*100;const pctRem=100-pctUsed;let clr='#E8F5E9',tx='#1B5E20';if(rem<=0){clr='#FFEBEE';tx='#B71C1C';}else if(pctRem<=thresh){clr='#FFF3E0';tx='#E65100';}return `<span class="flg" style="background:${clr};color:${tx}" title="${used}/${auth} used, ${Math.max(0,rem)} remaining">🎟 ${used}/${auth}${rem<=0?' (OVER)':''}</span>`;})()}${(c.scheduleTpl&&c.scheduleTpl.length)?`<span class='flg' style='background:#E8EAF6;color:#283593'>🗓 ${c.scheduleTpl.length}slot${c.scheduleTpl.length!==1?'s':''}</span>`:''}${medChips(c)}${(()=>{if(!c.reassessDue)return'';const d=Math.ceil((pd(c.reassessDue)-new Date())/864e5);return`<span class="reassess-chip ${d<0?'rc-over':d<30?'rc-due':'rc-ok'}">${d<0?'Reassess overdue':d<30?'Reassess '+d+'d':'Reassess ✓'}</span>`;})()}</div></div>`;
+</div><div class="cflags">${(()=>{const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');const styles={ABA:'background:#E3F2FD;color:#0D47A1',OT:'background:#E0F2F1;color:#004D40',BOTH:'background:linear-gradient(90deg,#E3F2FD,#E0F2F1);color:#004D40'};return`<span class="flg" style="${styles[tt]||styles.ABA}">${tt==='BOTH'?'ABA+OT':tt}</span>`})()}${c.hasBus?'<span class="flg flg-bus">🚌 Bus</span>':''}${c.inHome?'<span class="flg" style="background:#F3E5F5;color:#6A1B9A">🏠 In-Home</span>':''}${!isViewOnly?(()=>{/* Treatment Phase — replaces the auth-pipeline status chip. Per service; auth dates/units/status stay in the client's auth workflow. */const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');const both=tt==='BOTH';let out='';if(tt==='ABA'||both)out+=phaseSelectHtml(c.id,'ABA',{stop:true,prefix:both});if(tt==='OT'||both)out+=phaseSelectHtml(c.id,'OT',{stop:true,prefix:both});return out;})():(()=>{/* Read-only view: show phase as a static chip */const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');const both=tt==='BOTH';const chip=(svc)=>{const v=c[phaseField(svc)];return `<span class="flg phase-sel ${v?'phase-'+v:'phase-unset'}" style="cursor:default">${both?svc+': ':''}${v?phaseLabel(v):'Select phase'}</span>`;};let out='';if(tt==='ABA'||both)out+=chip('ABA');if(tt==='OT'||both)out+=chip('OT');return out;})()}${(()=>{/* OT visit utilization chip — calculated from the schedule (completed visits / authorized) */const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');if(tt!=='OT'&&!(tt==='BOTH'&&c.otAuth))return '';const s=otVisitStats(c);const thresh=((tt==='BOTH'?c.otAuth?.visitAlertThreshold:c.visitAlertThreshold)??20);if(s.noAuth||s.authorized==null)return '<span class="flg" style="background:#FFF3E0;color:#E65100">📝 Set OT auth</span>';const used=s.completed,auth=s.authorized,rem=auth-used;const pctRem=100-(used/auth)*100;let clr='#E8F5E9',tx='#1B5E20';if(rem<=0){clr='#FFEBEE';tx='#B71C1C';}else if(pctRem<=thresh){clr='#FFF3E0';tx='#E65100';}return `<span class="flg" style="background:${clr};color:${tx}" title="${used}/${auth} completed · ${Math.max(0,rem)} remaining${s.upcoming?(' · '+s.upcoming+' upcoming'):''}">🎟 ${used}/${auth}${s.upcoming?(' +'+s.upcoming):''}${rem<=0?' OVER':''}</span>`;})()}${(c.scheduleTpl&&c.scheduleTpl.length)?`<span class='flg' style='background:#E8EAF6;color:#283593'>🗓 ${c.scheduleTpl.length}slot${c.scheduleTpl.length!==1?'s':''}</span>`:''}${medChips(c)}${(()=>{if(!c.reassessDue)return'';const d=Math.ceil((pd(c.reassessDue)-new Date())/864e5);return`<span class="reassess-chip ${d<0?'rc-over':d<30?'rc-due':'rc-ok'}">${d<0?'Reassess overdue':d<30?'Reassess '+d+'d':'Reassess ✓'}</span>`;})()}</div></div>`;
 }
 function fc(f,el){document.querySelectorAll('.fch').forEach(c=>c.classList.remove('on'));el.classList.add('on');rClients(f);}
 
@@ -4756,8 +4825,8 @@ function openClientDetail(id){
     <div class="fr2"><div class="fg"><label>Case Manager</label><select id="cd-bcba">${bo}</select></div><div class="fg"><label>Authorized Visits <span style="font-weight:400;color:var(--mt);font-size:10px">default 40</span></label><input type="number" id="cd-visits" value="${c.authVisits||40}" min="1"></div></div>
     <div class="fr2"><div class="fg"><label>Auth Number</label><input id="cd-authnum" value="${c.authNumber||''}" placeholder="e.g. AT-0001623626" style="font-family:monospace;font-size:12px"></div><div class="fg"><label>Co-pay per Session</label><input type="number" id="cd-copay" min="0" step="0.01" value="${c.copayAmount??''}" placeholder="e.g. 25.00"></div></div>
     <div class="fr2"><div class="fg"><label>Diagnosis Code(s)</label><input id="cd-dx" value="${c.dxCode||''}" placeholder="e.g. F84.0" style="font-family:monospace;font-size:12px"></div><div class="fg"></div></div>
-    <div class="fr2"><div class="fg"><label>Visits Used <span style="font-weight:400;color:var(--mt);font-size:10px">manually maintained</span></label><input type="number" id="cd-visits-used" value="${c.visitsUsed??''}" min="0" placeholder="e.g. 12"></div><div class="fg"><label>Alert Threshold <span style="font-weight:400;color:var(--mt);font-size:10px">% remaining · default 20</span></label><input type="number" id="cd-visit-alert" value="${c.visitAlertThreshold??20}" min="1" max="100"></div></div>
-    ${(()=>{const used=c.visitsUsed,auth=c.authVisits||40;if(used==null)return `<div style="background:#FFF3E0;border:1px solid #FFB300;border-radius:6px;padding:7px 10px;font-size:11px;color:#E65100;margin:-4px 0 10px">📝 Enter \"Visits Used\" to enable visit tracking alerts</div>`;const rem=auth-used;const pct=Math.max(0,Math.min(100,(used/auth)*100));const clr=rem<=0?'var(--rd)':pct>=80?'var(--am)':'var(--gn)';return `<div style="background:var(--bg);border-radius:6px;padding:8px 11px;margin:-4px 0 10px"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--mt)">Visit utilization</span><span style="font-weight:700;color:${clr}">${used}/${auth} used · ${Math.max(0,rem)} remaining</span></div><div style="height:6px;background:#E0E0E0;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${clr}"></div></div></div>`;})()}
+    <div class="fr2"><div class="fg"><label>Alert Threshold <span style="font-weight:400;color:var(--mt);font-size:10px">% remaining · default 20</span></label><input type="number" id="cd-visit-alert" value="${c.visitAlertThreshold??20}" min="1" max="100"></div><div class="fg"></div></div>
+    ${otVisitPanelHtml(c)}
     <div class="fr2"><div class="fg"><label>Auth Start Date</label><input type="date" id="cd-auth-start" value="${c.authStart||''}"></div><div class="fg"><label>Auth End Date</label><input type="date" id="cd-auth" value="${c.authEnd||''}"></div></div>
     <div class="fg"><label>Treatment Phase <span style="font-weight:400;color:var(--mt);font-size:10px">— clinical stage · staff-selected, saved on change</span></label>${phaseSelectHtml(id,'OT',{style:'width:100%;font-size:13px;padding:8px 11px'})}</div>
     <div class="fg"><label>OT Team</label>${teamEditor(c.id,'cd-team',['OT'])}</div>
@@ -4852,10 +4921,9 @@ function openClientDetail(id){
         <div style="font-size:10px;font-weight:700;color:var(--mt);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px;margin-top:6px">OT Visits</div>
         <div class="fr2" style="margin-bottom:8px">
           <div class="fg" style="margin:0"><label>Authorized</label><input type="number" id="cd-ot-visits-auth" class="fi" value="${c.otAuth?.visitsAuthorized??''}" min="1" placeholder="e.g. 40"></div>
-          <div class="fg" style="margin:0"><label>Used</label><input type="number" id="cd-ot-visits-used" class="fi" value="${c.otAuth?.visitsUsed??''}" min="0" placeholder="e.g. 12"></div>
           <div class="fg" style="margin:0"><label>Alert %</label><input type="number" id="cd-ot-visit-alert" class="fi" value="${c.otAuth?.visitAlertThreshold??20}" min="1" max="100"></div>
         </div>
-        ${(()=>{const used=c.otAuth?.visitsUsed,auth=c.otAuth?.visitsAuthorized;if(auth==null||used==null)return `<div style="background:#FFF3E0;border:1px solid #FFB300;border-radius:6px;padding:7px 10px;font-size:11px;color:#E65100">📝 Enter both \"Authorized\" and \"Used\" above to enable visit tracking alerts</div>`;const rem=auth-used;const pct=Math.max(0,Math.min(100,(used/auth)*100));const clr=rem<=0?'var(--rd)':pct>=80?'var(--am)':'var(--gn)';return `<div style="background:#fff;border-radius:6px;padding:8px 11px;border:1px solid var(--bd)"><div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px"><span style="color:var(--mt)">OT visit utilization</span><span style="font-weight:700;color:${clr}">${used}/${auth} used · ${Math.max(0,rem)} remaining</span></div><div style="height:6px;background:#E0E0E0;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${clr}"></div></div></div>`;})()}
+        ${otVisitPanelHtml(c)}
       </div>
     </div>
     <div class="fg"><label>Team</label>${teamEditor(c.id,'cd-team',null)}</div>
@@ -5086,6 +5154,9 @@ function updClient(id){
     if(c.otAuth?.caseId) preserved.caseId=c.otAuth.caseId;
     if(c.otAuth?.authNumber) preserved.authNumber=c.otAuth.authNumber;
     if(c.otAuth?.dxCode) preserved.dxCode=c.otAuth.dxCode;
+    // Visits Used is now calculated from the schedule; keep any legacy manual
+    // figure so the modal can still flag discrepancies against the calculation.
+    if(c.otAuth?.visitsUsed!=null) preserved.visitsUsed=c.otAuth.visitsUsed;
     const hasAnyData=otStart||otEnd||otVisitsAuthRaw||otVisitsUsedRaw||Object.keys(preserved).length;
     if(hasAnyData){
       c.otAuth={start:otStart,end:otEnd,...preserved,visitAlertThreshold:otAlert};
@@ -6779,15 +6850,15 @@ function rAuthAlerts(){
     if(dLeft>30) return;
     alerts.push({_isReassessAlert:true,c,daysLeft:dLeft,level:dLeft<0?'red':'orange',bcba:gs(c.bcba),window:0});
   });
-  // Add OT visit-threshold alerts (for OT-only and BOTH clients)
+  // Add OT visit-threshold alerts (for OT-only and BOTH clients). Uses the
+  // schedule-calculated remaining (authorized − completed), not a manual figure.
   S.clients.forEach(c=>{
     const tt=c.therapyType||(c.hasOT?'BOTH':'ABA');
-    let auth,used,thresh;
-    if(tt==='OT'){auth=c.authVisits;used=c.visitsUsed;thresh=c.visitAlertThreshold??20;}
-    else if(tt==='BOTH'&&c.otAuth){auth=c.otAuth.visitsAuthorized;used=c.otAuth.visitsUsed;thresh=c.otAuth.visitAlertThreshold??20;}
-    else return;
-    if(auth==null||used==null||!auth) return;
-    const rem=auth-used;
+    if(tt!=='OT'&&!(tt==='BOTH'&&c.otAuth)) return;
+    const s=otVisitStats(c);
+    if(s.noAuth||s.authorized==null||!s.authorized) return;
+    const thresh=((tt==='BOTH'?c.otAuth?.visitAlertThreshold:c.visitAlertThreshold)??20);
+    const used=s.completed, auth=s.authorized, rem=s.remaining;
     const pctRem=(rem/auth)*100;
     let level=null;
     if(rem<=0) level='red';
@@ -9269,12 +9340,12 @@ function rDash(){
       used=Math.round(_mySess(c.authStart||'0000').reduce((n,s)=>n+_dMins(s)/15,0));
       usedSrc='counted';
       perWeek=Math.round(_mySess(from).reduce((n,s)=>n+_dMins(s)/15,0)/4*10)/10;
-    }else if(typeof c.visitsUsed==='number'){
-      used=c.visitsUsed;usedSrc='tracked';
-      perWeek=_mySess(from).length/4;
     }else{
-      used=_mySess(c.authStart||'0000').length;usedSrc='counted';
-      perWeek=_mySess(from).length/4;
+      // Visit-based (OT): completed OT visits from the schedule within the auth.
+      const vs=otVisitStats(c);
+      used=(vs.authorized!=null)?vs.completed:_mySess(c.authStart||'0000').filter(s=>s.type==='OT').length;
+      usedSrc='counted';
+      perWeek=_mySess(from).filter(s=>s.type==='OT').length/4;
     }
     const authPaceWk=unitBased?Math.round(Object.keys(c.authUnits).reduce((n,cp)=>n+((c.authUnits[cp]>0)?_rateWk((c.authUnitRates||{})[cp]):0),0)*10)/10:null;
     const rem=Math.max(0,total-used);
