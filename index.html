@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>adaptABILITY Practice Scheduler</title>
-<meta name="app-version" content="2026-11-23T13:30Z-clo-code-reconcile">
+<meta name="app-version" content="2026-11-25T10:20Z-leave-reverse-alert">
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -3496,6 +3496,44 @@ function _clientSearch(value){
   window._clientSearchQuery = value || '';
   rClients();
 }
+// ── ABA DIRECT-SERVICE UTILIZATION (current auth period) ──────────────────────
+// Replaces the old scheduled-vs-recommended "dosage" bar. Direct ABA = sessions of
+// type 'ABA' (97153 / 0373T / 97158 — every code the app classifies as direct
+// treatment); assessment (97151), parent training (97156) and protocol
+// modification (97155) are type INDIRECT and excluded automatically. Units are
+// 15-min. Authorized = sum of the direct-code authUnits on the card. "Completed"
+// counts documented, past, non-cancelled sessions — future, cancellations and
+// no-shows (all CX) are excluded. Usage over 100% is shown as-is so overage is
+// visible. OT is tracked in visits and keeps its own existing display.
+const ABA_DIRECT_CPTS = SERVICE_OPTIONS.filter(o=>o.category==='direct'&&o.type==='ABA').map(o=>o.cpt);
+function _abaDirectUtil(c){
+  if(!c.authEnd) return {none:true};
+  const u=c.authUnits||{};
+  let auth=0, hasAuth=false;
+  ABA_DIRECT_CPTS.forEach(cp=>{ if(u[cp]!=null&&u[cp]!==''){ auth+=+u[cp]||0; hasAuth=true; } });
+  if(!hasAuth||auth<=0) return {unavail:true};
+  const today=todayBerlin(), start=c.authStart||'', end=c.authEnd;
+  let mins=0;
+  (S.sessions||[]).forEach(s=>{
+    if(s.cid!==c.id || s.type!=='ABA') return;
+    if(s._autoAdmin||s._virtual) return;
+    if(s.status==='CX') return;              // excludes cancellations + no-shows
+    if(s.date>today) return;                 // excludes future appointments
+    if(start && s.date<start) return;        // within the authorization period
+    if(s.date>end) return;
+    mins+=sessMins(s);
+  });
+  const used=Math.round(mins/15);
+  return {used, auth, pct:Math.round(used/auth*100)};
+}
+function _abaUtilBarHtml(c, isBoth){
+  const du=_abaDirectUtil(c);
+  const lbl=isBoth?'ABA Direct':'Direct Service';
+  if(du.none)    return `<div class="dwrap"><div class="dlbls"><span>${lbl}</span><span style="color:var(--mt);font-weight:600">No active authorization</span></div></div>`;
+  if(du.unavail) return `<div class="dwrap"><div class="dlbls"><span>${lbl}</span><span style="color:var(--mt);font-weight:600">Utilization unavailable</span></div></div>`;
+  const over=du.pct>100, uc=over?'var(--rd)':(du.pct>=80?'var(--am)':'var(--gn)'), w=Math.min(100,du.pct);
+  return `<div class="dwrap"><div class="dlbls"><span>${lbl}</span><span style="font-weight:700;color:${uc}" title="Direct-service units used this authorization period">${du.used} of ${du.auth} units used (${du.pct}%)${over?' ⚠':''}</span></div><div class="dtrk"><div class="dbar" style="width:${w}%;background:${uc}"></div></div></div>`;
+}
 function cCard(c){
   const pct=Math.min(100,Math.round(c.sch/c.rec*100));
   const dc=pct>=95?'#2E8B65':pct>=75?'#E8832A':'#C0392B';
@@ -3505,8 +3543,9 @@ function cCard(c){
   return`<div class="ccard" onclick="openClientDetail('${c.id}')"><div class="cctop"><div><div class="ccname">${c.name}</div>${!isViewOnly?`<div style="font-size:10px;font-family:monospace;font-weight:700;color:${c.shortName?'var(--pu)':'#BDBDBD'};margin-top:1px" title="Schedule display name">${c.shortName||'auto: '+cDisplayName(c)}</div>`:''} ${c.extId&&!isViewOnly?`<div style="font-size:9px;font-family:monospace;color:var(--mt);margin-top:1px">${c.extId}</div>`:''}<div class="ccage">${age!==null?age+' yrs':''}</div></div><span class="bdg ${iBdg(c.ins)}">${iLabel(c.ins)}</span></div>${(()=>{
     // OT-only clients have no ABA weekly dosage — show authorized-visit usage
     // instead, or nothing at all if visits haven't been entered yet.
-    const _ot=(c.therapyType||(c.hasOT?'BOTH':'ABA'))==='OT';
-    if(!_ot) return `<div class="dwrap"><div class="dlbls"><span>Dosage</span><span style="font-weight:700;color:${dc}">${c.sch}/${c.rec}h/wk (${pct}%)</span></div><div class="dtrk"><div class="dbar" style="width:${pct}%;background:${dc}"></div></div></div>`;
+    const _tt=(c.therapyType||(c.hasOT?'BOTH':'ABA'));
+    const _ot=_tt==='OT';
+    if(!_ot) return _abaUtilBarHtml(c, _tt==='BOTH');
     const used=c.visitsUsed, auth=c.authVisits||40;
     if(used==null) return '';
     const rem=auth-used, vp=Math.max(0,Math.min(100,(used/auth)*100));
@@ -4138,6 +4177,53 @@ function saveBlock(){
 }
 
 // ── ADD SESSION ──
+// ── ASSIGNED-TEAM REFERENCE PANEL (scheduling box) ────────────────────────────
+// Shows the selected client's currently assigned team members near the therapist
+// field. Matched strictly by the client's unique id. Reference only — it does not
+// alter the therapist picker or availability rules. If a service (ABA/OT) is
+// chosen, only that discipline's team is shown; with no service chosen, members
+// are grouped by discipline. Backups are marked ★.
+function schedTeamHtml(cid, svcKey, date){
+  if(!cid) return '';                     // no client (admin/supervision) → nothing
+  const c=gc(cid); if(!c) return '';
+  const team  =(c.team||[]).map(id=>gs(id)).filter(Boolean);
+  const backup=(c.backupTeam||[]).map(id=>gs(id)).filter(Boolean);
+  const isOT=s=>s.role==='OT';
+  // Leave flag for the session's date, so a therapist on PTO/sick is visible
+  // before the picker is even opened.
+  const leaveTag=s=>{
+    if(!date) return '';
+    const pe=ptoOnDate(s,date); if(!pe) return '';
+    const lbl=ptoTypeLabel(pe.type||'PTO');
+    return `<span style="background:#FFEBEE;color:#B71C1C;font-size:9px;font-weight:800;padding:1px 5px;border-radius:7px;margin-left:3px" title="On leave this date">⛱ ${lbl}${pe.halfDay?' ½':''}</span>`;
+  };
+  const chip=(s,bk)=>{const _lv=!!(date&&ptoOnDate(s,date));return `<span style="display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid ${_lv?'#EF9A9A':'var(--bd)'};border-radius:5px;padding:2px 7px;font-size:11px;margin:0 4px 4px 0;${_lv?'opacity:.75':''}">${bk?'<span style="color:#BA7517;font-weight:800" title="Backup">★</span>':''}<strong>${s.initials}</strong> ${s.name} <span style="color:var(--mt);font-size:10px">${s.role}</span>${leaveTag(s)}</span>`;};
+  const wrap=inner=>`<div style="margin-top:7px;background:var(--bg);border-radius:6px;padding:7px 9px"><div style="font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:var(--mt);margin-bottom:5px">${c.name} · assigned team</div>${inner}</div>`;
+  if(!team.length && !backup.length) return wrap('<div style="font-size:11px;color:var(--mt)">No team members assigned</div>');
+  const line=(title,prim,bk)=>{
+    const hdr=title?`<div style="font-weight:700;font-size:9px;color:var(--mt);text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px">${title}</div>`:'';
+    if(!prim.length && !bk.length) return `${hdr}<div style="font-size:11px;color:var(--mt);margin-bottom:4px">No team members assigned</div>`;
+    return `<div style="margin-bottom:4px">${hdr}${prim.map(s=>chip(s,false)).join('')}${bk.map(s=>chip(s,true)).join('')}</div>`;
+  };
+  const opt=svcKey?serviceOptByKey(svcKey):null;
+  const svcType=opt?opt.type:'';
+  if(svcType==='ABA') return wrap(line('', team.filter(s=>!isOT(s)), backup.filter(s=>!isOT(s))));
+  if(svcType==='OT')  return wrap(line('', team.filter(s=>isOT(s)),  backup.filter(s=>isOT(s))));
+  // No ABA/OT service chosen yet → group by discipline.
+  const abaP=team.filter(s=>!isOT(s)), abaB=backup.filter(s=>!isOT(s));
+  const otP =team.filter(s=>isOT(s)),  otB =backup.filter(s=>isOT(s));
+  let out='';
+  if(abaP.length||abaB.length) out+=line('ABA', abaP, abaB);
+  if(otP.length||otB.length)   out+=line('OT',  otP,  otB);
+  return wrap(out||'<div style="font-size:11px;color:var(--mt)">No team members assigned</div>');
+}
+function refreshSchedTeam(clId, svcId, hostId, dateId){
+  const host=document.getElementById(hostId); if(!host) return;
+  const cl=document.getElementById(clId), sv=document.getElementById(svcId);
+  const dt=dateId?document.getElementById(dateId):null;
+  host.innerHTML=schedTeamHtml(cl?cl.value:'', sv?sv.value:'', dt?dt.value:'');
+}
+
 function openAddSessCore(pre){
   const dv=pre||todayBerlin();
   const co=_byLastName(S.clients.filter(c=>c.status!=='discharged')).map(c=>`<option value="${c.id}">${c.name} (${iLabel(c.ins)})</option>`).join('');
@@ -4156,10 +4242,11 @@ function openAddSessCore(pre){
     <div class="fg"><label>Therapist <span style="font-weight:400;color:var(--mt);font-size:10px" id="f-st-hint">— select a client to see team</span></label>
       <select id="f-st" onchange="updateAvailBlocks(this.value,document.getElementById('f-dt').value)">${so}</select>
       <div id="f-av-blocks" style="display:flex;gap:3px;margin-top:6px;align-items:center"></div>
+      <div id="f-team-host"></div>
     </div>
     <div class="fr2">
-      <div class="fg"><label>Date</label><input type="date" id="f-dt" value="${dv}" onchange="refreshTherapistOpts(this.value)"></div>
-      <div class="fg"><label>Service</label><select id="f-svc">${to}</select></div>
+      <div class="fg"><label>Date</label><input type="date" id="f-dt" value="${dv}" onchange="refreshTherapistOpts(this.value);refreshSchedTeam('f-cl','f-svc','f-team-host','f-dt')"></div>
+      <div class="fg"><label>Service</label><select id="f-svc" onchange="refreshSchedTeam('f-cl','f-svc','f-team-host','f-dt')">${to}</select></div>
     </div>
     <div class="fr2"><div class="fg"><label>Start</label>${tpicker('f-s', '09:00')}</div><div class="fg"><label>End</label>${tpicker('f-e', '11:00')}</div></div>
     <div style="display:flex;gap:14px;margin:6px 0">
@@ -4180,6 +4267,8 @@ function openAddSessCore(pre){
   // Don't show availability blocks until scheduler picks a therapist
   const avEl=document.getElementById('f-av-blocks');
   if(avEl) avEl.innerHTML='<span style="font-size:11px;color:var(--mt)">Select a therapist to see availability</span>';
+  // Show the pre-selected client's assigned team on open.
+  refreshSchedTeam('f-cl','f-svc','f-team-host','f-dt');
 }
 
 function updateAvailBlocks(stid, date){
@@ -4209,6 +4298,7 @@ function onAddSessClientChange(){
   }
   sel.value='UNASSIGNED';
   updateAvailBlocks('UNASSIGNED',date);
+  refreshSchedTeam('f-cl','f-svc','f-team-host','f-dt');
 }
 function refreshTherapistOpts(date){
   const sel=document.getElementById('f-st');
@@ -4239,6 +4329,13 @@ function saveSess(){
     showToast('⚠ Client required for billable services','#C0392B');
     return;
   }
+  // Leave guard — warn before assigning onto PTO/sick (checks every recurring date).
+  const _isRecG=document.getElementById('f-rec').checked;
+  const _authEndG=document.getElementById('f-auth')?.value||'';
+  const _dtsG=[];
+  if(_isRecG&&_authEndG){let d=pd(startDate);const _end=pd(_authEndG);while(d<=_end){_dtsG.push(fd(d));d=new Date(d);d.setDate(d.getDate()+7);}}
+  else _dtsG.push(startDate);
+  if(!confirmLeaveDates(stid,_dtsG,s,e)) return;
   pushUndo('Add session');
   const makeup=document.getElementById('f-mu').checked;
   const notes=document.getElementById('f-nt').value;
@@ -4299,10 +4396,11 @@ function openSess(id){
   const futureSiblings=isRec?S.sessions.filter(x=>x.recurGroup===s.recurGroup&&x.date>s.date).length:0;
   (bypassLock?_openM:openM)(`<h3>Session: ${cl?(isViewOnly?cDisplayName(cl):cl.name):sessFullLabel(s)}</h3>
     <div style="background:var(--bg);border-radius:7px;padding:10px;margin-bottom:12px;font-size:11px;color:var(--t2)">${ffull(pd(s.date))}<br>${ftm(s.s)}–${ftm(s.e)} · ${sessFullLabel(s)}${s.makeup?' · <strong style="color:#F57F17">Make-up</strong>':''}${isRec?` · <span style="color:#558B2F">🔁 Recurring (${futureSiblings} future)</span>`:''}</div>
-    <div class="fg"><label>Therapist</label><select id="sd-st">${so}</select></div>
-    <div class="fg"><label>Client <span style="font-weight:400;color:var(--mt);font-size:10px">— required for billable services</span></label><select id="sd-cl">${'<option value="">— No client (admin/supervision) —</option>'+_byLastName(S.clients.filter(c=>c.status!=='discharged')).map(c=>`<option value="${c.id}" ${c.id===s.cid?'selected':''}>${c.name}</option>`).join('')}</select></div>
-    <div class="fg"><label>Service</label><select id="sd-svc">${serviceOptsHtml(s.type, s.cptCode||'', gs(s.stid)?.role, !isViewOnly)}</select></div>
-    <div class="fr2"><div class="fg"><label>Date</label><input type="date" id="sd-dt" value="${s.date}"></div><div class="fg"><label></label><div style="padding-top:22px;font-size:10px;color:var(--mt)">Change date to reschedule</div></div></div>
+    <div class="fg"><label>Therapist</label><select id="sd-st">${so}</select>
+      <div id="sd-team-host">${schedTeamHtml(s.cid, serviceKeyFromSession(s), s.date)}</div></div>
+    <div class="fg"><label>Client <span style="font-weight:400;color:var(--mt);font-size:10px">— required for billable services</span></label><select id="sd-cl" onchange="refreshSchedTeam('sd-cl','sd-svc','sd-team-host','sd-dt')">${'<option value="">— No client (admin/supervision) —</option>'+_byLastName(S.clients.filter(c=>c.status!=='discharged')).map(c=>`<option value="${c.id}" ${c.id===s.cid?'selected':''}>${c.name}</option>`).join('')}</select></div>
+    <div class="fg"><label>Service</label><select id="sd-svc" onchange="refreshSchedTeam('sd-cl','sd-svc','sd-team-host','sd-dt')">${serviceOptsHtml(s.type, s.cptCode||'', gs(s.stid)?.role, !isViewOnly)}</select></div>
+    <div class="fr2"><div class="fg"><label>Date</label><input type="date" id="sd-dt" value="${s.date}" onchange="refreshSchedTeam('sd-cl','sd-svc','sd-team-host','sd-dt')"></div><div class="fg"><label></label><div style="padding-top:22px;font-size:10px;color:var(--mt)">Change date to reschedule</div></div></div>
     <div class="fr2"><div class="fg"><label>Start</label>${tpicker('sd-s', s.s)}</div><div class="fg"><label>End</label>${tpicker('sd-e', s.e)}</div></div>
     <div style="display:flex;gap:14px;margin:6px 0;flex-wrap:wrap">
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer"><input type="checkbox" id="sd-mu" ${s.makeup?'checked':''}> Make-up</label>
@@ -4390,6 +4488,10 @@ function updSess(id){
     showToast('⚠ Client required for billable services','#C0392B');
     return;
   }
+  // Leave guard — warn if reassigning onto a therapist on PTO/sick that date.
+  // Skipped when the session is being cancelled (a CX code is set).
+  const _cxVal=document.getElementById('sd-cx')?.value||'';
+  if(!_cxVal && !confirmLeaveDates(newStid,[newDate],newS,newE)) return;
   pushUndo('Edit session');
   const newMakeup=document.getElementById('sd-mu').checked;
   const newLocation=document.getElementById('sd-loc-select')?.value||'clinic';
@@ -11047,6 +11149,7 @@ function addPtoDate(stid){
   document.getElementById('pto-add-preview').textContent='';
   if(added<dates.length) showToast(added+' date'+(added!==1?'s':'')+' added ('+(dates.length-added)+' already existed)','var(--am)');
   rStaff();
+  alertLeaveConflicts(stid, dates);   // flag any existing sessions now on this leave
 }
 function removePtoDate(stid, dt){
   const st=gs(stid);if(!st)return;
@@ -11200,6 +11303,66 @@ function migratePto(st){
 function ptoOnDate(st, date){
   if(!st||!st.pto) return null;
   return st.pto.find(x=>(typeof x==='string'?x:x.date)===date)||null;
+}
+// Returns the therapist's leave entry if their leave on `date` overlaps the
+// session window [s,e]. Full-day leave always conflicts; half-day leave only
+// conflicts when the session touches the off-hours (exact window if recorded,
+// else the AM/PM half) — mirrors getBlockStatus so a 3h PM leave still leaves the
+// morning bookable. Returns null when there is no overlapping leave.
+function leaveOverlap(stid, date, s, e){
+  const st=gs(stid); if(!st) return null;
+  const pe=ptoOnDate(st,date); if(!pe) return null;
+  if(!pe.halfDay) return pe;                         // full-day leave
+  const sMin=_t2m(s), eMin=_t2m(e), noon=_t2m('12:00');
+  if(pe.halfFrom && pe.halfTo){
+    const offS=_t2m(pe.halfFrom), offE=_t2m(pe.halfTo);
+    return (sMin<offE && offS<eMin) ? pe : null;
+  }
+  const half=pe.halfWhen||'AM';
+  if(half==='AM') return (sMin<noon) ? pe : null;    // session touches the morning
+  return (eMin>noon) ? pe : null;                    // PM
+}
+// Confirm-on-save guard: if the therapist is on leave for any of `dates` during
+// the session window, show a confirm dialog so the scheduler can override for a
+// genuine exception. Returns true to proceed, false to abort the save.
+function confirmLeaveDates(stid, dates, s, e){
+  if(!stid || stid==='UNASSIGNED') return true;
+  const hits=(dates||[]).filter(d=>leaveOverlap(stid,d,s,e));
+  if(!hits.length) return true;
+  const st=gs(stid);
+  const first=leaveOverlap(stid,hits[0],s,e);
+  const typeLbl=ptoTypeLabel(first.type||'PTO');
+  const nm=st?st.name:'This therapist';
+  let msg;
+  if(hits.length>1){
+    const dlist=hits.slice(0,6).map(d=>pd(d).toLocaleDateString('en-US',{month:'short',day:'numeric'})).join(', ')+(hits.length>6?` +${hits.length-6} more`:'');
+    msg=`⚠ ${nm} is on leave (${typeLbl}) on ${hits.length} of these dates:\n${dlist}\n\nAssigning will conflict with their time off. Schedule anyway?`;
+  }else{
+    const half=first.halfDay?(first.halfFrom&&first.halfTo?`${first.halfFrom}–${first.halfTo}`:(first.halfWhen||'AM')+' half-day'):'full day';
+    msg=`⚠ ${nm} is on leave (${typeLbl}, ${half}) on ${pd(hits[0]).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}.\n\nAssigning this session conflicts with their time off. Schedule anyway?`;
+  }
+  return confirm(msg);
+}
+// Reverse-direction alert: after leave is RECORDED for a therapist, flag any
+// already-booked future client sessions that now fall on that leave so the
+// scheduler can fix them. Alert-only — nothing is changed automatically. Must be
+// called AFTER the leave has been written to st.pto (so leaveOverlap sees it).
+function alertLeaveConflicts(stid, dates){
+  const st=gs(stid); if(!st) return;
+  const today=todayBerlin();
+  const dset=new Set((dates||[]).filter(d=>d&&d>=today));   // only upcoming dates
+  if(!dset.size) return;
+  const hits=(S.sessions||[]).filter(s=>
+    s.stid===stid && dset.has(s.date) && s.status!=='CX' &&
+    !s._autoAdmin && !s._virtual && s.cid && leaveOverlap(stid,s.date,s.s,s.e)
+  ).sort((a,b)=> a.date.localeCompare(b.date) || a.s.localeCompare(b.s));
+  if(!hits.length) return;
+  const lines=hits.map(s=>{
+    const cl=gc(s.cid), nm=cl?cDisplayName(cl):sessChipLabel(s);
+    const dstr=pd(s.date).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    return `• ${nm} — ${dstr} ${ftm(s.s)}–${ftm(s.e)} (${sessChipLabel(s)})`;
+  }).join('\n');
+  alert(`⚠ ${st.name} has ${hits.length} client session${hits.length>1?'s':''} already booked on day${hits.length>1?'s':''} they're now on leave:\n\n${lines}\n\nPlease reassign, reschedule, or cancel ${hits.length>1?'them':'it'} from the schedule.`);
 }
 function ptoTypeColor(type){ return type==='SICK'?'#E53935':'var(--am)'; }
 function ptoTypeLabel(type){ return type==='SICK'?'Sick':'PTO'; }
@@ -12425,6 +12588,8 @@ async function submitManualLeaveEntry(){
   if(typeof rptLeave === 'function' && curReport==='leave') rptLeave();
   if(typeof rStaff === 'function') rStaff();
   if(typeof rSched === 'function') rSched();
+  // Flag any already-booked future client sessions that now fall on this leave.
+  if(leaveDeductsPto(type)) alertLeaveConflicts(st.id, days);
 }
 
 function rLeaveRequests(){
@@ -12552,6 +12717,8 @@ async function approveLeaveRequest(id){
   }
   save(); rLeaveRequests(); rStaff(); rSched();
   showToast(st.name+' leave approved ✓','var(--gn)');
+  // Flag any already-booked future client sessions that now fall on this leave.
+  alertLeaveConflicts(r.stid, r.halfDay ? [r.from] : (r.days||[]));
   // Email the staff member if we have an address on file. Email is a
   // notification — the in-app My Schedule banner is the canonical record,
   // so we don't block the approval on a delivery failure. We just surface
